@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Business Card Review · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Review Business Card</h1>
+<p>OCR results are suggestions only. Correct anything that is wrong before creating the lead.</p>
+{% endblock %}
+{% block content %}
+{% if warning %}<div class="alert warning">{{ warning }}</div>{% endif %}
+{% if match_type == 'AMBIGUOUS' %}
+<div class="alert warning">A possible existing company was found. Review the company choice before continuing.</div>
+{% elif match_type == 'EXACT' and matched_company %}
+<div class="alert success">Existing company found: <strong>{{ matched_company.name }}</strong>. It is selected below to avoid a duplicate.</div>
+{% endif %}
+
+<form method="post" action="/leads/import/card/create" class="form-stack">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+  <div class="card form-card">
+    <div class="step-title"><span>1</span><div><h2>Company</h2><p>Choose an existing match or create a company from the extracted information.</p></div></div>
+    <div class="segmented">
+      <label><input type="radio" name="company_mode" value="existing" {% if matched_company %}checked{% endif %}> Use existing</label>
+      <label><input type="radio" name="company_mode" value="new" {% if not matched_company %}checked{% endif %}> Create new</label>
+    </div>
+    <div id="existing-company-section">
+      <label>Existing company
+        <select name="existing_company_id" id="existing-company-select">
+          <option value="">Select company</option>
+          {% for company in companies %}
+          <option value="{{ company.id }}" {% if matched_company and company.id == matched_company.id %}selected{% endif %}>{{ company.name }}{% if company.domain %} — {{ company.domain }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div id="new-company-section" class="field-grid card-fields">
+      <label class="span-2">Company name *<input name="company_name" value="{{ data.company_name }}"></label>
+      <label>Website<input name="website" value="{{ data.website }}"></label>
+      <label>Domain<input name="domain" value="{{ data.domain }}"></label>
+      <label>Industry<input name="industry" value="{{ data.industry }}"></label>
+      <label>Country code<input name="country" maxlength="2" value="{{ data.country }}"></label>
+      <label>State<input name="state" value="{{ data.state }}"></label>
+      <label>City<input name="city" value="{{ data.city }}"></label>
+    </div>
+  </div>
+
+  <div class="card form-card">
+    <div class="step-title"><span>2</span><div><h2>Contact</h2><p>Leave every field blank to skip contact creation.</p></div></div>
+    <div class="field-grid">
+      <label class="span-2">Contact name<input name="contact_name" value="{{ data.contact_name }}"></label>
+      <label>Job title<input name="job_title" value="{{ data.job_title }}"></label>
+      <label>Email<input name="email" type="email" value="{{ data.email }}"></label>
+      <label>Phone<input name="phone" value="{{ data.phone }}"></label>
+      <label>LinkedIn URL<input name="linkedin_url" value="{{ data.linkedin_url }}"></label>
+    </div>
+    <p class="help">Contact name is optional when another meaningful contact field such as email, phone, job title, or LinkedIn URL is provided.</p>
+  </div>
+
+  <div class="card form-card">
+    <div class="step-title"><span>3</span><div><h2>Lead</h2><p>ICP is required. Priority defaults to Medium.</p></div></div>
+    <div class="field-grid">
+      <label>ICP profile *
+        <select name="icp_profile_id" required>
+          <option value="">Select ICP</option>
+          {% for icp in icps %}<option value="{{ icp.id }}">{{ icp.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority"><option>LOW</option><option selected>MEDIUM</option><option>HIGH</option></select>
+      </label>
+    </div>
+  </div>
+
+  <details class="card raw-ocr">
+    <summary>View raw OCR text</summary>
+    <pre>{{ data.raw_text }}</pre>
+  </details>
+
+  <div class="form-actions">
+    <a class="button secondary" href="/leads/import">Cancel</a>
+    <button class="button primary" type="submit">Create Lead</button>
+  </div>
+</form>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+const companyModeRadios = document.querySelectorAll('input[name="company_mode"]');
+const existingCompanySection = document.getElementById('existing-company-section');
+const newCompanySection = document.getElementById('new-company-section');
+
+function setSectionEnabled(section, enabled) {
+  section.querySelectorAll('input, select, textarea, button').forEach(el => {
+    el.disabled = !enabled;
+  });
+}
+
+function syncCardCompanyMode() {
+  const selected = document.querySelector('input[name="company_mode"]:checked');
+  const mode = selected ? selected.value : 'new';
+
+  const useExisting = mode === 'existing';
+
+  existingCompanySection.classList.toggle('hidden', !useExisting);
+  newCompanySection.classList.toggle('hidden', useExisting);
+
+  setSectionEnabled(existingCompanySection, useExisting);
+  setSectionEnabled(newCompanySection, !useExisting);
+}
+
+companyModeRadios.forEach(radio => {
+  radio.addEventListener('change', syncCardCompanyMode);
+});
+
+syncCardCompanyMode();
+</script>
+{% endblock %}
+

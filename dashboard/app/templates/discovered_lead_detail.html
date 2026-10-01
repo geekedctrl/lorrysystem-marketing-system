@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Discovered Lead Review · LorrySystem{% endblock %}
+{% block page_heading %}
+<div class="heading-row">
+  <div>
+    <h1>Discovered Lead Review</h1>
+    <p>Verify AI-discovered evidence before promoting this company to an official Lead.</p>
+  </div>
+  <div class="heading-badges">
+    <span class="badge candidate-{{ candidate.status|lower }}">{{ candidate.status.replace('_',' ')|title }}</span>
+    <span class="badge priority">{{ (candidate.icp_confidence * 100)|round(0)|int }}% confidence</span>
+  </div>
+</div>
+{% endblock %}
+{% block content %}
+{% if request.query_params.get('updated') %}
+<div class="alert success">Candidate details updated.</div>
+{% endif %}
+{% if request.query_params.get('decision') == 'rejected' %}
+<div class="alert success">Candidate rejected and removed from the active review queue.</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="alert error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<div class="candidate-review-layout">
+  <div class="candidate-main">
+    <div class="card">
+      <div class="record-top">
+        <span class="badge candidate-{{ candidate.status|lower }}">{{ candidate.status }}</span>
+        <span>Discovered {{ candidate.created_at|iso_date }}</span>
+        {% if candidate.reviewed_at %}<span>Reviewed {{ candidate.reviewed_at|iso_date }}</span>{% endif %}
+      </div>
+
+      <h2>{{ candidate.company_name }}</h2>
+      <p class="candidate-summary">{{ candidate.source_summary or 'No discovery summary was provided.' }}</p>
+
+      <div class="snapshot-meta candidate-meta">
+        <div><span>Suggested ICP</span><strong>{{ candidate.icp_label }}</strong></div>
+        <div><span>Confidence</span><strong>{{ (candidate.icp_confidence * 100)|round(0)|int }}%</strong></div>
+        <div><span>Location</span><strong>{{ [candidate.city, candidate.state, candidate.country_code]|select|join(', ') or '—' }}</strong></div>
+        <div><span>Industry</span><strong>{{ candidate.industry or '—' }}</strong></div>
+      </div>
+
+      <div class="evidence-section">
+        <h3>ICP reasoning</h3>
+        <p>{{ candidate.icp_reasoning }}</p>
+      </div>
+
+      <div class="evidence-columns">
+        <div class="evidence-section">
+          <h3>Fleet clues</h3>
+          {% if candidate.fleet_clues %}
+          <ul>{% for clue in candidate.fleet_clues %}<li>{{ clue }}</li>{% endfor %}</ul>
+          {% else %}<p class="muted-copy">No fleet clues recorded.</p>{% endif %}
+        </div>
+
+        <div class="evidence-section">
+          <h3>Buying signals</h3>
+          {% if candidate.buying_signals %}
+          <ul>{% for signal in candidate.buying_signals %}<li>{{ signal }}</li>{% endfor %}</ul>
+          {% else %}<p class="muted-copy">No buying signals recorded.</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Public source evidence</h2>
+        <span>{{ candidate.sources|length }} source{{ '' if candidate.sources|length == 1 else 's' }}</span>
+      </div>
+
+      {% if candidate.sources %}
+        {% for source in candidate.sources %}
+        <div class="candidate-source">
+          <div class="record-top">
+            <span class="badge status">{{ source.source_type.replace('_',' ')|title }}</span>
+            <span>{{ source.discovered_at|iso_date }}</span>
+            {% if source.published_at %}<span>Published {{ source.published_at|iso_date }}</span>{% endif %}
+          </div>
+
+          <h3>{{ source.title or source.url }}</h3>
+          {% if source.summary %}<p>{{ source.summary }}</p>{% endif %}
+
+          {% if source.evidence %}
+          <div class="source-evidence">
+            <strong>Evidence</strong>
+            <p>{{ source.evidence }}</p>
+          </div>
+          {% endif %}
+
+          {% if source.source_query %}<span class="source-query">Search: {{ source.source_query }}</span>{% endif %}
+          <a class="text-link" href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open public source ↗</a>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="empty compact">
+        <strong>No source records.</strong>
+        <span>This candidate should be reviewed carefully before acceptance.</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if editable %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Edit candidate</h2>
+        <span>Correct extracted information before making a decision.</span>
+      </div>
+
+      <form class="candidate-edit-form" method="post" action="/discovered-leads/{{ candidate.id }}/edit">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+        <div class="field-grid">
+          <label>Company name<input name="company_name" value="{{ candidate.company_name }}" required></label>
+          <label>Industry<input name="industry" value="{{ candidate.industry or '' }}"></label>
+          <label>Website<input name="website_url" value="{{ candidate.website_url or '' }}"></label>
+          <label>Domain<input name="domain" value="{{ candidate.domain or '' }}"></label>
+          <label>Country code<input name="country_code" maxlength="2" value="{{ candidate.country_code or '' }}"></label>
+          <label>State<input name="state" value="{{ candidate.state or '' }}"></label>
+          <label>City<input name="city" value="{{ candidate.city or '' }}"></label>
+          <label>Contact name<input name="contact_name" value="{{ candidate.contact_name or '' }}"></label>
+          <label>Job title<input name="job_title" value="{{ candidate.job_title or '' }}"></label>
+          <label>Email<input name="email" type="email" value="{{ candidate.email or '' }}"></label>
+          <label>Phone<input name="phone" value="{{ candidate.phone or '' }}"></label>
+          <label>LinkedIn URL<input name="linkedin_url" value="{{ candidate.linkedin_url or '' }}"></label>
+
+          <label>
+            Suggested ICP
+            <select name="suggested_icp_profile_id" required>
+              {% for icp in icps %}
+              <option value="{{ icp.id }}" {% if icp.id == candidate.suggested_icp_profile_id %}selected{% endif %}>{{ icp.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            ICP confidence
+            <input name="icp_confidence" type="number" min="0" max="1" step="0.01" value="{{ candidate.icp_confidence }}" required>
+          </label>
+
+          <label class="span-2">
+            ICP reasoning
+            <textarea name="icp_reasoning" rows="4" required>{{ candidate.icp_reasoning }}</textarea>
+          </label>
+
+          <label>
+            Fleet clues
+            <textarea name="fleet_clues" rows="6">{{ candidate.fleet_clues|join('
+') }}</textarea>
+            <span class="help">One clue per line.</span>
+          </label>
+
+          <label>
+            Buying signals
+            <textarea name="buying_signals" rows="6">{{ candidate.buying_signals|join('
+') }}</textarea>
+            <span class="help">One signal per line.</span>
+          </label>
+
+          <label class="span-2">
+            Source summary
+            <textarea name="source_summary" rows="4">{{ candidate.source_summary or '' }}</textarea>
+          </label>
+        </div>
+
+        <div class="form-actions candidate-form-actions">
+          <button class="button primary" type="submit">Save Candidate</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="candidate-decision-column">
+    <div class="card decision-card">
+      <h2>Review decision</h2>
+
+      {% if reviewable %}
+      <form method="post" action="/discovered-leads/{{ candidate.id }}/accept" onsubmit="return confirm('Accept this candidate as an official Lead?')">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+        <label>
+          ICP
+          <select name="icp_profile_id">
+            {% for icp in icps %}
+            <option value="{{ icp.id }}" {% if icp.id == candidate.suggested_icp_profile_id %}selected{% endif %}>{{ icp.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>
+          Priority
+          <select name="priority">
+            {% for priority in priorities %}
+            <option value="{{ priority }}" {% if priority == 'MEDIUM' %}selected{% endif %}>{{ priority|title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>Optional review notes<textarea name="review_notes" rows="4"></textarea></label>
+        <button class="button success full" type="submit">Accept as Lead</button>
+      </form>
+
+      <hr>
+
+      <form method="post" action="/discovered-leads/{{ candidate.id }}/reject" onsubmit="return confirm('Reject this discovered candidate?')">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Rejection reason<textarea name="review_notes" rows="4" required></textarea></label>
+        <button class="button danger full" type="submit">Reject Candidate</button>
+      </form>
+      {% else %}
+      <div class="empty compact">
+        <strong>{{ candidate.status.replace('_',' ')|title }}</strong>
+        {% if candidate.accepted_lead_id %}
+        <a class="text-link" href="/leads/{{ candidate.accepted_lead_id }}">Open accepted Lead →</a>
+        {% elif candidate.duplicate_lead_id %}
+        <a class="text-link" href="/leads/{{ candidate.duplicate_lead_id }}">Open existing Lead →</a>
+        {% endif %}
+        {% if candidate.reviewed_by %}<span>Reviewed by {{ candidate.reviewed_by }}</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Contact snapshot</h2>
+      <dl class="details candidate-contact-details">
+        <div><dt>Name</dt><dd>{{ candidate.contact_name or '—' }}</dd></div>
+        <div><dt>Job title</dt><dd>{{ candidate.job_title or '—' }}</dd></div>
+        <div><dt>Email</dt><dd>{{ candidate.email or '—' }}</dd></div>
+        <div><dt>Phone</dt><dd>{{ candidate.phone or '—' }}</dd></div>
+      </dl>
+    </div>
+  </aside>
+</div>
+{% endblock %}

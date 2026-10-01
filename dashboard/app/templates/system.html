@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}System · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>System</h1>
+<p>Safe service status only. No credentials or infrastructure details are exposed.</p>
+{% endblock %}
+{% block content %}
+<div class="metric-grid">
+  <div class="metric-card"><span>Marketing API</span><strong class="small-strong">{{ api_status }}</strong></div>
+  <div class="metric-card"><span>Database</span><strong class="small-strong">{{ db_status }}</strong></div>
+  <div class="metric-card"><span>Dashboard</span><strong class="small-strong">Online</strong></div>
+</div>
+<div class="card">
+  <h2>Architecture boundary</h2>
+  <pre class="architecture">Browser → Dashboard/BFF → Marketing API → PostgreSQL
+
+Dashboard → PostgreSQL  ✕
+Browser   → API secret  ✕
+Dashboard → Marketing API ✓</pre>
+</div>
+{% endblock %}

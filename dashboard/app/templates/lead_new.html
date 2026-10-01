@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Add Lead · LorrySystem{% endblock %}
+
+{% block page_heading %}
+<h1>Add Lead</h1>
+<p>Choose how you would like to add Leads.</p>
+{% endblock %}
+
+{% block content %}
+
+<div class="breadcrumbs">
+  <a href="/leads">Leads</a>
+  <span>›</span>
+  <strong>Add Lead</strong>
+</div>
+
+<div class="import-grid add-lead-grid">
+
+  <div class="card import-card">
+    <div class="import-icon">1</div>
+    <h2>Manual Entry</h2>
+
+    <p>
+      Add a single Lead by selecting or creating a
+      company, contact and ICP.
+    </p>
+
+    <div class="button-row">
+      <a
+        class="button primary"
+        href="/leads/new/manual"
+      >
+        Add Manually
+      </a>
+    </div>
+  </div>
+
+
+  <div class="card import-card">
+    <div class="import-icon">2</div>
+    <h2>Business Card</h2>
+
+    <p>
+      Upload a business card and review the extracted
+      details before creating the Lead.
+    </p>
+
+    <div class="button-row">
+      <a
+        class="button primary"
+        href="/leads/import#business-card"
+      >
+        Upload Business Card
+      </a>
+    </div>
+  </div>
+
+
+  <div class="card import-card">
+    <div class="import-icon">3</div>
+    <h2>CSV Import</h2>
+
+    <p>
+      Import multiple Leads using the existing CSV
+      validation and preview workflow.
+    </p>
+
+    <div class="button-row">
+      <a
+        class="button primary"
+        href="/leads/import#csv-import"
+      >
+        Import CSV
+      </a>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

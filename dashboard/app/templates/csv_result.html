@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}CSV Import Result · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>CSV Import Complete</h1>
+<p>Each row was processed independently through the Marketing API.</p>
+{% endblock %}
+{% block content %}
+<div class="metric-grid">
+  <div class="metric-card"><span>Imported</span><strong>{{ imported }}</strong></div>
+  <div class="metric-card"><span>Skipped Duplicates</span><strong>{{ skipped_duplicates }}</strong></div>
+  <div class="metric-card"><span>Needs Review</span><strong>{{ skipped_review }}</strong></div>
+  <div class="metric-card"><span>Failed / Invalid</span><strong>{{ failures|length + invalid }}</strong></div>
+</div>
+
+{% if failures %}
+<div class="card section-card">
+  <div class="card-head"><h2>Runtime Failures</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>CSV Row</th><th>Company</th><th>Reason</th></tr></thead>
+      <tbody>
+      {% for item in failures %}
+        <tr><td>{{ item.row }}</td><td>{{ item.company }}</td><td>{{ item.message }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if created_leads %}
+<div class="card section-card">
+  <div class="card-head"><h2>Created Leads</h2></div>
+  <div class="stack-list">
+  {% for lead in created_leads %}
+    <a class="list-row" href="/leads/{{ lead.id }}">
+      <div><strong>{{ lead.company_name }}</strong><span>Created as {{ lead.status }}</span></div>
+      <span class="text-link">View →</span>
+    </a>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="form-actions">
+  <a class="button secondary" href="/leads/import">Import Another File</a>
+  <a class="button primary" href="/leads">View Leads</a>
+</div>
+{% endblock %}

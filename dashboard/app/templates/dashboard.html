@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Overview · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Overview</h1>
+<p>Lead generation and outreach operations at a glance.</p>
+{% endblock %}
+{% block content %}
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+<div class="hero-actions">
+  <a class="button primary" href="/leads/new">+ Add Lead</a>
+  <a class="button secondary" href="/approvals">Review Approvals</a>
+</div>
+
+<div class="metric-grid">
+  <div class="metric-card"><span>Active Leads</span><strong>{{ metrics.active_leads }}</strong></div>
+  <div class="metric-card"><span>Pending Approvals</span><strong>{{ metrics.pending_approvals }}</strong></div>
+  <div class="metric-card"><span>Draft Actions</span><strong>{{ metrics.draft_actions }}</strong></div>
+  <div class="metric-card"><span>Approved Actions</span><strong>{{ metrics.approved_actions }}</strong></div>
+</div>
+
+<div class="two-column">
+  <div class="card">
+    <div class="card-head"><h2>Recent Leads</h2><a href="/leads">View all</a></div>
+    {% if recent_leads %}
+      <div class="stack-list">
+      {% for lead in recent_leads %}
+        <a class="list-row" href="/leads/{{ lead.id }}">
+          <div>
+            <strong>{{ (lead.company or {}).get('name', 'Unknown company') }}</strong>
+            <span>{{ (lead.contact or {}).get('full_name', 'No primary contact') }}</span>
+          </div>
+          <div class="row-right">
+            <span class="badge status">{{ lead.status }}</span>
+            <span class="score">{{ lead.current_score if lead.current_score is not none else '—' }}</span>
+          </div>
+        </a>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty"><strong>No leads yet.</strong><span>Add your first lead to begin.</span></div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Pending Approvals</h2><a href="/approvals">Open queue</a></div>
+    {% if pending_approvals %}
+      <div class="stack-list">
+      {% for approval in pending_approvals %}
+        <a class="list-row" href="/approvals/{{ approval.id }}">
+          <div>
+            <strong>{{ approval.content_snapshot.get('channel', 'Action') }} · {{ approval.content_snapshot.get('action_type', '') }}</strong>
+            <span>{{ approval.content_snapshot.get('subject') or approval.content_snapshot.get('content', '')[:65] }}</span>
+          </div>
+          <span class="badge warning">PENDING</span>
+        </a>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty"><strong>No approvals waiting.</strong><span>You're all caught up.</span></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Recent Marketing Actions</h2><a href="/actions">View all</a></div>
+  {% if recent_actions %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Company</th><th>Channel</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>
+      {% for action in recent_actions %}
+        <tr>
+          <td>{{ (action.company or {}).get('name', 'Unknown') }}</td>
+          <td>{{ action.channel }}</td>
+          <td>{{ action.action_type }}</td>
+          <td><span class="badge status">{{ action.status }}</span></td>
+          <td>{{ action.created_at|iso_date }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty"><span>No marketing actions yet.</span></div>
+  {% endif %}
+</div>
+{% endblock %}

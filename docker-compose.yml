@@ -1,0 +1,111 @@
+services:
+
+  postgres-dev:
+    image: postgres:17-alpine
+    container_name: lorrysystem-dev-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - lorrysystem-dev-db-net
+
+    mem_limit: 384m
+    cpus: 0.50
+
+
+  marketing-api-dev:
+    build:
+      context: ./api
+
+    container_name: lorrysystem-dev-marketing-api
+    restart: unless-stopped
+
+    environment:
+      APP_ENV: development
+
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      MARKETING_API_KEY: ${MARKETING_API_KEY}
+
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+
+    volumes:
+      - ./database/migrations/versions:/app/alembic/versions
+
+    ports:
+      - "127.0.0.1:8001:8000"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - lorrysystem-dev-db-net
+      - lorrysystem-dev-api-net
+
+    mem_limit: 384m
+    cpus: 0.75
+
+
+
+  dashboard-dev:
+    build:
+      context: ./dashboard
+    container_name: lorrysystem-dev-dashboard
+    restart: unless-stopped
+
+    env_file:
+      - ./dashboard/.env
+
+    depends_on:
+      marketing-api-dev:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:8081:8080"
+
+    networks:
+      - lorrysystem-dev-api-net
+
+    mem_limit: 384m
+    cpus: 0.50
+
+networks:
+
+  lorrysystem-dev-db-net:
+    name: lorrysystem-dev-db-net
+    internal: true
+
+  lorrysystem-dev-api-net:
+    name: lorrysystem-dev-api-net

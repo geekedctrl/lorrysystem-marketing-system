@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LorrySystem AI Marketing{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">LS</div>
+        <div>
+          <strong>LorrySystem</strong>
+          <span>AI Marketing</span>
+        </div>
+      </div>
+
+      <nav>
+        <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">Overview</a>
+
+        <a href="/leads"
+           class="{% if request.url.path == '/leads' or (request.url.path.startswith('/leads/') and not request.url.path.startswith('/leads/new') and not request.url.path.startswith('/leads/import')) %}active{% endif %}">
+          Leads
+        </a>
+
+        <a href="/leads/new"
+           class="nav-add {% if request.url.path.startswith('/leads/new') or request.url.path.startswith('/leads/import') %}active{% endif %}">
+          + Add Lead
+        </a>
+
+        <a href="/discovered-leads" class="{% if request.url.path.startswith('/discovered-leads') %}active{% endif %}">Discovered Leads</a>
+        <a href="/actions" class="{% if request.url.path.startswith('/actions') %}active{% endif %}">Marketing Actions</a>
+        <a href="/approvals" class="{% if request.url.path.startswith('/approvals') %}active{% endif %}">Approvals</a>
+        <div class="nav-spacer"></div>
+        <a href="/system" class="{% if request.url.path == '/system' %}active{% endif %}">System</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          {% block page_heading %}{% endblock %}
+        </div>
+        <div class="user-chip">
+          <span class="status-dot"></span>
+          {{ reviewer_identity }}
+        </div>
+      </header>
+
+      <section class="page">
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

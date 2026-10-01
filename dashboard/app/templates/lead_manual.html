@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Add Lead · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Manual Entry</h1>
+<p>Create a single Lead manually.</p>
+{% endblock %}
+{% block content %}
+
+<div class="breadcrumbs">
+  <a href="/leads">Leads</a>
+  <span>›</span>
+  <a href="/leads/new">Add Lead</a>
+  <span>›</span>
+  <strong>Manual Entry</strong>
+</div>
+
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+{% if not icps %}
+<div class="alert warning">
+  No ICP profiles are configured on the dashboard server. Add the ICP IDs to the dashboard <code>.env</code> before creating leads.
+</div>
+{% endif %}
+
+<form method="post" action="/leads/new" class="form-stack" id="lead-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+  <div class="card form-card">
+    <div class="step-title"><span>1</span><div><h2>Company</h2><p>Select an existing company or create a new one.</p></div></div>
+
+    <div class="segmented">
+      <label><input type="radio" name="company_mode" value="existing" checked> Existing company</label>
+      <label><input type="radio" name="company_mode" value="new"> Create new</label>
+    </div>
+
+    <div id="existing-company">
+      <label>Company
+        <select name="company_id" id="company-select">
+          <option value="">Select a company</option>
+          {% for company in companies %}
+          <option value="{{ company.id }}">{{ company.name }}{% if company.domain %} — {{ company.domain }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div id="new-company" class="hidden field-grid">
+      <label class="span-2">Company name *<input name="company_name"></label>
+      <label>Website URL<input name="company_website_url" placeholder="https://example.com"></label>
+      <label>Domain<input name="company_domain" placeholder="example.com"></label>
+      <label>Industry<input name="company_industry" placeholder="Logistics"></label>
+      <label>Country code<input name="company_country_code" maxlength="2" placeholder="MY"></label>
+      <label>State<input name="company_state" placeholder="Selangor"></label>
+      <label>City<input name="company_city" placeholder="Shah Alam"></label>
+      <label>Estimated fleet size<input name="company_fleet_size" type="number" min="0"></label>
+    </div>
+  </div>
+
+  <div class="card form-card">
+    <div class="step-title"><span>2</span><div><h2>ICP</h2><p>Choose the lead's ideal customer profile.</p></div></div>
+    <label>ICP profile *
+      <select name="icp_profile_id" required {% if not icps %}disabled{% endif %}>
+        <option value="">Select ICP</option>
+        {% for icp in icps %}
+        <option value="{{ icp.id }}">{{ icp.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div class="card form-card">
+    <div class="step-title"><span>3</span><div><h2>Primary Contact</h2><p>Optional. Use an existing contact, create one, or skip.</p></div></div>
+
+    <div class="segmented">
+      <label><input type="radio" name="contact_mode" value="skip" checked> Skip</label>
+      <label><input type="radio" name="contact_mode" value="existing"> Existing</label>
+      <label><input type="radio" name="contact_mode" value="new"> Create new</label>
+    </div>
+
+    <div id="existing-contact" class="hidden">
+      <label>Contact
+        <select name="existing_contact_id" id="contact-select">
+          <option value="">Select a company first</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="new-contact" class="hidden field-grid">
+      <label class="span-2">Full name *<input name="contact_name"></label>
+      <label>Job title<input name="contact_job_title"></label>
+      <label>Email<input name="contact_email" type="email"></label>
+      <label>Phone<input name="contact_phone"></label>
+      <label>LinkedIn URL<input name="contact_linkedin_url" type="url"></label>
+    </div>
+  </div>
+
+  <div class="card form-card">
+    <div class="step-title"><span>4</span><div><h2>Lead Details</h2><p>Choose the operating priority.</p></div></div>
+    <label>Priority
+      <select name="priority">
+        <option value="LOW">Low</option>
+        <option value="MEDIUM" selected>Medium</option>
+        <option value="HIGH">High</option>
+      </select>
+    </label>
+    <p class="help">New leads automatically start as <strong>DISCOVERED</strong>.</p>
+  </div>
+
+  <div class="form-actions">
+    <a class="button secondary" href="/leads">Cancel</a>
+    <button class="button primary" type="submit" {% if not icps %}disabled{% endif %}>Create Lead</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const companyRadios = document.querySelectorAll('input[name="company_mode"]');
+const contactRadios = document.querySelectorAll('input[name="contact_mode"]');
+const existingCompany = document.getElementById('existing-company');
+const newCompany = document.getElementById('new-company');
+const existingContact = document.getElementById('existing-contact');
+const newContact = document.getElementById('new-contact');
+const companySelect = document.getElementById('company-select');
+const contactSelect = document.getElementById('contact-select');
+
+function syncCompanyMode() {
+  const mode = document.querySelector('input[name="company_mode"]:checked').value;
+  existingCompany.classList.toggle('hidden', mode !== 'existing');
+  newCompany.classList.toggle('hidden', mode !== 'new');
+  if (mode === 'new') {
+    document.querySelector('input[name="contact_mode"][value="existing"]').disabled = true;
+    if (document.querySelector('input[name="contact_mode"]:checked').value === 'existing') {
+      document.querySelector('input[name="contact_mode"][value="skip"]').checked = true;
+      syncContactMode();
+    }
+  } else {
+    document.querySelector('input[name="contact_mode"][value="existing"]').disabled = false;
+  }
+}
+
+function syncContactMode() {
+  const mode = document.querySelector('input[name="contact_mode"]:checked').value;
+  existingContact.classList.toggle('hidden', mode !== 'existing');
+  newContact.classList.toggle('hidden', mode !== 'new');
+}
+
+async function loadContacts() {
+  const companyId = companySelect.value;
+  contactSelect.innerHTML = '<option value="">Select a contact</option>';
+  if (!companyId) return;
+  try {
+    const res = await fetch(`/ui/companies/${companyId}/contacts`, {credentials: 'same-origin'});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Unable to load contacts');
+    for (const contact of data) {
+      const option = document.createElement('option');
+      option.value = contact.id;
+      option.textContent = `${contact.full_name}${contact.job_title ? ' — ' + contact.job_title : ''}`;
+      contactSelect.appendChild(option);
+    }
+  } catch (err) {
+    contactSelect.innerHTML = '<option value="">Unable to load contacts</option>';
+  }
+}
+
+companyRadios.forEach(r => r.addEventListener('change', syncCompanyMode));
+contactRadios.forEach(r => r.addEventListener('change', syncContactMode));
+companySelect.addEventListener('change', loadContacts);
+
+syncCompanyMode();
+syncContactMode();
+</script>
+{% endblock %}

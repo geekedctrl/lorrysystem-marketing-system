@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}{{ company.name }} · LorrySystem{% endblock %}
+{% block page_heading %}
+<div class="heading-row">
+  <div>
+    <h1>{{ company.name }}</h1>
+    <p>{{ company.domain or company.website_url or 'Lead details' }}</p>
+  </div>
+  <div class="heading-badges">
+    <span class="badge status">{{ lead.status }}</span>
+    <span class="badge priority">{{ lead.priority }}</span>
+
+    {% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] %}
+    <button
+      class="button secondary"
+      type="button"
+      onclick="document.getElementById('close-lead-dialog').showModal()"
+    >
+      Close Lead
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block content %}
+
+<div class="breadcrumbs">
+  <a href="/leads">Leads</a>
+  <span>›</span>
+  <strong>{{ company.name }}</strong>
+</div>
+
+{% if created %}
+<div class="alert success">
+  Lead created successfully.
+</div>
+{% endif %}
+
+{% if closed %}
+<div class="alert success">
+  Lead closed successfully.
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert error">
+  {{ error }}
+</div>
+{% endif %}
+
+<div class="metric-grid detail-metrics">
+  <div class="metric-card"><span>Current Score</span><strong>{{ lead.current_score if lead.current_score is not none else '—' }}</strong></div>
+  <div class="metric-card"><span>Status</span><strong class="small-strong">{{ lead.status }}</strong></div>
+  <div class="metric-card"><span>Priority</span><strong class="small-strong">{{ lead.priority }}</strong></div>
+  <div class="metric-card"><span>Created</span><strong class="small-strong">{{ lead.created_at|iso_date }}</strong></div>
+  <div class="metric-card"><span>Last Updated</span><strong class="small-strong">{{ lead.updated_at|iso_date }}</strong></div>
+</div>
+
+<div class="two-column">
+  <div class="card">
+    <div class="card-head"><h2>Company</h2></div>
+    <dl class="details">
+      <div><dt>Industry</dt><dd>{{ company.industry or '—' }}</dd></div>
+      <div><dt>Location</dt><dd>{{ company.city or '' }}{% if company.city and company.state %}, {% endif %}{{ company.state or '—' }}</dd></div>
+      <div><dt>Fleet estimate</dt><dd>{{ company.fleet_size_estimate if company.fleet_size_estimate is not none else '—' }}</dd></div>
+      <div><dt>Website</dt><dd>{% if company.website_url %}<a href="{{ company.website_url }}" target="_blank" rel="noopener">{{ company.website_url }}</a>{% else %}—{% endif %}</dd></div>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Primary Contact</h2></div>
+    {% if contact %}
+    <dl class="details">
+      <div><dt>Name</dt><dd>{{ contact.full_name }}</dd></div>
+      <div><dt>Role</dt><dd>{{ contact.job_title or '—' }}</dd></div>
+      <div><dt>Email</dt><dd>{{ contact.email or '—' }}</dd></div>
+      <div><dt>Phone</dt><dd>{{ contact.phone or '—' }}</dd></div>
+    </dl>
+    {% else %}
+    <div class="empty"><span>No primary contact selected.</span></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card section-card">
+  <div class="card-head"><h2>Research</h2><span>{{ research|length }} run(s)</span></div>
+  {% if research %}
+    {% for item in research %}
+    <div class="record-block">
+      <div class="record-top">
+        <span class="badge status">{{ item.research_status }}</span>
+        <span>{{ item.created_at|iso_date }}</span>
+        <span>Confidence: {{ item.confidence if item.confidence is not none else '—' }}</span>
+      </div>
+      {% if item.summary %}<p>{{ item.summary }}</p>{% endif %}
+      {% if item.pain_points %}
+      <h3>Pain points</h3>
+      <ul>{% for p in item.pain_points %}<li>{{ p }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if item.buying_signals %}
+      <h3>Buying signals</h3>
+      <ul>{% for p in item.buying_signals %}<li>{{ p }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if item.sources %}
+      <h3>Sources</h3>
+      <ul>
+      {% for source in item.sources %}
+        <li><a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title or source.url }}</a></li>
+      {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty"><span>No research available yet.</span></div>
+  {% endif %}
+</div>
+
+<div class="card section-card">
+  <div class="card-head"><h2>Scoring</h2></div>
+  {% if scores %}
+    {% for score in scores %}
+    <div class="record-block">
+      <div class="record-top">
+        <strong class="big-score">{{ score.total_score }}/100</strong>
+        {% if score.is_current %}<span class="badge success">CURRENT</span>{% endif %}
+        <span>{{ score.scoring_version }}</span>
+        <span>{{ score.created_at|iso_date }}</span>
+      </div>
+      <p>{{ score.rationale or '' }}</p>
+      {% if score.score_breakdown %}
+      <div class="key-values">
+        {% for key, value in score.score_breakdown.items() %}
+        <div><span>{{ key.replace('_', ' ')|title }}</span><strong>{{ value }}</strong></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty"><span>No score available yet.</span></div>
+  {% endif %}
+</div>
+
+<div class="card section-card">
+  <div class="card-head"><h2>Product Matches</h2></div>
+  {% if matches %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Product</th><th>Fit Score</th><th>Rationale</th></tr></thead>
+      <tbody>
+      {% for match in matches %}
+      <tr>
+        <td><strong>{{ (match.product or {}).get('name', match.product_id) }}</strong></td>
+        <td>{{ match.fit_score }}/100</td>
+        <td>{{ match.rationale or '—' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty"><span>No product matches available yet.</span></div>
+  {% endif %}
+</div>
+
+<div class="card section-card">
+  <div class="card-head"><h2>Marketing Actions</h2></div>
+  {% if actions %}
+    {% for action in actions %}
+    <div class="action-card">
+      <div class="record-top">
+        <strong>{{ action.channel }} · {{ action.action_type }}</strong>
+        <span class="badge status">{{ action.status }}</span>
+        <span>{{ action.created_at|iso_date }}</span>
+      </div>
+      {% if action.subject %}<h3>{{ action.subject }}</h3>{% endif %}
+      <p class="content-preview">{{ action.content }}</p>
+      {% set histories = approvals_by_action.get(action.id, []) %}
+      {% if histories %}
+        <div class="approval-history">
+          {% for approval in histories %}
+          <a href="/approvals/{{ approval.id }}">{{ approval.status }} · {{ approval.requested_at|iso_date }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty"><span>No marketing actions available yet.</span></div>
+  {% endif %}
+</div>
+
+{% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] %}
+<dialog id="close-lead-dialog" class="close-lead-dialog">
+  <form
+    method="post"
+    action="/leads/{{ lead.id }}/close"
+    class="form-stack"
+  >
+    <input
+      type="hidden"
+      name="csrf"
+      value="{{ csrf_token }}"
+    >
+
+    <div>
+      <h2>Close Lead</h2>
+      <p>
+        Close this Lead without deleting its history.
+      </p>
+    </div>
+
+    <div class="close-reasons">
+      <label>
+        <input
+          type="radio"
+          name="reason"
+          value="NO_RESPONSE"
+          required
+        >
+        No response
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="reason"
+          value="NOT_INTERESTED"
+          required
+        >
+        Not interested
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="reason"
+          value="WRONG_FIT"
+          required
+        >
+        Wrong fit
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="reason"
+          value="DUPLICATE"
+          required
+        >
+        Duplicate
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="reason"
+          value="OTHER"
+          required
+        >
+        Other
+      </label>
+    </div>
+
+    <label>
+      Optional note
+      <textarea
+        name="note"
+        rows="4"
+        placeholder="Add context for why this Lead is being closed."
+      ></textarea>
+    </label>
+
+    <div class="form-actions">
+      <button
+        type="button"
+        class="button secondary"
+        onclick="document.getElementById('close-lead-dialog').close()"
+      >
+        Cancel
+      </button>
+
+      <button
+        type="submit"
+        class="button danger"
+      >
+        Close Lead
+      </button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+{% endblock %}

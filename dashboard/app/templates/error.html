@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · LorrySystem{% endblock %}
+{% block page_heading %}<h1>{{ title }}</h1>{% endblock %}
+{% block content %}
+<div class="card empty">
+  <strong>{{ message }}</strong>
+  <a class="button secondary" href="/dashboard">Back to Dashboard</a>
+</div>
+{% endblock %}

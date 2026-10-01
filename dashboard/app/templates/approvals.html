@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Approvals · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Approval Queue</h1>
+<p>Human review for AI-generated marketing actions.</p>
+{% endblock %}
+{% block content %}
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+<div class="toolbar">
+  <div class="tabs">
+    {% for item in ['PENDING','APPROVED','REJECTED','CHANGES_REQUESTED','ALL'] %}
+    <a href="/approvals?status={{ item }}" class="{% if item == selected_status %}active{% endif %}">{{ item.replace('_',' ')|title }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if approvals %}
+<div class="approval-grid">
+  {% for approval in approvals %}
+  <a class="approval-card" href="/approvals/{{ approval.id }}">
+    <div class="record-top">
+      <span class="badge {% if approval.status == 'PENDING' %}warning{% else %}status{% endif %}">{{ approval.status }}</span>
+      <span>{{ approval.requested_at|iso_date }}</span>
+    </div>
+    <h2>{{ (approval.company or {}).get('name', 'Unknown company') }}</h2>
+    <p class="eyebrow">{{ approval.content_snapshot.get('channel', '—') }} · {{ approval.content_snapshot.get('action_type', '—') }}</p>
+    {% if approval.content_snapshot.get('subject') %}
+    <strong>{{ approval.content_snapshot.get('subject') }}</strong>
+    {% endif %}
+    <p>{{ approval.content_snapshot.get('content', '')[:220] }}{% if approval.content_snapshot.get('content','')|length > 220 %}…{% endif %}</p>
+    <span class="text-link">Review →</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">
+  <strong>No {{ selected_status.replace('_',' ').lower() }} approvals.</strong>
+  <span>You're all caught up.</span>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Discovered Leads · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Discovered Leads</h1>
+<p>Review companies found by AI web discovery before they become official Leads.</p>
+{% endblock %}
+{% block content %}
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+<div class="toolbar">
+  <div class="tabs">
+    {% for item in filters %}
+    <a href="/discovered-leads?status={{ item }}" class="{% if item == selected_status %}active{% endif %}">
+      {{ item.replace('_',' ')|title }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <form class="filters" method="get" action="/discovered-leads">
+    <input type="hidden" name="status" value="{{ selected_status }}">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search company, domain, location…">
+    <button class="button secondary" type="submit">Search</button>
+  </form>
+</div>
+
+{% if candidates %}
+<div class="card">
+  <div class="table-wrap">
+    <table class="candidate-table">
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Suggested ICP</th>
+          <th>Confidence</th>
+          <th>Location</th>
+          <th>Sources</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for candidate in candidates %}
+        <tr>
+          <td>
+            <strong>{{ candidate.company_name }}</strong>
+            <span class="sub">{{ candidate.domain or candidate.website_url or 'No website' }}</span>
+          </td>
+          <td>{{ candidate.icp_label }}</td>
+          <td><strong class="confidence-value">{{ (candidate.icp_confidence * 100)|round(0)|int }}%</strong></td>
+          <td>{{ candidate.location }}</td>
+          <td>{{ candidate.source_count }}</td>
+          <td>
+            <span class="badge candidate-{{ candidate.status|lower }}">
+              {{ candidate.status.replace('_',' ')|title }}
+            </span>
+          </td>
+          <td><a class="text-link" href="/discovered-leads/{{ candidate.id }}">Review →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card empty">
+  <strong>No discovered leads in this view.</strong>
+  <span>New web-discovery candidates will appear here for human review.</span>
+</div>
+{% endif %}
+{% endblock %}

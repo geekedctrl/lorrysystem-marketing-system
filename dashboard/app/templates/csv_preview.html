@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}CSV Preview · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>CSV Import Preview</h1>
+<p>Review validation results before any rows are imported.</p>
+{% endblock %}
+{% block content %}
+<div class="metric-grid">
+  <div class="metric-card"><span>Ready</span><strong>{{ counts.READY }}</strong></div>
+  <div class="metric-card"><span>Duplicates</span><strong>{{ counts.DUPLICATE }}</strong></div>
+  <div class="metric-card"><span>Needs Review</span><strong>{{ counts.NEEDS_REVIEW }}</strong></div>
+  <div class="metric-card"><span>Invalid</span><strong>{{ counts.INVALID }}</strong></div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="import-table">
+      <thead>
+        <tr><th>CSV Row</th><th>Company</th><th>Contact</th><th>ICP</th><th>Priority</th><th>Company Match</th><th>Result</th><th>Details</th></tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row._csv_row }}</td>
+          <td><strong>{{ row.company_name or '—' }}</strong><span class="sub">{{ row.domain or row.website or '' }}</span></td>
+          <td>{{ row.contact_name or '—' }}{% if row.email %}<span class="sub">{{ row.email }}</span>{% endif %}</td>
+          <td>{{ row.icp or '—' }}</td>
+          <td>{{ row.priority }}</td>
+          <td>
+            {% if row.existing_company_name %}{{ row.existing_company_name }}{% else %}{{ row.company_match|title }}{% endif %}
+          </td>
+          <td><span class="badge import-{{ row.result.lower() }}">{{ row.result.replace('_',' ') }}</span></td>
+          <td>
+            {% for msg in row.errors %}<span class="row-message error-text">{{ msg }}</span>{% endfor %}
+            {% for msg in row.warnings %}<span class="row-message warning-text">{{ msg }}</span>{% endfor %}
+            {% if not row.errors and not row.warnings %}<span class="muted">Ready to import</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="form-actions sticky-actions">
+  <a class="button secondary" href="/leads/import">Cancel</a>
+  {% if counts.DUPLICATE + counts.NEEDS_REVIEW + counts.INVALID > 0 %}
+  <a class="button secondary" href="/leads/import/csv/errors/{{ import_token }}">Download Error Rows</a>
+  {% endif %}
+  <form method="post" action="/leads/import/csv/commit">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="import_token" value="{{ import_token }}">
+    <button class="button primary" type="submit" {% if counts.READY == 0 %}disabled{% endif %}>Import {{ counts.READY }} Ready Row{% if counts.READY != 1 %}s{% endif %}</button>
+  </form>
+</div>
+{% endblock %}

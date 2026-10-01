@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Import Leads · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Import Leads</h1>
+<p>Add leads from a business card or CSV without bypassing the Marketing API.</p>
+{% endblock %}
+{% block content %}
+
+<div class="breadcrumbs">
+  <a href="/leads">Leads</a>
+  <span>›</span>
+  <a href="/leads/new">Add Lead</a>
+  <span>›</span>
+  <strong>Import</strong>
+</div>
+
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+<div class="import-grid">
+  <div class="card import-card" id="business-card">
+    <div class="import-icon">▣</div>
+    <h2>Business Card</h2>
+    <p>Upload a card image. The dashboard extracts what it can, then opens an editable review form before anything is created.</p>
+    <form method="post" action="/leads/import/card/extract" enctype="multipart/form-data" class="form-stack compact-stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Business card image
+        <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+      </label>
+      <span class="help">JPG, PNG or WEBP · maximum 10 MB</span>
+      <button class="button primary" type="submit">Extract & Review</button>
+    </form>
+  </div>
+
+  <div class="card import-card" id="csv-import">
+    <div class="import-icon">CSV</div>
+    <h2>CSV Import</h2>
+    <p>Upload multiple leads, validate every row, review duplicates and errors, then import only rows marked Ready.</p>
+    <div class="button-row">
+      <a class="button secondary" href="/leads/import/csv/template">Download Template</a>
+    </div>
+    <form method="post" action="/leads/import/csv/preview" enctype="multipart/form-data" class="form-stack compact-stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>CSV file
+        <input type="file" name="file" accept=".csv,text/csv" required>
+      </label>
+      <span class="help">UTF-8 · maximum 5 MB · maximum 5,000 rows</span>
+      <button class="button primary" type="submit">Upload & Preview</button>
+    </form>
+  </div>
+</div>
+
+<div class="card section-card">
+  <h2>Import rules</h2>
+  <div class="rule-grid">
+    <div><strong>Required</strong><span>Company name + ICP</span></div>
+    <div><strong>Priority</strong><span>Blank becomes MEDIUM</span></div>
+    <div><strong>Duplicates</strong><span>Existing company is reused; active lead + same ICP is skipped</span></div>
+    <div><strong>Lifecycle</strong><span>Imported leads start as DISCOVERED</span></div>
+  </div>
+</div>
+{% endblock %}

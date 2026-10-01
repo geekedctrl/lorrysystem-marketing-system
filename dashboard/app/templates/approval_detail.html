@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Approval Review · LorrySystem{% endblock %}
+{% block page_heading %}
+<h1>Approval Review</h1>
+<p>Review the immutable action snapshot before deciding.</p>
+{% endblock %}
+{% block content %}
+{% if request.query_params.get('decision') %}
+<div class="alert success">Decision saved successfully.</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="alert error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<div class="approval-layout">
+  <div class="card">
+    <div class="record-top">
+      <span class="badge {% if approval.status == 'PENDING' %}warning{% else %}status{% endif %}">{{ approval.status }}</span>
+      <span>Requested {{ approval.requested_at|iso_date }}</span>
+    </div>
+
+    <h2>{{ company.name if company else 'Marketing Action' }}</h2>
+
+    <div class="snapshot-meta">
+      <div><span>Channel</span><strong>{{ snapshot.get('channel', '—') }}</strong></div>
+      <div><span>Action type</span><strong>{{ snapshot.get('action_type', '—') }}</strong></div>
+      <div><span>Created by</span><strong>{{ snapshot.get('created_by') or '—' }}</strong></div>
+      <div><span>Scheduled</span><strong>{{ snapshot.get('scheduled_at')|iso_date if snapshot.get('scheduled_at') else '—' }}</strong></div>
+    </div>
+
+    {% if snapshot.get('subject') %}
+      <div class="message-subject"><span>Subject</span><strong>{{ snapshot.get('subject') }}</strong></div>
+    {% endif %}
+
+    <div class="message-content">{{ snapshot.get('content', '') }}</div>
+
+    {% if approval.reviewer_notes %}
+      <div class="review-note"><strong>Reviewer notes</strong><p>{{ approval.reviewer_notes }}</p></div>
+    {% endif %}
+  </div>
+
+  <div class="card decision-card">
+    <h2>Decision</h2>
+    {% if approval.status == 'PENDING' %}
+      <form method="post" action="/approvals/{{ approval.id }}/approve">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Optional notes<textarea name="reviewer_notes" rows="3"></textarea></label>
+        <button class="button success full" type="submit">Approve</button>
+      </form>
+
+      <hr>
+
+      <form method="post" action="/approvals/{{ approval.id }}/request-changes" onsubmit="return confirm('Request changes to this marketing action?')">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Required notes<textarea name="reviewer_notes" rows="4" required></textarea></label>
+        <button class="button warning full" type="submit">Request Changes</button>
+      </form>
+
+      <form method="post" action="/approvals/{{ approval.id }}/reject" onsubmit="return confirm('Reject this marketing action?')">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Required rejection reason<textarea name="reviewer_notes" rows="4" required></textarea></label>
+        <button class="button danger full" type="submit">Reject</button>
+      </form>
+    {% else %}
+      <div class="empty compact">
+        <strong>{{ approval.status.replace('_',' ')|title }}</strong>
+        <span>Decided by {{ approval.decided_by or '—' }}</span>
+        <span>{{ approval.decided_at|iso_date if approval.decided_at else '' }}</span>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
