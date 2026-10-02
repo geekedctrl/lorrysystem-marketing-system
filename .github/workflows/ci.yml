@@ -1,0 +1,364 @@
+name: LorrySystem CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "fix/**"
+      - "chore/**"
+
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test:
+    name: API + Database + Dashboard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check Python syntax
+        run: |
+          python3 -m compileall -q api/app
+          python3 -m compileall -q dashboard/app
+
+      - name: Create disposable CI environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PG_PASSWORD="$(openssl rand -hex 32)"
+          API_KEY="$(openssl rand -hex 32)"
+          DASHBOARD_SECRET="$(openssl rand -hex 32)"
+
+          cat > .env <<EOF
+          APP_ENV=development
+
+          POSTGRES_HOST=postgres-dev
+          POSTGRES_PORT=5432
+          POSTGRES_DB=lorrysystem_dev
+          POSTGRES_USER=lorrysystem_dev
+          POSTGRES_PASSWORD=${PG_PASSWORD}
+
+          MARKETING_API_KEY=${API_KEY}
+          EOF
+
+          cat > dashboard/.env <<EOF
+          MARKETING_API_BASE_URL=http://lorrysystem-dev-marketing-api:8000
+          MARKETING_API_KEY=${API_KEY}
+
+          DASHBOARD_SESSION_SECRET=${DASHBOARD_SECRET}
+          DASHBOARD_REVIEWER_IDENTITY=ci-reviewer
+          TRUST_CLOUDFLARE_IDENTITY=false
+
+          ICP_LOGISTICS_HAULAGE_ID=00000000-0000-0000-0000-000000000001
+          ICP_PASSENGER_TRANSPORT_ID=00000000-0000-0000-0000-000000000002
+          ICP_COMMERCIAL_ENTERPRISE_ID=00000000-0000-0000-0000-000000000003
+          EOF
+
+      - name: Validate Docker Compose
+        run: |
+          docker compose config -q
+          echo "Docker Compose configuration is valid."
+
+      - name: Build API and Dashboard
+        run: |
+          docker compose build marketing-api-dev dashboard-dev
+
+      - name: Start PostgreSQL and API
+        run: |
+          docker compose up -d postgres-dev marketing-api-dev
+          docker compose ps
+
+      - name: Wait for PostgreSQL health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..30}; do
+            STATUS="$(docker inspect -f '{{.State.Health.Status}}' lorrysystem-dev-postgres 2>/dev/null || true)"
+
+            if [ "${STATUS}" = "healthy" ]; then
+              echo "PostgreSQL is healthy."
+              exit 0
+            fi
+
+            echo "Waiting for PostgreSQL... (${attempt}/30) status=${STATUS:-unknown}"
+            sleep 2
+          done
+
+          echo "PostgreSQL did not become healthy."
+          exit 1
+
+      - name: Apply Alembic migrations
+        run: |
+          docker exec lorrysystem-dev-marketing-api \
+            alembic upgrade head
+
+      - name: Verify Alembic migration state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HEAD_REVISION="$(
+            docker exec lorrysystem-dev-marketing-api \
+              alembic heads |
+            awk 'NR == 1 {print $1}'
+          )"
+
+          CURRENT_REVISION="$(
+            docker exec lorrysystem-dev-marketing-api \
+              alembic current 2>/dev/null |
+            awk '/\(head\)/ {print $1}' |
+            tail -1
+          )"
+
+          echo "Alembic head:     ${HEAD_REVISION}"
+          echo "Database current: ${CURRENT_REVISION}"
+
+          if [ -z "${HEAD_REVISION}" ] || [ -z "${CURRENT_REVISION}" ]; then
+            echo "Could not determine Alembic migration state."
+            exit 1
+          fi
+
+          if [ "${HEAD_REVISION}" != "${CURRENT_REVISION}" ]; then
+            echo "Database is not at Alembic HEAD."
+            exit 1
+          fi
+
+      - name: Wait for API health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8001/health >/dev/null; then
+              echo "Marketing API is healthy."
+              exit 0
+            fi
+
+            echo "Waiting for API... (${attempt}/30)"
+            sleep 2
+          done
+
+          echo "Marketing API did not become healthy."
+          exit 1
+
+      - name: Test API authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API_KEY="$(
+            grep '^MARKETING_API_KEY=' .env |
+            cut -d= -f2-
+          )"
+
+          STATUS="$(
+            curl -s \
+              -o /dev/null \
+              -w '%{http_code}' \
+              http://127.0.0.1:8001/api/companies
+          )"
+
+          echo "Request without API key returned HTTP ${STATUS}"
+
+          if [ "${STATUS}" != "401" ]; then
+            echo "Protected API endpoint did not reject unauthenticated request."
+            exit 1
+          fi
+
+          curl -fsS \
+            -H "X-API-Key: ${API_KEY}" \
+            http://127.0.0.1:8001/api/companies \
+            >/dev/null
+
+          echo "Authenticated API request succeeded."
+
+      - name: Count API endpoints
+        run: |
+          curl -fsS \
+            http://127.0.0.1:8001/openapi.json \
+            -o /tmp/openapi.json
+
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/openapi.json", encoding="utf-8") as f:
+              spec = json.load(f)
+
+          supported = {
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "OPTIONS",
+              "HEAD",
+          }
+
+          counts = {}
+
+          for path_data in spec.get("paths", {}).values():
+              for method in path_data:
+                  method = method.upper()
+                  if method in supported:
+                      counts[method] = counts.get(method, 0) + 1
+
+          print("API endpoint count:")
+          for method in sorted(counts):
+              print(f"  {method}: {counts[method]}")
+          print(f"  TOTAL: {sum(counts.values())}")
+          PY
+
+      - name: Configure Dashboard ICP IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          COMMERCIAL_ID="$(
+            docker exec lorrysystem-dev-postgres \
+              psql \
+              -U lorrysystem_dev \
+              -d lorrysystem_dev \
+              -tAc \
+              "SELECT id FROM icp_profiles WHERE code='COMMERCIAL_ENTERPRISE';" |
+            tr -d '[:space:]'
+          )"
+
+          LOGISTICS_ID="$(
+            docker exec lorrysystem-dev-postgres \
+              psql \
+              -U lorrysystem_dev \
+              -d lorrysystem_dev \
+              -tAc \
+              "SELECT id FROM icp_profiles WHERE code='LOGISTICS_HAULAGE';" |
+            tr -d '[:space:]'
+          )"
+
+          PASSENGER_ID="$(
+            docker exec lorrysystem-dev-postgres \
+              psql \
+              -U lorrysystem_dev \
+              -d lorrysystem_dev \
+              -tAc \
+              "SELECT id FROM icp_profiles WHERE code='PASSENGER_TRANSPORT';" |
+            tr -d '[:space:]'
+          )"
+
+          if [ -z "${COMMERCIAL_ID}" ] || \
+             [ -z "${LOGISTICS_ID}" ] || \
+             [ -z "${PASSENGER_ID}" ]; then
+            echo "One or more ICP profiles were not seeded."
+            exit 1
+          fi
+
+          API_KEY="$(
+            grep '^MARKETING_API_KEY=' .env |
+            cut -d= -f2-
+          )"
+
+          DASHBOARD_SECRET="$(
+            grep '^DASHBOARD_SESSION_SECRET=' dashboard/.env |
+            cut -d= -f2-
+          )"
+
+          cat > dashboard/.env <<EOF
+          MARKETING_API_BASE_URL=http://lorrysystem-dev-marketing-api:8000
+          MARKETING_API_KEY=${API_KEY}
+
+          DASHBOARD_SESSION_SECRET=${DASHBOARD_SECRET}
+          DASHBOARD_REVIEWER_IDENTITY=ci-reviewer
+          TRUST_CLOUDFLARE_IDENTITY=false
+
+          ICP_LOGISTICS_HAULAGE_ID=${LOGISTICS_ID}
+          ICP_PASSENGER_TRANSPORT_ID=${PASSENGER_ID}
+          ICP_COMMERCIAL_ENTERPRISE_ID=${COMMERCIAL_ID}
+          EOF
+
+          echo "Dashboard configured with CI ICP profiles."
+
+      - name: Start Dashboard
+        run: |
+          docker compose up -d dashboard-dev
+          docker compose ps
+
+      - name: Test Dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          READY=0
+
+          for attempt in {1..30}; do
+            STATUS="$(
+              curl -s \
+                -o /dev/null \
+                -w '%{http_code}' \
+                http://127.0.0.1:8081/ \
+                || true
+            )"
+
+            if [ "${STATUS}" = "302" ]; then
+              echo "Dashboard root returned expected HTTP 302."
+              READY=1
+              break
+            fi
+
+            echo "Waiting for Dashboard... (${attempt}/30), HTTP=${STATUS:-none}"
+            sleep 2
+          done
+
+          if [ "${READY}" != "1" ]; then
+            echo "Dashboard did not become ready."
+            exit 1
+          fi
+
+          curl -fsS \
+            http://127.0.0.1:8081/dashboard \
+            >/dev/null
+
+          echo "Dashboard page loaded successfully."
+
+      - name: Test Dashboard to API connectivity
+        run: |
+          docker exec lorrysystem-dev-dashboard \
+            python -c \
+            "import httpx; r=httpx.get('http://lorrysystem-dev-marketing-api:8000/health'); r.raise_for_status(); print(r.status_code, r.text)"
+
+      - name: Show diagnostics on failure
+        if: failure()
+        run: |
+          echo "=== CONTAINERS ==="
+          docker compose ps -a
+
+          echo
+          echo "=== API LOGS ==="
+          docker logs --tail 200 lorrysystem-dev-marketing-api || true
+
+          echo
+          echo "=== DASHBOARD LOGS ==="
+          docker logs --tail 200 lorrysystem-dev-dashboard || true
+
+          echo
+          echo "=== POSTGRES LOGS ==="
+          docker logs --tail 200 lorrysystem-dev-postgres || true
+
+      - name: Clean up CI containers
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans || true
