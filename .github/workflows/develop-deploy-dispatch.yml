@@ -1,0 +1,87 @@
+name: Dispatch Successful Develop CI
+
+on:
+  workflow_run:
+    workflows:
+      - LorrySystem CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch-develop:
+    name: Dispatch Develop Deployment
+
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'develop'
+
+    runs-on: ubuntu-24.04
+
+    environment:
+      name: trusted-deploy-dispatch
+      deployment: false
+
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate CI metadata
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: Invalid CI commit SHA."
+            exit 1
+          fi
+
+          if [[ ! "${SOURCE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: Invalid source workflow run ID."
+            exit 1
+          fi
+
+          echo "Develop CI passed."
+          echo "Commit: ${TARGET_SHA}"
+          echo "Run ID: ${SOURCE_RUN_ID}"
+
+      - name: Dispatch trusted develop deployment
+        shell: bash
+        env:
+          DISPATCH_TOKEN: ${{ secrets.DEPLOY_REPO_DISPATCH_TOKEN }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+
+          PAYLOAD="$(
+            printf '%s' \
+              "{\"event_type\":\"develop-ci-passed\",\"client_payload\":{\"branch\":\"develop\",\"sha\":\"${TARGET_SHA}\",\"source_run_id\":\"${SOURCE_RUN_ID}\"}}"
+          )"
+
+          HTTP_STATUS="$(
+            curl \
+              --silent \
+              --show-error \
+              --output /tmp/dispatch-response.txt \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${DISPATCH_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data "${PAYLOAD}" \
+              https://api.github.com/repos/geekedctrl/lorrysystem-deploy/dispatches
+          )"
+
+          if [ "${HTTP_STATUS}" != "204" ]; then
+            echo "ERROR: repository_dispatch failed with HTTP ${HTTP_STATUS}."
+            cat /tmp/dispatch-response.txt
+            exit 1
+          fi
+
+          echo "Deployment dispatch accepted by lorrysystem-deploy."
