@@ -36,6 +36,9 @@ jobs:
           python3 -m compileall -q api/app
           python3 -m compileall -q dashboard/app
 
+      - name: Test n8n workspace adaptation
+        run: node --test integrations/n8n/workspace-runtime.test.js
+
       - name: Create disposable CI environment
         shell: bash
         run: |

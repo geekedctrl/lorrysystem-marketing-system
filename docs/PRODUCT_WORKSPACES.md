@@ -132,6 +132,12 @@ above. The monthly budget setting is configuration for automation; this release
 does not enforce provider-spend caps or calculate invoices. Campaign scheduling,
 provider integration and richer campaign analytics remain their roadmap stages.
 
+The [n8n adaptation package](../integrations/n8n/README.md) supplies an importable
+workspace preflight, an offline workflow binder, context/prompt and discovery
+memory guards, and a cross-workspace registry/sender credential check. Adapted
+exports remain inactive until their existing prompt, memory and sender mappings
+are reviewed. It does not automatically update live n8n workflows.
+
 ## Validation
 
 GitHub CI runs the workspace integration suite, the existing business-card/CSV

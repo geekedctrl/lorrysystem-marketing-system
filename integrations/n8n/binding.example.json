@@ -1,0 +1,12 @@
+{
+  "workspace_id": "00000000-0000-0000-0000-000000000001",
+  "api_base_url": "http://lorrysystem-dev-marketing-api:8000",
+  "api_credential": { "id": "SELECT_N8N_CREDENTIAL_ID", "name": "LorrySystem Marketing API" },
+  "require_catalog": true,
+  "trigger_nodes": ["Manual Trigger"],
+  "api_nodes": { "Create Candidate": "/api/candidates" },
+  "registry_table_id": "SELECT_LORRYSYSTEM_TABLE_ID",
+  "registry_nodes": ["Find Domain", "Update Discovery Memory"],
+  "sender_nodes": {},
+  "shared_nodes": ["Brave Search", "OpenAI Extraction"]
+}
