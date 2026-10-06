@@ -10,6 +10,12 @@ This repository contains the core application used by the **development environm
 
 ## Product workspaces update
 
+Administrators can now set up a product and its catalog through application forms,
+then run shared automation through an outreach draft awaiting human approval.
+See [Product onboarding and shared automation](docs/product-onboarding.md) for
+the one-time platform connection, access boundaries, automatic preparation rules,
+pause/retry controls and release steps. Sending remains a separate stage.
+
 The application now supports private product workspaces with email/password
 accounts, workspace roles, catalogs and automation credentials. Existing data
 migrates into the LorrySystem workspace. The API applies Alembic migrations before

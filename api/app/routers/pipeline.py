@@ -161,6 +161,8 @@ class Failure(Strict):
 
 def permit(*roles):
     principal = current_principal.get()
+    if principal.automation_job_id and principal.role == "SERVICE" and "ADMIN" in roles:
+        return principal
     if principal.role not in roles or (
         principal.role == "SERVICE" and not principal.actor.startswith("service:")
     ):
@@ -437,6 +439,7 @@ def review_contact(lead_id: UUID, data: ContactReview, db=Depends(get_db)):
         person_index=data.person_index,
         profile_url=contact.linkedin_url,
         contact_signature=contact_signature(contact),
+        review_mode="AUTOMATIC" if current_principal.get().automation_job_id else "HUMAN",
     )
     db.commit()
     return ContactRead.model_validate(contact)
@@ -623,6 +626,10 @@ def enqueue(db, lead, data, principal):
 def queue(lead_id: UUID, data: QueueStage, db=Depends(get_db)):
     principal = permit("ADMIN", "OPERATOR")
     run = enqueue(db, lead_for(db, lead_id), data, principal)
+    from app.services.product_automation import managed, schedule
+
+    if managed(db):
+        schedule(db, run.stage, run.id)
     db.commit()
     return run_read(run)
 
@@ -663,6 +670,10 @@ def qualify(lead_id: UUID, data: Qualification, db=Depends(get_db)):
         score=lead.current_score,
     )
     run = enqueue(db, lead, QueueStage(stage="MATCHING"), principal)
+    from app.services.product_automation import managed, schedule
+
+    if managed(db):
+        schedule(db, "MATCHING", run.id)
     db.commit()
     return run_read(run)
 
@@ -724,7 +735,23 @@ def state(lead_id: UUID, db=Depends(get_db)):
     )
     if current:
         current = matching.input_snapshot.get("context_hash") == context_hash
+    from app.models.automation import AutomationJob, ProductAutomationPlan
+
+    plan = db.scalar(select(ProductAutomationPlan))
+    related = select(LeadResearch.id).where(LeadResearch.lead_id == lead_id).union(
+        select(PipelineRun.id).where(PipelineRun.lead_id == lead_id)
+    )
+    jobs = list(db.scalars(select(AutomationJob).where(
+        AutomationJob.related_id.in_(related)
+    ).order_by(AutomationJob.created_at.desc()).limit(15))) if plan else []
     return {
+        "managed": bool(plan),
+        "automation_enabled": bool(plan and plan.enabled),
+        "automation_jobs": [
+            {"id": str(j.id), "kind": j.kind, "status": j.status,
+             "failure_reason": j.failure_reason, "outcome": j.result.get("outcome")}
+            for j in jobs
+        ],
         "available": True,
         "contact_reviewed": reviewed(db, lead) if lead.primary_contact_id else False,
         "scored": scored,
@@ -753,6 +780,10 @@ def health(db=Depends(get_db)):
 @router.post("/api/pipeline/claim")
 def claim(db=Depends(get_db)):
     principal = permit("SERVICE")
+    from app.services.product_automation import managed
+
+    if managed(db):
+        return None
     db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:scope,0))"),
         {"scope": f"pipeline:{principal.workspace_id}"},

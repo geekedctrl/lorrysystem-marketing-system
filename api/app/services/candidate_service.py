@@ -199,6 +199,7 @@ def find_duplicate_candidate(
 def create_candidate(
     db: Session,
     data: CandidateCreate,
+    commit: bool = True,
 ) -> dict:
     _active_icp(
         db,
@@ -255,7 +256,7 @@ def create_candidate(
                     },
                 )
             )
-            db.commit()
+            db.commit() if commit else db.flush()
             db.refresh(existing_candidate)
 
         return {
@@ -307,7 +308,7 @@ def create_candidate(
                     },
                 )
             )
-            db.commit()
+            db.commit() if commit else db.flush()
 
             return {
                 "outcome": "EXISTING_ACTIVE_LEAD",
@@ -405,7 +406,7 @@ def create_candidate(
             )
         )
 
-        db.commit()
+        db.commit() if commit else db.flush()
         db.refresh(candidate)
 
         return {
@@ -447,7 +448,7 @@ def create_candidate(
                         data=data.source,
                     )
                 )
-                db.commit()
+                db.commit() if commit else db.flush()
                 db.refresh(existing_candidate)
 
             return {
@@ -825,6 +826,7 @@ def accept_candidate(
     *,
     candidate_id: UUID,
     data: CandidateAccept,
+    commit: bool = True,
 ) -> dict:
     candidate = get_candidate(
         db,
@@ -958,7 +960,7 @@ def accept_candidate(
                 )
             )
 
-            db.commit()
+            db.commit() if commit else db.flush()
             db.refresh(candidate)
 
             return {
@@ -1146,7 +1148,14 @@ def accept_candidate(
             )
         )
 
-        db.commit()
+        from app.services.product_automation import managed, schedule
+        if managed(db):
+            research = db.scalar(select(LeadResearch).where(
+                LeadResearch.lead_id == lead.id, LeadResearch.research_status == 'PENDING'
+            ))
+            if research:
+                schedule(db, 'RESEARCH', research.id)
+        db.commit() if commit else db.flush()
         db.refresh(candidate)
         db.refresh(lead)
 

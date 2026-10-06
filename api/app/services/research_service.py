@@ -483,6 +483,10 @@ def claim_next_research(
     max_running: int | None = None,
 ) -> LeadResearch | None:
 
+    from app.services.product_automation import managed
+    if managed(db):
+        return None
+
     # --------------------------------------------------------
     # Atomically select the oldest available PENDING job.
     #
@@ -636,6 +640,8 @@ def claim_next_research(
 # ============================================================
 
 def recover_stale_research(db: Session) -> int:
+    from app.services.product_automation import managed
+    if managed(db):return 0
     now = datetime.now(timezone.utc)
     jobs = list(db.scalars(select(LeadResearch).where(
         LeadResearch.research_status == 'RUNNING',

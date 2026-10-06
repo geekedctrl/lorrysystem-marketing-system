@@ -6,6 +6,16 @@ references only; API keys and provider secrets stay in n8n credentials.
 
 ## Reviewed lead stages
 
+For administrator-activated products, use **shared-workflows.js**,
+**shared-runtime.js** and **shared-binding.example.json**. One dispatcher and
+four children handle every product, using API-issued temporary job leases,
+database-owned workspace discovery memory and the existing Brave/xKiro n8n
+credentials. Product teams configure only application forms. See
+[the onboarding guide](../../docs/product-onboarding.md) for migration 012 and
+the one-time platform connection. Run `node --test integrations/n8n/shared.test.js`.
+Shared workers prepare drafts but cannot approve or send. The workspace-bound
+generators below remain the legacy/manual integration path for unactivated products.
+
 The [lead preparation guide](../../docs/lead-preparation-pipeline.md) covers
 **Research → Contact review → Qualification/scoring → Product matching → Outreach
 draft → Approval**. `pipeline-workflows.js` generates a shared stage child and a

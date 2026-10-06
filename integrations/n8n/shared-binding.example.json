@@ -1,0 +1,12 @@
+{
+  "api_base_url": "http://lorrysystem-dev-marketing-api:8000",
+  "api_credential": {"id": "SELECT_SHARED_WORKER_CREDENTIAL_ID", "name": "Shared Product Worker"},
+  "brave_credential": {"id": "SELECT_BRAVE_CREDENTIAL_ID", "name": "Brave Search"},
+  "llm": {
+    "provider": "xkiro",
+    "base_url": "https://api.xkiro.com/v1",
+    "model": "mistralai/mistral-large-2512",
+    "max_tokens": 6000,
+    "credential": {"id": "SELECT_XKIRO_CREDENTIAL_ID", "name": "xKiro"}
+  }
+}

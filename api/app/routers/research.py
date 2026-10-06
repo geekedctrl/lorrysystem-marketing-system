@@ -88,10 +88,16 @@ def create_research_endpoint(
     db: Session = Depends(get_db),
 ):
     try:
-        return create_research_run(
+        report = create_research_run(
             db,
             lead_id=lead_id,
         )
+        from app.services.product_automation import managed, schedule
+
+        if managed(db):
+            schedule(db, 'RESEARCH', report.id)
+            db.commit()
+        return report
 
     except LeadNotFoundError as exc:
         raise HTTPException(

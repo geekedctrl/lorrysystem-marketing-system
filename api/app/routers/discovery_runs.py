@@ -10,7 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select,text
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import token_hash
@@ -103,6 +103,10 @@ def run_read(run):
 
 @router.get('/config')
 def config(db=Depends(get_db)):
+    from app.models.automation import ProductAutomationPlan
+    managed=db.scalar(select(ProductAutomationPlan))
+    if managed:
+        return {'configured':True,'enabled':managed.enabled and managed.state=='ACTIVE','managed':True,'default_query':managed.configuration.get('discovery_query','')}
     row = db.scalar(select(DiscoveryAutomation))
     result = {'configured': bool(row), 'enabled': bool(row and row.enabled), 'default_query': row.default_query if row else ''}
     if current_principal.get().role == 'ADMIN':
@@ -126,6 +130,12 @@ def configure(data: AutomationConfig, db=Depends(get_db)):
 
 @router.get('/runs')
 def runs(db=Depends(get_db)):
+    from app.models.automation import AutomationJob,ProductAutomationPlan
+    if db.scalar(select(ProductAutomationPlan.id)):
+        return [{'id':j.id,'status':'QUEUED' if j.status=='PENDING' else j.status,'query':j.payload.get('query',''),
+                 'target_new_companies':j.payload.get('target_new_companies',5),'summary':{**j.result,'new_candidates':j.result.get('accepted_leads',0)},
+                 'error_code':j.failure_reason,'created_at':j.created_at,'started_at':j.started_at,'finished_at':j.finished_at}
+                for j in db.scalars(select(AutomationJob).where(AutomationJob.kind=='DISCOVERY').order_by(AutomationJob.created_at.desc()).limit(10))]
     expire_runs(db)
     return [run_read(row) for row in db.scalars(select(DiscoveryRun).order_by(DiscoveryRun.created_at.desc()).limit(10))]
 
@@ -138,6 +148,17 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 @router.post('/runs', status_code=202)
 def start(data: StartRun, db=Depends(get_db)):
     principal = require_role('ADMIN', 'OPERATOR')
+    from app.models.automation import AutomationJob,ProductAutomationPlan
+    from app.services.product_automation import schedule
+    managed=db.scalar(select(ProductAutomationPlan))
+    if managed:
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('shared-automation-claim',0))"))
+        if not managed.enabled or managed.state!='ACTIVE':raise HTTPException(409,'Activate or resume this product before finding leads')
+        if db.scalar(select(AutomationJob.id).where(AutomationJob.kind=='DISCOVERY',AutomationJob.status.in_(('PENDING','RUNNING')))):
+            raise HTTPException(409,'Discovery is already running for this product')
+        schedule(db,'DISCOVERY',payload={'query':data.query,'target_new_companies':data.target_new_companies})
+        managed.next_discovery_at=datetime.now(timezone.utc)+timedelta(days=1)
+        db.commit();return runs(db)[0]
     config = db.scalar(select(DiscoveryAutomation))
     if not config or not config.enabled:
         raise HTTPException(409, 'Lead discovery is not configured for this workspace. Ask an administrator to connect its workflow.')

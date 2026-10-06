@@ -9,7 +9,7 @@ def install_api_key_security(app):
     @app.middleware("http")
     async def workspace_guard(request, call_next):
         path = request.url.path
-        control = path.startswith("/api/auth/") or path == "/api/workspaces" or path.startswith("/api/workspaces/")
+        control = path.startswith("/api/auth/") or path == "/api/workspaces" or path.startswith("/api/workspaces/") or path.startswith('/api/automation/worker/')
         if not (path == "/api" or path.startswith("/api/")) or control:
             response = await call_next(request)
             if path.startswith('/api/'):
