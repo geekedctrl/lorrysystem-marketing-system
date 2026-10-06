@@ -56,6 +56,7 @@ function preflightNodes(binding) {
     require_catalog: binding.require_catalog !== false,
     ...(binding.discovery ? { discovery: binding.discovery } : {}),
     ...(binding.llm ? { llm: binding.llm } : {}),
+    ...(binding.research ? { research: binding.research } : {}),
   };
   return [
     { id: 'workspace-configuration', name: CONFIG, type: 'n8n-nodes-base.code', typeVersion: 2,

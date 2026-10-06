@@ -314,7 +314,7 @@ remain required. Pause the old workflow before enabling its replacement.
 Local regression and CI:
 
 ```bash
-node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js
+node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js integrations/n8n/research.test.js
 ```
 
 The API's disposable integration suite separately verifies the context contract,
@@ -337,3 +337,75 @@ accounts and real extraction still need their own validation before activation.
 References: [n8n HTTP credentials](https://docs.n8n.io/integrations/builtin/credentials/httprequest/),
 [Data Table node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.datatable/),
 [referencing node output](https://docs.n8n.io/code/builtin/output-other-nodes/).
+
+## Automatic research after acceptance
+
+Accepting a discovered candidate already creates an official lead and one
+`PENDING` research job in the same transaction. The workspace research worker
+polls every minute; acceptance needs no second research button. Human review
+remains required, and the worker does not qualify leads, create contacts or send
+messages. Named people and their public business details are saved as research
+findings for review.
+
+Create two workflows using `research-binding.example.json`. Fill only credential
+**references** from n8n: the workspace Marketing API credential, Brave Search and
+the existing `xKiro DEV model API` Header Auth credential (`x-api-key`). xKiro's
+key stays in n8n's credential store; no model key or runtime environment variable
+is required. The model is `mistralai/mistral-large-2512` at
+`https://api.xkiro.com/v1`.
+
+```bash
+node integrations/n8n/research-workflows.js child tmp/research-binding.json tmp/research-child.json
+# Import and publish the child, then use its assigned n8n workflow ID:
+node integrations/n8n/research-workflows.js worker tmp/research-binding.json tmp/research-worker.json CHILD_ID
+```
+
+Import and publish the queue workflow. Each product needs its own pair and named
+workspace API credential. Both workflows verify current workspace identity and
+active ICP/catalog IDs before work. The parent validates API readiness before
+claiming a job: an older API without `/api/research/recover-stale` returns a
+`WAITING_API_DEPLOYMENT` result. Once the new API is deployed, the next scheduled
+tick starts processing automatically.
+
+DEV is wired with the published
+[Company Research child](https://n8n-dev.obsidian.cam/workflow/xlaOGqh9W1WE8kXj)
+and [Automatic Research queue](https://n8n-dev.obsidian.cam/workflow/9uNygo8bhPT2RvEP).
+The live readiness check confirmed it waits for the API deployment without
+claiming the existing pending job or calling providers. Merge the API/dashboard
+change into `develop` for the normal CI/CD deployment; the queue needs no further
+activation afterwards. Older API versions can return either 404 or 405 for the
+missing recovery route; both wait safely, while auth/server errors stop execution.
+
+The parent claims at most one running job per workspace using an advisory lock
+and `FOR UPDATE SKIP LOCKED`. Closed leads are excluded from automatic claims.
+Jobs abandoned for 30 minutes become failed with retained history. An operator
+can use **Run research again** on the lead page; duplicate pending/running jobs
+are rejected. Source and completion writes remain scoped by PostgreSQL RLS.
+
+Each job makes two Brave queries, fetches at most six pages through the API's
+guarded public-fetch endpoint, saves at most ten sources, and sends at most
+24,000 evidence characters to one xKiro call with 4,000 output tokens. Guarded
+fetch retains robots checks, public-IP DNS pinning, bounded redirects and response
+sizes. Search/website failures can still yield a useful partial report. Sources
+are saved before extraction, so model failures retain readable evidence.
+
+Extraction validates source membership, exact evidence quotes, public person
+names/titles and contact attribution. Unsupported contacts are omitted; unknown
+fleet and technology remain unknown. Completed research requires official-page
+evidence, supported services and verified identity with confidence at least 70.
+Otherwise useful findings are partial with confidence capped at 65. No supported
+facts or a provider error fails the job with a sanitized reason. Raw provider
+responses and credentials are not saved as dashboard data. n8n execution payload
+retention is disabled in the deployed pair.
+
+The lead's Research section displays company/services/fleet/technology findings,
+public business contacts, per-finding confidence, quotes, source links and missing
+information. It refreshes while work is pending/running and retains previous
+runs when research is queued again.
+
+Validation: `api/scripts/validate_workspace_research.py` covers acceptance,
+concurrent claims, RLS, named-key guarded fetch, stale recovery, dashboard display,
+retry CSRF and role restrictions in disposable environments. Native n8n 2.41.7
+tests against the disposable API exercise two workspaces, empty queues, API
+deployment waiting, partial evidence, model failure and a mismatched child using
+synthetic website/search/model responses; these tests incur no provider charges.

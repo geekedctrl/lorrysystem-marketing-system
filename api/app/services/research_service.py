@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -95,10 +95,7 @@ def create_research_run(
     lead_id: UUID,
 ) -> LeadResearch:
 
-    lead = db.get(
-        Lead,
-        lead_id,
-    )
+    lead = db.scalar(select(Lead).where(Lead.id == lead_id).with_for_update())
 
     if lead is None:
         raise LeadNotFoundError(
@@ -125,6 +122,12 @@ def create_research_run(
     # DISCOVERED → RESEARCHING happens only when the
     # Research Worker actually starts/claims the job.
     # --------------------------------------------------------
+
+    if db.scalar(select(LeadResearch.id).where(
+        LeadResearch.lead_id == lead_id,
+        LeadResearch.research_status.in_(['PENDING', 'RUNNING']),
+    ).limit(1)) is not None:
+        raise ValueError('Research is already queued or running for this lead.')
 
     research = LeadResearch(
         lead_id=lead.id,
@@ -416,6 +419,8 @@ def get_research_context(
 
 def claim_next_research(
     db: Session,
+    *,
+    max_running: int | None = None,
 ) -> LeadResearch | None:
 
     # --------------------------------------------------------
@@ -424,6 +429,15 @@ def claim_next_research(
     # FOR UPDATE SKIP LOCKED prevents multiple Research
     # Workers from claiming the same job concurrently.
     # --------------------------------------------------------
+
+    if max_running is not None:
+        # Serialize capacity checks/claims across API replicas and n8n workers.
+        workspace_key = db.info['workspace_id'].int & ((1 << 63) - 1)
+        db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': workspace_key})
+        running = db.scalar(select(func.count()).select_from(LeadResearch).where(LeadResearch.research_status == 'RUNNING'))
+        if running >= max_running:
+            db.rollback()
+            return None
 
     statement = (
         select(LeadResearch)
@@ -441,6 +455,9 @@ def claim_next_research(
         .limit(1)
     )
 
+    if max_running is not None:
+        statement = statement.join(Lead, Lead.id == LeadResearch.lead_id).where(
+            Lead.status.in_(ACTIVE_STATUSES)).with_for_update(of=LeadResearch, skip_locked=True)
     research = db.scalar(statement)
 
     if research is None:
@@ -552,6 +569,27 @@ def claim_next_research(
     db.refresh(research)
 
     return research
+
+
+# ============================================================
+# Recover a worker lost during a run
+# ============================================================
+
+def recover_stale_research(db: Session) -> int:
+    now = datetime.now(timezone.utc)
+    jobs = list(db.scalars(select(LeadResearch).where(
+        LeadResearch.research_status == 'RUNNING',
+        LeadResearch.started_at < now - timedelta(minutes=30),
+    ).with_for_update(skip_locked=True).limit(10)))
+    for research in jobs:
+        research.research_status = 'FAILED'
+        research.completed_at = now
+        research.raw_output = {'failure_reason': 'WORKER_TIMEOUT'}
+        db.add(Event(event_type='research_failed', entity_type='RESEARCH', entity_id=research.id,
+            actor_type='SERVICE', actor_id='research-worker',
+            metadata_json={'lead_id': str(research.lead_id), 'reason': 'WORKER_TIMEOUT'}))
+    db.commit()
+    return len(jobs)
 
 
 # ============================================================
@@ -956,6 +994,7 @@ def fail_research(
     )
 
     research.research_status = "FAILED"
+    research.raw_output = {'failure_reason': data.reason}
     research.completed_at = now
 
     db.add(

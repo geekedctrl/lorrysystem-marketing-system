@@ -1,0 +1,14 @@
+{
+  "workspace_id": "00000000-0000-0000-0000-000000000001",
+  "api_base_url": "http://lorrysystem-dev-marketing-api:8000",
+  "api_credential": {"id": "SELECT_WORKSPACE_API_CREDENTIAL", "name": "LorrySystem DEV discovery API"},
+  "brave_credential": {"id": "SELECT_BRAVE_CREDENTIAL", "name": "Brave Search DEV"},
+  "llm": {
+    "base_url": "https://api.xkiro.com/v1",
+    "provider": "xkiro",
+    "model": "mistralai/mistral-large-2512",
+    "max_tokens": 4000,
+    "credential": {"id": "SELECT_XKIRO_CREDENTIAL", "name": "xKiro DEV model API"}
+  },
+  "research": {"country": "MY", "max_pages": 6, "max_sources": 10, "max_evidence_chars": 24000}
+}
