@@ -67,9 +67,24 @@ function registryIdentity(context, domainOrUrl) {
     registry_key: `${context.registry_namespace}:${domain}` };
 }
 
+function registryRecordIdentity(context, row) {
+  const identity = registryIdentity(context, row.canonical_domain || row.domain || row.canonical_url);
+  // The discovery workflow deduplicates directories by page, company sites by root URL.
+  // Keeping the canonical URL prevents one directory page from suppressing all others.
+  if (row.canonical_url) {
+    const match = String(row.canonical_url).match(/^https?:\/\/([^/?#]+)([^#]*)$/i);
+    if (!match || registryIdentity(context, match[1]).domain !== identity.domain) {
+      throw new Error('Registry canonical URL must match its domain');
+    }
+    const suffix = match[2] || '/';
+    identity.registry_key = `${context.registry_namespace}:https://${identity.domain}${suffix.startsWith('?') ? '/' : ''}${suffix}`;
+  }
+  return identity;
+}
+
 function assertRegistryRow(context, row) {
   if (!row) return null;
-  const expected = registryIdentity(context, row.canonical_domain || row.domain || row.canonical_url);
+  const expected = registryRecordIdentity(context, row);
   if (row.workspace_id !== expected.workspace_id || row.registry_key !== expected.registry_key) {
     throw new Error('Discovery memory row belongs to another workspace or has not been migrated');
   }
@@ -112,6 +127,6 @@ function workspacePrompt(context, task) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { assertWorkspaceContext, registryIdentity, assertRegistryRow, icpId,
+  module.exports = { assertWorkspaceContext, registryIdentity, registryRecordIdentity, assertRegistryRow, icpId,
     assertCandidate, workspacePrompt };
 }

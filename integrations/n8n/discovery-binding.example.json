@@ -1,0 +1,17 @@
+{
+  "workspace_id": "00000000-0000-0000-0000-000000000001",
+  "api_base_url": "http://lorrysystem-dev-marketing-api:8000",
+  "api_credential": {"id": "SELECT_WORKSPACE_API_CREDENTIAL", "name": "LorrySystem DEV discovery API"},
+  "brave_credential": {"id": "SELECT_BRAVE_CREDENTIAL", "name": "Brave Search DEV"},
+  "openai_credential": {"id": "SELECT_OPENAI_CREDENTIAL", "name": "Select OpenAI credential when ready"},
+  "registry_table_id": "SELECT_DEDICATED_WORKSPACE_TABLE",
+  "discovery": {
+    "query": "haulage company Selangor Malaysia",
+    "country": "MY",
+    "brave_count": 20,
+    "target_new_companies": 10,
+    "max_results_scanned": 40,
+    "relevance_keywords": [],
+    "directory_domains": ["freightnet.com", "businesslist.my", "goodfirms.co", "zoominfo.com"]
+  }
+}

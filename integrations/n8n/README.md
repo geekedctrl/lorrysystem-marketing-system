@@ -32,6 +32,59 @@ unsupported contract versions and empty discovery catalogs. Configure named
 credentials for LorrySystem as well. `require_catalog: false` is available for
 non-discovery health checks; do not use it to activate discovery without ICPs.
 
+## Adapt the supplied Level 1 / 1.1 discovery workflow
+
+`workspace-discovery.template.json` is the sanitized, product-neutral adaptation
+of the supplied 59-node discovery export. Generate an importable **62-node inactive
+copy** using `adapt-discovery.js`; the template itself is not ready to import.
+
+```bash
+node integrations/n8n/adapt-discovery.js \
+  tmp/discovery-binding.json tmp/discovery-workspace.json
+```
+
+Start the binding from `discovery-binding.example.json`. Select the workspace's
+named Marketing API credential, a dedicated registry table, and Brave/OpenAI
+credential references from the target n8n instance. Credential IDs from another
+instance are not portable. Only `id` and `name` belong in this file, never tokens.
+The example uses DEV's internal API origin; the API has no public DEV hostname.
+
+The adapter preserves retry windows, existing-candidate/active-lead handling,
+website-credit contact checks, source evidence and the confidence thresholds.
+It loads current catalogs before search, removes seed ICP UUIDs and the fixed
+logistics classifier, resolves AI ICP codes through the current catalog, and
+verifies the candidate's ICP plus authenticated workspace context. A null ICP
+means no fit and follows the rejection path. Unknown codes fail extraction.
+Dashboard rendering and human review are verified separately using a user login.
+
+All 12 memory nodes use the dedicated table and write workspace ownership. Each
+lookup/update checks both ownership and the scoped canonical URL key. Direct
+company sites remain domain-scoped through their root canonical URL; directory
+listings remain page-scoped. Existing and final rows must pass ownership checks.
+
+Configure each product's discovery query, country, directory domains and optional
+literal relevance keywords in its binding. Empty keywords defer relevance to the
+workspace ICP evaluation, allowing products outside logistics. The example keeps
+LorrySystem's query only as an example binding. Scanning is bounded to at most 200
+raw results, with at most 20 results per Brave page. `target_new_companies` limits
+new discoveries; due retries also consume fetch/AI calls. These are run limits,
+not enforcement of the workspace's monthly spend setting. Run one discovery at
+a time per workspace. Public fetch redirects require separate validation.
+
+For DEV setup, `.env.n8n-dev` stays ignored. `MARKETING_WORKSPACE_API_KEY` is created
+in the dashboard: select the product, open **Workspaces & team → Automation
+credentials**, enter a name and select **Create credential**. Copy the token shown
+once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header Auth
+with `X-Subscription-Token`. OpenAI uses n8n's OpenAI credential type.
+
+The DEV copy created on 2026-10-06 is **LorrySystem DEV - Workspace Lead Discovery**,
+inactive, with named Marketing API/Brave credentials and a new dedicated registry
+containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
+were verified against the original. The original table and workflows were left
+unchanged. OpenAI is unselected until a DEV account is chosen; no AI calls or real
+candidate writes were performed. Live preflight confirmed 3 ICPs and 6 offerings,
+and one public Brave result verified the provider key.
+
 ## Bind an existing workflow
 
 Export the original workflow and keep it under an ignored directory such as
@@ -116,7 +169,7 @@ columns and add string columns `workspace_id` and `registry_key`.
 ```javascript
 // Put workspace-runtime.js functions above this code.
 const context = $('Workspace Guard').first().json.workspace_context;
-const identity = registryIdentity(context, $json.canonical_domain || $json.domain || $json.canonical_url);
+const identity = registryRecordIdentity(context, $json);
 // Write identity.workspace_id and identity.registry_key.
 // For the existing DEV schema, write identity.domain to canonical_domain.
 // Look up registry_key in context.registry_table_id.
@@ -137,7 +190,9 @@ node integrations/n8n/bind-workflow.js migrate-memory \
 
 The migration preserves statuses, candidate IDs, evidence and retry fields,
 normalizes company domains, and adds ownership keys. It supports the existing DEV
-`canonical_domain` column without introducing an extra `domain` column. It rejects duplicate domains
+`canonical_domain` column without introducing an extra `domain` column. It includes
+the canonical URL in keys for this discovery schema, preserving separate directory
+pages on the same domain. It rejects duplicate discovery keys
 and foreign-workspace rows. Unscoped historic rows can only be assigned to
 LorrySystem. Create other products' tables empty. Review the result and import
 it into the intended table using your installed n8n's table import facilities or
@@ -186,7 +241,7 @@ remain required. Pause the old workflow before enabling its replacement.
 Local regression and CI:
 
 ```bash
-node --test integrations/n8n/workspace-runtime.test.js
+node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js
 ```
 
 The API's disposable integration suite separately verifies the context contract,
@@ -196,8 +251,12 @@ tests do not imply that live workflows have been imported or activated.
 The preflight and candidate-submission path were also imported and executed in a
 disposable n8n 2.41.7 instance against two test workspaces. Both created independent
 candidates for the same prospect with their own ICP IDs and registry namespaces;
-a swapped credential stopped before downstream execution. Actual Data Table row
-operations and sender accounts must still be verified in the target n8n instance.
+a swapped credential stopped before downstream execution. The full discovery graph
+was also run in disposable n8n 2.41.7 with native Data Tables and synthetic provider
+and candidate responses for two unrelated products. First runs passed candidate,
+source and final registry checks; identical second runs skipped fetch, AI and
+candidate creation. A mismatched workspace stopped before Brave Search. Sender
+accounts and real extraction still need their own validation before activation.
 
 References: [n8n HTTP credentials](https://docs.n8n.io/integrations/builtin/credentials/httprequest/),
 [Data Table node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.datatable/),
