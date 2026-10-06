@@ -62,12 +62,13 @@ invalid JSON follow the existing registry failure/retry path without creating
 candidates. Provider/model attribution and valid token-usage counters are retained;
 provider error bodies are not copied into candidate or registry results.
 
-For xKiro, put the key in the ignored `.env.n8n-dev` as `XKIRO_API_KEY`, then create
-or select an n8n **Header Auth** credential with header name `x-api-key` and the
-key as its value. The local file also contains `XKIRO_BASE_URL` and `XKIRO_MODEL`;
-the generated workflow takes those settings from its binding. Changing the local
-file alone does not configure a remote n8n credential. No OpenAI credential or
-SDK is required. Redirects are disabled on model requests. Other compatible
+For xKiro, create or select the n8n **Header Auth** credential named
+**xKiro DEV model API**, with header name `x-api-key` and the key as its value.
+Select that credential in **Custom Model Structured Extraction**. Store the key
+in n8n's credential store. The workflow binding holds only the credential ID/name,
+base URL and model; xKiro variables are not needed in `.env` or the Marketing API
+container. No OpenAI credential or SDK is required. Redirects are disabled on
+model requests. Other compatible
 gateways can use an appropriate Header Auth credential, such as `Authorization`
 with a `Bearer …` value, without changing the extraction pipeline.
 
@@ -103,13 +104,15 @@ once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header 
 with `X-Subscription-Token`. xKiro uses Header Auth with `x-api-key`.
 
 The DEV copy created on 2026-10-06 is **LorrySystem DEV - Workspace Lead Discovery**,
-inactive, with named Marketing API/Brave/xKiro credentials and a new dedicated registry
-containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
+with named Marketing API/Brave/xKiro credentials and a dedicated registry
+initially containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
 were verified against the original. The original table and workflows were left
 unchanged. Custom-model auth is bound to xKiro using the supplied key. A small
 synthetic JSON request passed both directly and through real DEV n8n, using the
-requested Mistral model; the remote check reported 19 total tokens. No real-lead
-AI calls or candidate writes were performed. Live preflight confirmed 3 ICPs and
+requested Mistral model; the remote check reported 19 total tokens. A subsequent
+live discovery run saved four new candidates with verified source evidence.
+The child and dashboard dispatcher are now published for dashboard-requested
+runs. Live preflight confirmed 3 ICPs and
 6 offerings, and one public Brave result verified the provider key. Temporary
 connectivity-check workflows and their authentication credentials were removed.
 
