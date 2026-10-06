@@ -138,6 +138,12 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .toolbar { display:flex; justify-content:space-between; gap:14px; align-items:center; margin-bottom:16px; }
 .filters { display:flex; gap:10px; flex-wrap:wrap; }
+.discovery-panel .filters { align-items:flex-end; margin-bottom:16px; }
+.discovery-panel label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }
+.discovery-panel input[name="query"] { width:min(460px, 100%); min-width:250px; }
+.discovery-panel input[type="number"] { width:110px; }
+.discovery-panel [role="status"] { padding-top:12px; border-top:1px solid var(--line); }
+.discovery-panel .sub { display:block; margin-top:6px; color:var(--muted); font-size:13px; }
 input, select, textarea {
   width:100%; background:#fff; border:1px solid #d9dee7; border-radius:9px;
   padding:10px 11px; color:var(--text); outline:none;

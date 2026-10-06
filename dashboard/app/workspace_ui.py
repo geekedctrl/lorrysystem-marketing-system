@@ -136,6 +136,7 @@ async def accept_invitation(request: Request, token: str = Form(...), password: 
 async def workspaces(request: Request, message: str = ''):
     selected = request.state.workspace
     members, credentials, audit, products, icps = [], [], [], [], []
+    discovery_config = {}
     if selected and selected['role'] == 'ADMIN':
         api = request.app.state.api
         prefix = '/api/workspaces/' + selected['id']
@@ -144,8 +145,9 @@ async def workspaces(request: Request, message: str = ''):
         audit = await api.get(prefix + '/audit')
         products = await api.get('/api/products')
         icps = await api.get('/api/icp-profiles')
+        discovery_config = await api.get('/api/discovery/config')
     return page(request, 'workspaces.html', members=members, credentials=credentials,
-                audit=audit, products=products, icps=icps, message=message)
+                audit=audit, products=products, icps=icps, message=message, discovery_config=discovery_config)
 
 
 @router.post('/workspaces/switch')
@@ -186,6 +188,12 @@ async def manage(request: Request):
             await api.patch(prefix + '/members/' + str(form.get('user_id')), json={'role': form.get('role')})
         elif action == 'remove':
             await api.request('DELETE', prefix + '/members/' + str(form.get('user_id')))
+        elif action == 'discovery':
+            await api.request('PUT', '/api/discovery/config', json={
+                'webhook_url': str(form.get('webhook_url', '')),
+                'default_query': str(form.get('default_query', '')),
+                'enabled': form.get('enabled') == 'on',
+            })
         elif action == 'settings':
             await api.patch(prefix + '/settings', json={'description': form.get('description', ''),
                 'brand_voice': form.get('brand_voice', ''), 'monthly_budget_usd': form.get('monthly_budget_usd', 50)})

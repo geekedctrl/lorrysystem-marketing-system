@@ -62,12 +62,13 @@ invalid JSON follow the existing registry failure/retry path without creating
 candidates. Provider/model attribution and valid token-usage counters are retained;
 provider error bodies are not copied into candidate or registry results.
 
-For xKiro, put the key in the ignored `.env.n8n-dev` as `XKIRO_API_KEY`, then create
-or select an n8n **Header Auth** credential with header name `x-api-key` and the
-key as its value. The local file also contains `XKIRO_BASE_URL` and `XKIRO_MODEL`;
-the generated workflow takes those settings from its binding. Changing the local
-file alone does not configure a remote n8n credential. No OpenAI credential or
-SDK is required. Redirects are disabled on model requests. Other compatible
+For xKiro, create or select the n8n **Header Auth** credential named
+**xKiro DEV model API**, with header name `x-api-key` and the key as its value.
+Select that credential in **Custom Model Structured Extraction**. Store the key
+in n8n's credential store. The workflow binding holds only the credential ID/name,
+base URL and model; xKiro variables are not needed in `.env` or the Marketing API
+container. No OpenAI credential or SDK is required. Redirects are disabled on
+model requests. Other compatible
 gateways can use an appropriate Header Auth credential, such as `Authorization`
 with a `Bearer …` value, without changing the extraction pipeline.
 
@@ -103,13 +104,15 @@ once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header 
 with `X-Subscription-Token`. xKiro uses Header Auth with `x-api-key`.
 
 The DEV copy created on 2026-10-06 is **LorrySystem DEV - Workspace Lead Discovery**,
-inactive, with named Marketing API/Brave/xKiro credentials and a new dedicated registry
-containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
+with named Marketing API/Brave/xKiro credentials and a dedicated registry
+initially containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
 were verified against the original. The original table and workflows were left
 unchanged. Custom-model auth is bound to xKiro using the supplied key. A small
 synthetic JSON request passed both directly and through real DEV n8n, using the
-requested Mistral model; the remote check reported 19 total tokens. No real-lead
-AI calls or candidate writes were performed. Live preflight confirmed 3 ICPs and
+requested Mistral model; the remote check reported 19 total tokens. A subsequent
+live discovery run saved four new candidates with verified source evidence.
+The child and dashboard dispatcher are now published for dashboard-requested
+runs. Live preflight confirmed 3 ICPs and
 6 offerings, and one public Brave result verified the provider key. Temporary
 connectivity-check workflows and their authentication credentials were removed.
 
@@ -259,6 +262,48 @@ for each workspace and review its API/provider usage; budget settings do not
 enforce provider spend caps.
 
 ## Acceptance before activation
+
+### Dashboard Find Leads
+
+Discovered Leads now starts bounded discovery with a search phrase and 1–10 new
+websites. Only workspace administrators/operators can start runs; a database
+constraint allows one queued/running job per workspace. The page polls saved
+status and refreshes the reviewable candidates when the run finishes. Counts
+distinguish new candidates, existing candidates, skipped websites and failures.
+
+The discovery child keeps its manual trigger and also accepts an Execute
+Sub-workflow Trigger. Generate the dashboard dispatcher with
+`dashboardDispatcher(binding, discoveryWorkflowId, webhookPath)` from
+`dashboard-discovery.js`. Publish the child first, then the dispatcher; n8n 2.41
+requires published referenced sub-workflows. The dispatcher webhook validates
+the bound workspace and exchanges a one-use run proof at
+`POST /api/discovery/runs/{id}/claim` using the named workspace API credential
+before invoking search. It waits for the child and reports completion or a
+sanitized failure at `/complete`. Unknown, expired, replayed and foreign-workspace
+requests stop before Brave/model calls. Webhook execution data is not retained.
+Do not add a search schedule: discovery runs only when a human starts a saved job.
+
+The child returns one completion summary after all terminal branches, including
+empty searches, all-skipped memory results, fetch failures and rejected
+extractions. Dashboard runs only fetch unseen websites and never accept
+candidates or send marketing. Fatal child errors are caught by the dispatcher;
+a worker lost during a run times out rather than permanently blocking the button.
+
+DEV startup registers the LorrySystem connection from `api/discovery.dev.json`
+after migration 010, only when `APP_ENV=development` and no connection exists.
+This is configuration, not a credential: the webhook cannot start discovery
+without a genuine API-created run and its one-use proof. Existing administrator
+settings (including disabled connections) are preserved. Production/test modes
+do not inherit this DEV connection. Other products can connect their own
+dispatcher in **Workspaces & team → Lead discovery**. Allowed destination hosts
+are restricted by `DISCOVERY_WEBHOOK_ALLOWED_HOSTS` in the API environment;
+DEV defaults to `n8n-dev.obsidian.cam`. An explicit `DISCOVERY_BOOTSTRAP_FILE`
+can supply a different deployment's initial connection.
+
+Validation includes the disposable `api/scripts/validate_discovery_runs.py`
+integration suite and native n8n 2.41.7 runs covering a successful discovery,
+all-skipped memory, empty search and fatal child failure. No paid providers are
+called by these fixture tests.
 
 Validate both workspaces independently: overlapping company domains do not
 suppress each other; AI sees the correct catalog; candidates use that workspace's

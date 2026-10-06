@@ -8,6 +8,7 @@ const {adaptDiscovery, discoverySettings, modelSettings} = require('./adapt-disc
 const {completionContent} = require('./model-runtime');
 const {registryRecordIdentity} = require('./workspace-runtime');
 const {migrateMemory} = require('./bind-workflow');
+const {dashboardDispatcher} = require('./dashboard-discovery');
 const example = JSON.parse(fs.readFileSync(path.join(__dirname,'discovery-binding.example.json'),'utf8'));
 const A = example.workspace_id;
 const B = '00000000-0000-0000-0000-000000000002';
@@ -20,7 +21,8 @@ function run(name, json, context, previous = {}) {
   const node = workflow.nodes.find(node => node.name === name);
   const $ = name => {
     const value = name === 'Workspace Guard' ? {workspace_context:context}
-      : name === 'Workspace Configuration' ? {config: {discovery: discoverySettings(example.discovery), llm: modelSettings(example.llm)}} : previous[name];
+      : name === 'Workspace Configuration' ? {config: {discovery: discoverySettings(example.discovery), llm: modelSettings(example.llm)}}
+      : name === 'Discovery Inputs' ? (previous[name] || discoverySettings(example.discovery)) : previous[name];
     if (!value) throw new Error(`Missing fixture node: ${name}`);
     return {item: {json:value}, first: () => ({json:value}), all: () => [{json:value}]};
   };
@@ -30,7 +32,8 @@ function run(name, json, context, previous = {}) {
 }
 
 test('the supplied discovery graph binds all 12 memory nodes and stops API auth errors', () => {
-  assert.equal(workflow.nodes.length,62);
+  assert.ok(workflow.nodes.some(node => node.name === 'Dashboard Run Input'));
+  assert.ok(workflow.nodes.some(node => node.name === 'Discovery Run Summary'));
   assert.equal(workflow.active,false);
   assert.equal(workflow.nodes.some(node => /gmail|emailSend|executeCommand/.test(node.type)),false);
   const tables=workflow.nodes.filter(node => node.type === 'n8n-nodes-base.dataTable');
@@ -200,4 +203,37 @@ test('provider failures and truncated output cannot create candidates or leak pr
   response.body.usage={prompt_tokens:10,completion_tokens:20,total_tokens:30};
   assert.equal(completionContent(response).usage.total_tokens,30);
   assert.equal(completionContent({choices:[{finish_reason:'stop',message:{content:'{}',refusal:'refused'}}]}).error,'AI_PROVIDER_UNEXPECTED_MESSAGE');
+});
+
+test('dashboard requests override search bounds and reject another workspace before searching', () => {
+  const request={workspace_id:A,status:'RUNNING',query:'accounting teams in Penang',target_new_companies:3};
+  const result=run('Discovery Inputs',{},ctx(A),{'Dashboard Run Input':request})[0].json;
+  assert.equal(result.query,request.query);
+  assert.equal(result.target_new_companies,3);
+  assert.equal(result.max_results_scanned,40);
+  assert.equal(result.new_only,true);
+  assert.throws(()=>run('Discovery Inputs',{},ctx(B),{'Dashboard Run Input':request}),/does not match/);
+  const row={...registryRecordIdentity(ctx(A),{canonical_domain:'example.com',canonical_url:'https://example.com/'}),
+    canonical_domain:'example.com',canonical_url:'https://example.com/',status:'FETCH_FAILED',retry_after:'2020-01-01T00:00:00Z'};
+  const decision=run('Prepare Existing Registry Decision',row,ctx(A),{'Discovery Inputs':result,'Normalize Discovery Key':{url:row.canonical_url}}).json;
+  assert.equal(decision.registry_should_process,false);
+  assert.equal(decision.registry_decision_reason,'SKIP_EXISTING_FOR_NEW_DISCOVERY_RUN');
+});
+
+test('dashboard dispatcher validates a one-use API claim before invoking discovery and catches workflow errors', () => {
+  const dispatcher=dashboardDispatcher(example,'DEV_CHILD_ID','workspace-discovery-dev');
+  const claim=dispatcher.nodes.find(node=>node.name==='Claim Dashboard Run');
+  assert.equal(claim.credentials.httpHeaderAuth.id,example.api_credential.id);
+  assert.equal(claim.parameters.options.redirect.redirect.followRedirects,false);
+  assert.notEqual(claim.parameters.options.response.response.neverError,true);
+  const execute=dispatcher.nodes.find(node=>node.name==='Run Workspace Discovery');
+  assert.equal(execute.parameters.options.waitForSubWorkflow,true);
+  assert.equal(execute.onError,'continueRegularOutput');
+  const completion=dispatcher.nodes.find(node=>node.name==='Prepare Dashboard Completion');
+  const output=vm.runInNewContext(`(function(){${completion.parameters.jsCode}\n})()`,{
+    $input:{all:()=>[{json:{error:'sensitive provider response'}}]},
+    $:()=>({first:()=>({json:{run_id:'run',run_token:'proof'}})})}, {timeout:1000})[0].json;
+  assert.equal(output.status,'FAILED');
+  assert.equal(output.error_code,'WORKFLOW_FAILED');
+  assert.equal(JSON.stringify(output).includes('sensitive provider response'),false);
 });
