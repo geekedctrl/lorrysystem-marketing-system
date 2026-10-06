@@ -184,3 +184,19 @@ test('checked-in preflight matches generator and is inactive', () => {
         api_nodes: {}, registry_nodes: [], sender_nodes: {}, shared_nodes: [],
       }).nodes.find(node => node.name === 'Workspace Guard').parameters.jsCode);
 });
+
+test('existing DEV canonical_domain registry schema is preserved during migration', () => {
+  const workspaceId = '00000000-0000-0000-0000-000000000001';
+  const rows = [{ canonical_domain: 'www.example.com', canonical_url: 'https://www.example.com/about',
+    status: 'LEVEL2_REQUIRED', candidate_id: 'existing-candidate', times_seen: 4,
+    retry_after: '2026-10-07T00:00:00Z' }];
+  const migrated = migrateMemory(rows, workspaceId);
+  assert.equal(migrated[0].canonical_domain, 'example.com');
+  assert.equal(Object.hasOwn(migrated[0], 'domain'), false);
+  assert.equal(migrated[0].times_seen, 4);
+  assert.equal(migrated[0].retry_after, rows[0].retry_after);
+  assert.equal(migrated[0].candidate_id, 'existing-candidate');
+  const context = assertWorkspaceContext(response(workspaceId), binding(workspaceId));
+  assert.equal(assertRegistryRow(context, migrated[0]), migrated[0]);
+  assert.throws(() => assertRegistryRow(context, rows[0]), /migrated/);
+});

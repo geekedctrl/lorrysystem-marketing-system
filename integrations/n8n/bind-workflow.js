@@ -3,7 +3,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { registryIdentity } = require('./workspace-runtime');
+const { registryRecordIdentity } = require('./workspace-runtime');
 const runtime = fs.readFileSync(path.join(__dirname, 'workspace-runtime.js'), 'utf8').replace(/\r\n/g, '\n');
 const CONFIG = 'Workspace Configuration';
 const FETCH = 'Load Workspace Context';
@@ -54,6 +54,8 @@ function preflightNodes(binding) {
     api_base_url: binding.api_base_url.replace(/\/$/, ''),
     registry_table_id: binding.registry_table_id || null,
     require_catalog: binding.require_catalog !== false,
+    ...(binding.discovery ? { discovery: binding.discovery } : {}),
+    ...(binding.llm ? { llm: binding.llm } : {}),
   };
   return [
     { id: 'workspace-configuration', name: CONFIG, type: 'n8n-nodes-base.code', typeVersion: 2,
@@ -225,11 +227,12 @@ function migrateMemory(rows, workspaceId) {
         || (row.workspace_id && row.workspace_id !== workspaceId)) {
       throw new Error('Unscoped historic rows may only be assigned to LorrySystem; foreign rows cannot be copied');
     }
-    const identity = registryIdentity(context, row.domain || row.canonical_url);
+    const identity = registryRecordIdentity(context, row);
     if (row.registry_key && row.registry_key !== identity.registry_key) throw new Error('Foreign registry key');
     if (seen.has(identity.registry_key)) throw new Error('Duplicate canonical domains; resolve before importing');
     seen.add(identity.registry_key);
-    return { ...row, ...identity };
+    return { ...row, workspace_id: identity.workspace_id, registry_key: identity.registry_key,
+      [Object.hasOwn(row, 'canonical_domain') ? 'canonical_domain' : 'domain']: identity.domain };
   });
 }
 
