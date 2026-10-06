@@ -69,7 +69,7 @@ function registryIdentity(context, domainOrUrl) {
 
 function assertRegistryRow(context, row) {
   if (!row) return null;
-  const expected = registryIdentity(context, row.domain);
+  const expected = registryIdentity(context, row.canonical_domain || row.domain || row.canonical_url);
   if (row.workspace_id !== expected.workspace_id || row.registry_key !== expected.registry_key) {
     throw new Error('Discovery memory row belongs to another workspace or has not been migrated');
   }

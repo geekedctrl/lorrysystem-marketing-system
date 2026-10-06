@@ -116,8 +116,9 @@ columns and add string columns `workspace_id` and `registry_key`.
 ```javascript
 // Put workspace-runtime.js functions above this code.
 const context = $('Workspace Guard').first().json.workspace_context;
-const identity = registryIdentity(context, $json.domain || $json.canonical_url);
-// Write identity.workspace_id, identity.domain and identity.registry_key.
+const identity = registryIdentity(context, $json.canonical_domain || $json.domain || $json.canonical_url);
+// Write identity.workspace_id and identity.registry_key.
+// For the existing DEV schema, write identity.domain to canonical_domain.
 // Look up registry_key in context.registry_table_id.
 ```
 
@@ -135,7 +136,8 @@ node integrations/n8n/bind-workflow.js migrate-memory \
 ```
 
 The migration preserves statuses, candidate IDs, evidence and retry fields,
-normalizes company domains, and adds ownership keys. It rejects duplicate domains
+normalizes company domains, and adds ownership keys. It supports the existing DEV
+`canonical_domain` column without introducing an extra `domain` column. It rejects duplicate domains
 and foreign-workspace rows. Unscoped historic rows can only be assigned to
 LorrySystem. Create other products' tables empty. Review the result and import
 it into the intended table using your installed n8n's table import facilities or

@@ -225,11 +225,12 @@ function migrateMemory(rows, workspaceId) {
         || (row.workspace_id && row.workspace_id !== workspaceId)) {
       throw new Error('Unscoped historic rows may only be assigned to LorrySystem; foreign rows cannot be copied');
     }
-    const identity = registryIdentity(context, row.domain || row.canonical_url);
+    const identity = registryIdentity(context, row.canonical_domain || row.domain || row.canonical_url);
     if (row.registry_key && row.registry_key !== identity.registry_key) throw new Error('Foreign registry key');
     if (seen.has(identity.registry_key)) throw new Error('Duplicate canonical domains; resolve before importing');
     seen.add(identity.registry_key);
-    return { ...row, ...identity };
+    return { ...row, workspace_id: identity.workspace_id, registry_key: identity.registry_key,
+      [Object.hasOwn(row, 'canonical_domain') ? 'canonical_domain' : 'domain']: identity.domain };
   });
 }
 
