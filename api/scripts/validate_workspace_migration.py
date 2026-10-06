@@ -37,7 +37,13 @@ try:
         connection.execute(text("INSERT INTO leads(company_id,primary_contact_id,icp_profile_id) SELECT '11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222',id FROM icp_profiles LIMIT 1"))
         connection.execute(text("INSERT INTO events(event_type,entity_type,entity_id,metadata) VALUES ('migration_fixture','COMPANY','11111111-1111-1111-1111-111111111111',jsonb_build_object('preserve',true))"))
         before = {table: connection.execute(text(f'SELECT * FROM {table} ORDER BY id')).mappings().all() for table in tables}
-    migrate('head')
+    # Reproduce API startup racing an explicit CI/operator migration.
+    upgrades = [subprocess.Popen(['alembic', 'upgrade', 'head'], env=env,
+                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+    for upgrade in upgrades:
+        _, errors = upgrade.communicate(timeout=60)
+        assert upgrade.returncode == 0, errors
+    print('PASS concurrent upgrades serialize and both succeed')
     migrated = True
     with scratch.connect() as connection:
         for table in tables:

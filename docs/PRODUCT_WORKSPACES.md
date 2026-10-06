@@ -56,7 +56,8 @@ authenticated principal, rather than submitted form values.
 
 The API entrypoint now runs `alembic upgrade head` before starting Uvicorn.
 An unsuccessful migration stops the API rather than serving against an old
-schema. Compose keeps the dashboard dependent on API health.
+schema. A PostgreSQL session advisory lock serializes startup and explicit
+operator/CI migration commands. Compose keeps the dashboard dependent on API health.
 
 Before merging/deploying this database change, take a verified PostgreSQL backup
 through the existing server backup procedure. Migration `009` requires database
