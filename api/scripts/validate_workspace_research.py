@@ -119,6 +119,33 @@ assert call('GET', '/api/research/' + stalled['id'], headers=a['service'])['raw_
 call('PATCH', '/api/research/' + other['id'] + '/fail', {'reason': 'FIXTURE_RESET'}, b['service'])
 print('PASS stalled job recovery affects only its workspace and retains failure history', flush=True)
 
+# Industry promotion uses saved evidence, preserves curated values and stays workspace-scoped.
+for case in ('supported', 'invented_quote', 'foreign_source', 'external_only', 'low_confidence', 'unverified_identity', 'curated'):
+    domain = f'{case.replace("_", "-")}-{suffix}.com'
+    company = call('POST', '/api/companies', {'name': f'Industry fixture {case} {suffix}',
+        'domain': domain, 'website_url': f'https://{domain}/',
+        'industry': 'Existing curated industry' if case == 'curated' else None}, a['human'], 201)
+    primary = call('POST', '/api/contacts', {'company_id': company['id'], 'email': f'overview-{suffix}@example.test'}, a['human'], 201) if case == 'supported' else None
+    lead = call('POST', '/api/leads', {'company_id': company['id'], 'icp_profile_id': context['icp_profile']['id'],
+        'primary_contact_id': primary['id'] if primary else None}, a['human'], 201)
+    if case == 'supported':
+        industry_overview_lead = lead['id']
+    run = call('POST', f"/api/leads/{lead['id']}/research", {}, a['human'], 201)
+    call('PATCH', f"/api/research/{run['id']}/start", {}, a['service'])
+    saved_source = {**source, 'url': 'https://outside.com/' if case == 'external_only' else f'https://{domain}/'}
+    call('POST', f"/api/research/{run['id']}/sources", saved_source, a['service'], 201)
+    classification = {'label': 'Logistics & freight forwarding', 'confidence': 74 if case == 'low_confidence' else 85,
+        'evidence_quote': 'invented industry evidence' if case == 'invented_quote' else 'provides road haulage',
+        'source_urls': ['https://foreign.com/'] if case == 'foreign_source' else [saved_source['url']]}
+    payload = {**report, 'company_facts': {**report['company_facts'],
+        'company_identity_verified': case != 'unverified_identity', 'industry_classification': classification}}
+    call('PATCH', f"/api/research/{run['id']}/complete", payload, a['service'])
+    updated = call('GET', '/api/companies/' + company['id'], headers=a['service'])
+    expected = 'Logistics & freight forwarding' if case == 'supported' else 'Existing curated industry' if case == 'curated' else None
+    assert updated['industry'] == expected, case
+    call('GET', '/api/companies/' + company['id'], headers=b['service'], expected=404)
+print('PASS sourced industry promotion, low-confidence/unsupported rejection and preservation of curated industry', flush=True)
+
 jar = http.cookiejar.CookieJar()
 browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 def page(path):
@@ -131,6 +158,11 @@ with form('/login', {'csrf_token': csrf, 'email': email, 'password': password}):
 csrf = re.search(r'name="csrf_token" value="([^"]+)"', page('/workspaces'))[1]
 with form('/workspaces/switch', {'csrf_token': csrf, 'workspace_id': a['workspace_id']}): pass
 html = page('/leads/' + job['lead_id'])
+assert html.index('<h2>Company</h2>') < html.index('id="research-brief"')
+overview = page('/leads/' + industry_overview_lead)
+assert 'Logistics &amp; freight forwarding' in overview
+assert 'Name not identified' in overview and '<dd>None</dd>' not in overview
+assert overview.index('<h2>Primary Contact</h2>') < overview.index('id="research-brief"')
 for text in ('Provides road haulage services', 'Jane Tan', 'Operations Manager', 'Source 1', 'Fleet count is unknown', 'Run research again'):
     assert text in html, text
 with form('/leads/' + job['lead_id'] + '/research', {'csrf': 'invalid'}): pass

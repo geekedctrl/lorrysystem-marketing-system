@@ -71,6 +71,17 @@ test('unverified identity or snippet-only coverage becomes partial research',()=
   const data=extraction();data.company_identity_verified=false;
   assert.equal(validate(data).research_payload.confidence,65);
 });
+test('industry classification needs an exact official-source quote and sufficient confidence',()=>{
+  const data=extraction();
+  data.industry_classification={label:'Logistics & freight forwarding',confidence:85,evidence_quote:'provides road haulage and freight forwarding',source_urls:[url]};
+  assert.equal(validate(data).research_payload.company_facts.industry_classification.label,'Logistics & freight forwarding');
+  for(const change of [{confidence:74},{evidence_quote:'Invented accounting practice'},{source_urls:['https://foreign.com/']},{label:'<script>bad</script>'}]) {
+    const bad={...data,industry_classification:{...data.industry_classification,...change}};
+    assert.equal(validate(bad).research_payload.company_facts.industry_classification,null);
+  }
+  assert.equal(validate(data,{...evidence,sources:[{...evidence.sources[0],official:false}]}).research_payload.company_facts.industry_classification,null);
+  assert.equal(validate(extraction()).research_payload.company_facts.industry_classification,null,'older responses remain compatible');
+});
 test('invented quotes, foreign sources, people and contact details are rejected',()=>{
   const data=extraction();data.facts[0].evidence_quote='A fleet of one million trucks';assert.equal(validate(data).research_outcome,'FAILED');
   const foreign=extraction();foreign.summary_sources=['https://foreign.com/'];assert.equal(validate(foreign).failure_reason,'INVALID_RESEARCH_SCHEMA');

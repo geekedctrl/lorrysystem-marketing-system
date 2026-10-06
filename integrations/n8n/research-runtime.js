@@ -198,10 +198,18 @@ function validateResearchExtraction(response, evidence, llm, completion) {
   if (!facts.length) return failure('NO_SUPPORTED_RESEARCH_FACTS');
   const complete=data.company_identity_verified===true&&evidence.coverage.official_pages_read>0
     && facts.some(fact=>fact.category==='SERVICES'&&fact.evidence_status==='OBSERVED')&&data.confidence>=70;
+  const classification=data.industry_classification;
+  const industry=classification && typeof classification.label==='string' && classification.label.trim().length>=3
+    && classification.label.trim().length<=120 && !/[\x00-\x1f<>]/.test(classification.label)
+    && confidence(classification.confidence) && classification.confidence>=75 && supported(classification)
+    && classification.source_urls.some(url=>byUrl.get(url).official===true
+      && normalize(byUrl.get(url).evidence).includes(normalize(classification.evidence_quote)))
+    ? {label:classification.label.trim(),confidence:classification.confidence,evidence_quote:classification.evidence_quote,
+      source_urls:classification.source_urls} : null;
   const report={summary:data.company_summary.trim(),confidence:complete?data.confidence:Math.min(data.confidence,65),
     pain_points:facts.filter(fact=>fact.category==='PAIN_POINT').map(fact=>`${fact.evidence_status==='INFERRED'?'Possible: ':''}${fact.fact}`),
     buying_signals:facts.filter(fact=>fact.category==='SIGNAL').map(fact=>fact.fact),
-    company_facts:{research_version:'workspace-research-v1',facts,people,coverage:evidence.coverage,
+    company_facts:{research_version:'workspace-research-v1',facts,people,industry_classification:industry,coverage:evidence.coverage,
       company_identity_verified:complete,missing_information:Array.isArray(data.missing_information)?data.missing_information.filter(x=>typeof x==='string'&&x.length<=300).slice(0,12):[],
       model_usage:envelope.usage},model_provider:llm.provider,model_name:llm.model,raw_output:null};
   return {research_id:evidence.research_id,lead_id:evidence.lead_id,research_outcome:complete?'COMPLETED':'PARTIAL',
