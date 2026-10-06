@@ -189,6 +189,7 @@ def submit_action_for_approval(
     db: Session,
     *,
     action_id: UUID,
+    commit: bool = True,
 ) -> dict:
 
     action = (
@@ -314,7 +315,10 @@ def submit_action_for_approval(
             )
         )
 
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
 
     except IntegrityError as exc:
         db.rollback()

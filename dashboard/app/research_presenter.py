@@ -121,7 +121,7 @@ def present_report(item):
     sections = [{'category': category, 'title': title, 'description': description, 'findings': grouped[category]}
                 for category, title, description in CATEGORIES if grouped[category]]
     people = []
-    for person in facts.get('people') if isinstance(facts.get('people'), list) else []:
+    for person_index, person in enumerate(facts.get('people') if isinstance(facts.get('people'), list) else []):
         if not isinstance(person, dict) or not text(person.get('name')):
             continue
         name = text(person['name'])
@@ -142,7 +142,7 @@ def present_report(item):
         legacy_profile = safe_profile_url(person.get('linkedin_url'), 'LinkedIn')
         if legacy_profile and 'professional_profiles' not in person:
             profiles.append({'url': legacy_profile, 'platform': 'LinkedIn', 'handle': '', 'quote': '', 'citations': [], 'basis': 'Saved in company research'})
-        people.append({'name': name, 'initials': ''.join(part[0] for part in name.split()[:2]).upper(),
+        people.append({'name': name, 'research_index': person_index, 'initials': ''.join(part[0] for part in name.split()[:2]).upper(),
             'title': text(person.get('job_title')) or 'Role not specified',
             'role': text(person.get('role_classification')).replace('_', ' ').title(),
             'email': email, 'email_href': 'mailto:' + email if re.fullmatch(r'[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+', email) else None,
@@ -180,3 +180,29 @@ def research_view(items, requested_run=None):
     return {'report': selected, 'history': reports, 'latest': reports[0] if reports else None,
             'active': active,
             'viewing_history': bool(requested_run and selected and selected['id'] == requested_run and reports[0]['id'] != selected['id'])}
+
+
+def present_scores(items):
+    """Build readable criteria without trusting model-provided links or HTML."""
+    result = []
+    for item in items:
+        breakdown = item.get('score_breakdown') or {}
+        components = breakdown.get('components', []) if isinstance(breakdown, dict) else []
+        entries = breakdown.get('rubric', []) if isinstance(breakdown, dict) else []
+        rubric = {r['criterion']: r.get('label') for r in entries
+                  if isinstance(r, dict) and isinstance(r.get('criterion'), str)} if isinstance(entries, list) else {}
+        view = []
+        for component in components if isinstance(components, list) else []:
+            if not isinstance(component, dict):
+                continue
+            evidence = []
+            for citation in component.get('evidence', []) if isinstance(component.get('evidence'), list) else []:
+                if isinstance(citation, dict) and (url := safe_research_url(citation.get('source_url'))):
+                    evidence.append({'url': url, 'quote': text(citation.get('evidence_quote'))})
+            criterion = text(component.get('criterion'))
+            view.append({'title': text(rubric.get(criterion)) or criterion.replace('_', ' ').title(),
+                         'points': score(component.get('points')), 'max_points': score(component.get('max_points')),
+                         'rationale': text(component.get('rationale')), 'evidence': evidence})
+        result.append({**item, 'view_components': view,
+                       'view_gaps': strings(breakdown.get('gaps')) if isinstance(breakdown, dict) else []})
+    return result

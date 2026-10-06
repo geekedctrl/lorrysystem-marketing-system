@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .api_client import MarketingAPI, MarketingAPIError
 from .config import Settings, icp_options
 from .workspace_ui import WorkspaceDashboardMiddleware, router as workspace_router
-from .research_presenter import research_view, safe_research_url
+from .research_presenter import research_view, safe_research_url, present_scores
 
 from .import_helpers import (
     CSV_HEADERS,
@@ -242,9 +242,9 @@ def iso_date(value: str | None) -> str:
 templates.env.filters["iso_date"] = iso_date
 
 
-async def safe_get(path: str, default: Any) -> Any:
+async def safe_get(path: str, default: Any, params: dict | None = None) -> Any:
     try:
-        return await api.get(path)
+        return await api.get(path, params=params)
     except MarketingAPIError:
         return default
 
@@ -887,6 +887,9 @@ async def lead_detail(
             safe_get(f"/api/leads/{lead_id}/product-matches", []),
             safe_get(f"/api/leads/{lead_id}/actions", []),
             safe_get("/api/products", []),
+            safe_get(f'/api/leads/{lead_id}/pipeline', []),
+            safe_get(f'/api/leads/{lead_id}/pipeline-state', {'available':False}),
+            safe_get('/api/contacts', [], params={'company_id':lead['company_id']}),
         ]
 
         if lead.get("primary_contact_id"):
@@ -905,7 +908,8 @@ async def lead_detail(
         matches = results[3]
         actions = results[4]
         products = results[5]
-        contact = results[6] if len(results) > 6 else None
+        pipeline_runs, pipeline_state, company_contacts = results[6:9]
+        contact = results[9] if len(results) > 9 else None
 
         product_map = {p["id"]: p for p in products}
         for match in matches:
@@ -936,10 +940,13 @@ async def lead_detail(
                 "research": research_details,
                 "research_view": research_view(research_details, research_run),
                 "research_active": any(item['research_status'] in ('PENDING', 'RUNNING') for item in research_details),
-                "scores": scores,
+                "scores": present_scores(scores),
                 "matches": matches,
                 "actions": actions,
                 "approvals_by_action": approvals_by_action,
+                "pipeline_runs": pipeline_runs,
+                "pipeline_state": pipeline_state,
+                "company_contacts": company_contacts,
                 "created": bool(created),
                 "closed": bool(closed),
                 "error": error,
@@ -967,6 +974,125 @@ async def queue_lead_research(request: Request, lead_id: str, csrf: str = Form(.
         return RedirectResponse(f'/leads/{lead_id}', status_code=303)
     except MarketingAPIError as exc:
         return RedirectResponse(f'/leads/{lead_id}?error={quote(exc.message)}', status_code=303)
+
+
+@app.post("/leads/{lead_id}/contact-review")
+async def review_lead_contact(
+    request: Request,
+    lead_id: str,
+    csrf: str = Form(...),
+    confirmed: str = Form(""),
+    contact_id: str = Form(""),
+    research_id: str = Form(""),
+    person_index: int = Form(-1),
+    linkedin_url: str = Form(""),
+):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    if confirmed != "yes":
+        return RedirectResponse(
+            f'/leads/{lead_id}?error={quote("Confirm the company connection before selecting this contact.")}',
+            status_code=303,
+        )
+    payload = (
+        {"confirmed": True, "contact_id": contact_id}
+        if contact_id
+        else {
+            "confirmed": True,
+            "research_id": research_id,
+            "person_index": person_index,
+            "linkedin_url": linkedin_url or None,
+        }
+    )
+    try:
+        await api.post(f"/api/leads/{lead_id}/contact-review", json=payload)
+        return RedirectResponse(f"/leads/{lead_id}#contact-review", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(
+            f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303
+        )
+
+
+@app.post("/leads/{lead_id}/pipeline")
+async def queue_lead_stage(
+    request: Request,
+    lead_id: str,
+    csrf: str = Form(...),
+    stage: str = Form(...),
+    product_id: str = Form(""),
+    channel: str = Form("EMAIL"),
+):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    try:
+        await api.post(
+            f"/api/leads/{lead_id}/pipeline",
+            json={"stage": stage, "product_id": product_id or None, "channel": channel},
+        )
+        return RedirectResponse(f"/leads/{lead_id}#lead-stages", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(
+            f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303
+        )
+
+
+@app.post("/leads/{lead_id}/qualify")
+async def qualify_lead_stage(
+    request: Request, lead_id: str, csrf: str = Form(...), note: str = Form(...)
+):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    try:
+        await api.post(f"/api/leads/{lead_id}/qualify", json={"note": note})
+        return RedirectResponse(f"/leads/{lead_id}#lead-stages", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(
+            f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303
+        )
+
+
+@app.post("/leads/{lead_id}/actions/{action_id}/edit")
+async def edit_lead_draft(
+    request: Request,
+    lead_id: str,
+    action_id: str,
+    csrf: str = Form(...),
+    subject: str = Form(""),
+    content: str = Form(...),
+):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    try:
+        action = await api.get(f"/api/actions/{action_id}")
+        if action["lead_id"] != lead_id:
+            raise MarketingAPIError(404, "Draft not found for this lead.")
+        await api.patch(
+            f"/api/actions/{action_id}",
+            json={"subject": subject or None, "content": content},
+        )
+        return RedirectResponse(f"/leads/{lead_id}#lead-actions", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(
+            f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303
+        )
+
+
+@app.post("/leads/{lead_id}/actions/{action_id}/submit")
+async def submit_lead_draft(
+    request: Request, lead_id: str, action_id: str, csrf: str = Form(...)
+):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    try:
+        action = await api.get(f"/api/actions/{action_id}")
+        if action["lead_id"] != lead_id:
+            raise MarketingAPIError(404, "Draft not found for this lead.")
+        await api.post(f"/api/actions/{action_id}/submit", json={})
+        return RedirectResponse(f"/leads/{lead_id}#lead-actions", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(
+            f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303
+        )
 
 
 @app.get(

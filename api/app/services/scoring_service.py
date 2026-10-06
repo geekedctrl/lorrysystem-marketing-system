@@ -96,6 +96,7 @@ def create_score(
     *,
     lead_id: UUID,
     data: ScoreCreate,
+    commit: bool = True,
 ) -> LeadScore:
 
     # --------------------------------------------------------
@@ -253,7 +254,10 @@ def create_score(
         # until an approved scoring threshold/policy exists.
         # ----------------------------------------------------
 
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         db.refresh(score)
 
         return score

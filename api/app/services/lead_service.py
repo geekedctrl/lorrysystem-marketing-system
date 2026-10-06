@@ -381,6 +381,7 @@ def transition_lead(
     reason: str | None = None,
     note: str | None = None,
     closed_by: str | None = None,
+    commit: bool = True,
 ) -> Lead:
 
     lead = db.get(
@@ -531,7 +532,10 @@ def transition_lead(
     db.add(event)
 
     try:
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         db.refresh(lead)
 
         return lead

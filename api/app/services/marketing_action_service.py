@@ -237,6 +237,7 @@ def create_action(
     *,
     lead_id: UUID,
     data: MarketingActionCreate,
+    commit: bool = True,
 ) -> MarketingAction:
 
     lead = validate_lead_eligibility(
@@ -305,7 +306,10 @@ def create_action(
 
     db.add(event)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(action)
 
     return action

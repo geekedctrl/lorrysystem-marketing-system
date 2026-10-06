@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.research_presenter import present_report, research_view, safe_research_url
+from app.research_presenter import present_report, research_view, safe_research_url, present_scores
 
 
 def report(identifier='old', created='2026-10-05T12:00:00Z', status='COMPLETED'):
@@ -79,6 +79,21 @@ class ResearchPresentationTests(unittest.TestCase):
         legacy = present_report(item)
         self.assertEqual(len(legacy['sections']), 2)
         self.assertEqual(legacy['sections'][1]['findings'][0]['inferred'], True)
+
+
+class ScorePresentationTests(unittest.TestCase):
+    def test_score_criteria_preserve_values_and_reject_executable_source_links(self):
+        saved={'total_score':40,'score_breakdown':{'rubric':[{'criterion':'icp_fit','label':'ICP fit'}],
+            'components':[{'criterion':'icp_fit','points':40,'max_points':40,'rationale':'Documented public fleet.',
+                'evidence':[{'source_url':'javascript:alert(1)','evidence_quote':'Unsupported link'},
+                            {'source_url':'https://acme.com/','evidence_quote':'Public fleet evidence'}]}],
+            'gaps':['Buying intent unknown']}}
+        view=present_scores([saved])[0]
+        self.assertEqual(view['view_components'][0]['title'],'ICP fit')
+        self.assertEqual(len(view['view_components'][0]['evidence']),1)
+        self.assertEqual(view['view_gaps'],['Buying intent unknown'])
+        self.assertEqual(present_scores([{'score_breakdown':{'components':None,'rubric':None}}])[0]['view_components'],[])
+        self.assertNotIn('view_components',saved)
 
 
 if __name__ == '__main__':

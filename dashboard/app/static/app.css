@@ -859,3 +859,42 @@ dd { margin:0; text-align:right; font-weight:700; font-size:13px; }
 .research-profile-review { margin-top: 12px; font-size: 12px; }
 .research-profile-review summary { cursor: pointer; color: #92400e; font-weight: 600; }
 .research-profile-review p { color: #64748b; }
+.lead-stages { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0 0 24px; }
+.lead-stage { display:grid; grid-template-columns:24px minmax(0,1fr); gap:4px 9px; padding:14px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; text-decoration:none; color:#475569; }
+.lead-stage > span { grid-row:span 2; width:24px; height:24px; display:grid; place-items:center; background:#f1f5f9; border-radius:50%; font-size:11px; font-weight:700; }
+.lead-stage strong { font-size:12px; line-height:1.4; }
+.lead-stage small { font-size:10px; color:#64748b; }
+.lead-stage-complete { border-color:#bbdaca; background:#f8fcfa; }
+.lead-stage-complete > span { background:#dcf3e6; color:#166534; }
+.stage-intro { max-width:800px; color:#64748b; font-size:13px; line-height:1.7; }
+.stage-control-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; margin-top:24px; }
+.stage-control { min-width:0; padding:0 20px 0 0; border-right:1px solid #e2e8f0; }
+.stage-control:last-child { border:0; padding:0; }
+.stage-control h3,.stage-draft-control h3 { font-size:14px; margin:0 0 10px; }
+.stage-control p,.stage-draft-control p { font-size:12px; line-height:1.7; color:#64748b; }
+.stage-control .form-stack { gap:12px; }
+.stage-confirm { display:flex !important; flex-direction:row !important; align-items:flex-start; gap:8px; font-size:12px; font-weight:400; line-height:1.6; }
+.stage-confirm input { width:16px; flex:0 0 16px; margin-top:3px; }
+.stage-muted { color:#64748b; }
+.stage-reviewed { color:#166534 !important; font-weight:600; }
+.stage-history { margin:20px 0 0; border-top:1px solid #e2e8f0; padding-top:14px; font-size:12px; }
+.stage-history > summary { cursor:pointer; color:#475569; font-weight:600; }
+.stage-history > div { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:12px 0; border-bottom:1px solid #f1f5f9; }
+.stage-history form { padding:18px 0; }
+.stage-draft-control { margin-top:24px; padding-top:20px; border-top:1px solid #e2e8f0; }
+.stage-draft-form { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:16px; align-items:end; }
+.stage-draft-form label { display:flex; flex-direction:column; gap:8px; font-size:12px; font-weight:600; }
+.stage-draft-form select,.stage-control select { width:100%; min-width:0; }
+.score-criteria { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:20px 0; }
+.score-criterion { min-width:0; padding:18px; border:1px solid #e2e8f0; border-radius:10px; background:#fafcfe; }
+.score-criterion > div { display:flex; justify-content:space-between; gap:16px; }
+.score-criterion h3 { font-size:13px; margin:0; }
+.score-criterion strong { font-size:13px; color:#334155; }
+.score-criterion p { font-size:12px; line-height:1.7; color:#64748b; }
+.score-criterion a,.score-criterion blockquote { overflow-wrap:anywhere; }
+.stage-contact-form { display:flex; flex-direction:column; gap:12px; margin-top:18px; border-top:1px solid #e2e8f0; padding-top:16px; }
+.stage-contact-form > label:not(.stage-confirm) { display:flex; flex-direction:column; gap:8px; font-size:12px; }
+.stage-contact-form button { align-self:flex-start; }
+.section-card[id],.lead-stages { scroll-margin-top:24px; }
+@media(max-width:1100px) { .lead-stages { grid-template-columns:repeat(3,minmax(0,1fr)); } .stage-draft-form { grid-template-columns:1fr 1fr; } .stage-draft-form button { grid-column:1 / -1; justify-self:start; } }
+@media(max-width:700px) { .lead-stages { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; } .stage-control-grid,.score-criteria,.stage-draft-form { grid-template-columns:1fr; } .stage-control { padding:0 0 20px; border-right:0; border-bottom:1px solid #e2e8f0; } .stage-history > div { grid-template-columns:1fr 1fr; } .stage-history time { grid-column:1 / -1; } }

@@ -24,6 +24,7 @@
 </div>
 {% endblock %}
 {% block content %}
+{% set pipeline_active = pipeline_runs|selectattr('status','equalto','RUNNING')|list + pipeline_runs|selectattr('status','equalto','PENDING')|list %}
 
 <div class="breadcrumbs">
   <a href="/leads">Leads</a>
@@ -56,6 +57,7 @@
   <div class="metric-card"><span>Last Updated</span><strong class="small-strong">{{ lead.updated_at|iso_date }}</strong></div>
 </div>
 
+{% include "lead_stage_overview.html" %}
 <div class="two-column">
   <div class="card">
     <div class="card-head"><h2>Company</h2></div>
@@ -83,22 +85,24 @@
 </div>
 
 {% include "research_brief.html" %}
+{% include "lead_stage_controls.html" %}
 
-{% if research_active %}<script>setInterval(() => { if (!document.querySelector('dialog[open]') && !document.hidden) window.location.reload(); }, 15000);</script>{% endif %}
+{% if research_active or pipeline_active %}<script>document.addEventListener('input', event => { if(event.target.form) event.target.form.dataset.editing='true'; }); setInterval(() => { if (!document.querySelector('dialog[open]') && !document.hidden && !document.querySelector('form[data-editing="true"]')) window.location.reload(); }, 15000);</script>{% endif %}
 
-<div class="card section-card">
+<div class="card section-card" id="lead-scoring">
   <div class="card-head"><h2>Scoring</h2></div>
   {% if scores %}
     {% for score in scores %}
     <div class="record-block">
       <div class="record-top">
         <strong class="big-score">{{ score.total_score }}/100</strong>
-        {% if score.is_current %}<span class="badge success">CURRENT</span>{% endif %}
+        {% if score.is_current %}<span class="badge {{ 'success' if pipeline_state.scored else 'warning' }}">{{ 'CURRENT' if pipeline_state.scored else 'NEEDS REFRESH' }}</span>{% endif %}
         <span>{{ score.scoring_version }}</span>
         <span>{{ score.created_at|iso_date }}</span>
       </div>
       <p>{{ score.rationale or '' }}</p>
-      {% if score.score_breakdown %}
+      {% if score.view_components %}<div class="score-criteria">{% for component in score.view_components %}<article class="score-criterion"><div><h3>{{ component.title }}</h3><strong>{{ component.points }}/{{ component.max_points }}</strong></div><p>{{ component.rationale }}</p>{% if component.evidence %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary>{% for item in component.evidence %}<blockquote>{{ item.quote }}</blockquote><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a>{% endfor %}</details>{% endif %}</article>{% endfor %}</div>{% if score.view_gaps %}<div class="research-gaps"><h3>Details to confirm</h3><ul>{% for gap in score.view_gaps %}<li>{{ gap }}</li>{% endfor %}</ul></div>{% endif %}
+      {% elif score.score_breakdown %}
       <div class="key-values">
         {% for key, value in score.score_breakdown.items() %}
         <div><span>{{ key.replace('_', ' ')|title }}</span><strong>{{ value }}</strong></div>
@@ -112,7 +116,7 @@
   {% endif %}
 </div>
 
-<div class="card section-card">
+<div class="card section-card" id="lead-matches">
   <div class="card-head"><h2>Product Matches</h2></div>
   {% if matches %}
   <div class="table-wrap">
@@ -129,12 +133,13 @@
       </tbody>
     </table>
   </div>
+  {% if pipeline_state.matching_current and not pipeline_active and current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['QUALIFIED','READY_FOR_OUTREACH'] %}<div class="stage-draft-control"><h3>Prepare outreach</h3><p>Select a matched product and a channel supported by the reviewed contact. The generated message will enter human approval.</p><form class="stage-draft-form" method="post" action="/leads/{{ lead.id }}/pipeline"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="stage" value="DRAFTING"><label>Product<select name="product_id" required><option value="">Choose a supported product</option>{% for match in matches %}{% if match.product_id in pipeline_state.draft_product_ids %}<option value="{{ match.product_id }}">{{ (match.product or {}).get('name',match.product_id) }} · {{ match.fit_score }}/100</option>{% endif %}{% endfor %}</select></label><label>Channel<select name="channel" required>{% if contact and contact.email %}<option value="EMAIL">Email</option>{% endif %}{% if contact and contact.linkedin_url %}<option value="LINKEDIN">LinkedIn message draft</option>{% endif %}</select></label><button type="submit" class="button" {{ 'disabled' if not contact or not (contact.email or contact.linkedin_url) else '' }}>Prepare draft for approval</button></form>{% if not contact or not (contact.email or contact.linkedin_url) %}<p class="stage-muted">This contact needs a confirmed business email or individual LinkedIn profile before drafting.</p>{% endif %}</div>{% endif %}
   {% else %}
     <div class="empty"><span>No product matches available yet.</span></div>
   {% endif %}
 </div>
 
-<div class="card section-card">
+<div class="card section-card" id="lead-actions">
   <div class="card-head"><h2>Marketing Actions</h2></div>
   {% if actions %}
     {% for action in actions %}
@@ -146,6 +151,7 @@
       </div>
       {% if action.subject %}<h3>{{ action.subject }}</h3>{% endif %}
       <p class="content-preview">{{ action.content }}</p>
+      {% if action.status == 'DRAFT' and current_workspace.role in ['ADMIN','OPERATOR'] %}<details class="stage-history"><summary>Edit draft</summary><form class="form-stack" method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/edit"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Subject<textarea name="subject" maxlength="150" rows="2">{{ action.subject or '' }}</textarea></label><label>Message<textarea name="content" minlength="30" maxlength="5000" rows="8" required>{{ action.content }}</textarea></label><button class="button secondary" type="submit">Save draft</button></form></details><form method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/submit"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="button" type="submit">Request approval</button></form>{% endif %}
       {% set histories = approvals_by_action.get(action.id, []) %}
       {% if histories %}
         <div class="approval-history">
