@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import csv
 import io
 import json
@@ -8,6 +9,8 @@ import secrets
 import time
 from pathlib import Path
 from typing import Any
+
+from .workspace_context import request_auth
 
 from PIL import Image
 import pytesseract
@@ -70,7 +73,7 @@ def clean_text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def csv_template_text() -> str:
+def csv_template_text(icp_code: str = "LOGISTICS_HAULAGE") -> str:
     out = io.StringIO(newline="")
     writer = csv.writer(out)
     writer.writerow(CSV_HEADERS)
@@ -87,7 +90,7 @@ def csv_template_text() -> str:
         "john@abc.com",
         "+60123456789",
         "",
-        "LOGISTICS_HAULAGE",
+        icp_code,
         "HIGH",
     ])
     writer.writerow([
@@ -103,7 +106,7 @@ def csv_template_text() -> str:
         "",
         "",
         "",
-        "LOGISTICS_HAULAGE",
+        icp_code,
         "",
     ])
     return out.getvalue()
@@ -254,7 +257,7 @@ def validate_csv_rows(
         icp_code = row["icp"].upper()
         if not icp_code:
             errors.append("icp is required")
-        elif icp_code not in ICP_CODES:
+        elif icp_code not in icp_code_to_id:
             errors.append("invalid ICP code")
         elif not icp_code_to_id.get(icp_code):
             errors.append("ICP is not configured on the dashboard server")
@@ -308,10 +311,16 @@ def validate_csv_rows(
     return result
 
 
+def import_owner() -> dict:
+    auth = request_auth.get() or {}
+    return {'workspace_id': auth.get('workspace_id'), 'session': hashlib.sha256(str(auth.get('token', '')).encode()).hexdigest()}
+
+
 def save_import(rows: list[dict[str, Any]]) -> str:
     token = secrets.token_urlsafe(24)
     payload = {
         "created_at": time.time(),
+        "owner": import_owner(),
         "rows": rows,
     }
     (IMPORT_DIR / f"{token}.json").write_text(
@@ -328,6 +337,8 @@ def load_import(token: str, max_age_seconds: int = 3600) -> list[dict[str, Any]]
     if not path.exists():
         raise ValueError("Import preview has expired or does not exist.")
     payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("owner") != import_owner():
+        raise ValueError("Import belongs to another session or workspace.")
     if time.time() - float(payload.get("created_at", 0)) > max_age_seconds:
         path.unlink(missing_ok=True)
         raise ValueError("Import preview has expired. Please upload the CSV again.")

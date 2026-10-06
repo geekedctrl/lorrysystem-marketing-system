@@ -47,6 +47,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
       MARKETING_API_KEY: ${MARKETING_API_KEY}
+      ENABLE_LEGACY_API_KEY: ${ENABLE_LEGACY_API_KEY:-true}
 
     depends_on:
       postgres-dev:

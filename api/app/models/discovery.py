@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.workspaces import WorkspaceOwned
 
 
 ACTIVE_CANDIDATE_STATUSES_SQL = """
@@ -31,7 +32,7 @@ status IN (
 """
 
 
-class LeadCandidate(Base):
+class LeadCandidate(WorkspaceOwned, Base):
     __tablename__ = "lead_candidates"
 
     __table_args__ = (
@@ -140,13 +141,14 @@ class LeadCandidate(Base):
 
     sources: Mapped[list["LeadCandidateSource"]] = relationship(
         back_populates="candidate",
+        foreign_keys='LeadCandidateSource.candidate_id',
         cascade="all, delete-orphan",
         passive_deletes=True,
         lazy="selectin",
     )
 
 
-class LeadCandidateSource(Base):
+class LeadCandidateSource(WorkspaceOwned, Base):
     __tablename__ = "lead_candidate_sources"
 
     __table_args__ = (
@@ -203,7 +205,8 @@ class LeadCandidateSource(Base):
     )
 
     candidate: Mapped[LeadCandidate] = relationship(
-        back_populates="sources"
+        back_populates="sources",
+        foreign_keys=[candidate_id],
     )
 
 
@@ -214,6 +217,7 @@ Index("idx_lead_candidates_existing_company", LeadCandidate.existing_company_id)
 
 Index(
     "idx_lead_candidates_active_domain_unique",
+    LeadCandidate.workspace_id,
     LeadCandidate.domain,
     unique=True,
     postgresql_where=text(
@@ -223,6 +227,7 @@ Index(
 
 Index(
     "idx_lead_candidates_active_website_unique",
+    LeadCandidate.workspace_id,
     LeadCandidate.normalized_website,
     unique=True,
     postgresql_where=text(

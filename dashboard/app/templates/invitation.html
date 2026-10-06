@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Join workspace</title><link rel="stylesheet" href="/static/app.css"></head>
+<body class="auth-page"><main class="auth-card"><h1>Join your workspace</h1><p>Create a password with at least 12 characters. If you already have an account, enter its current password.</p>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<form method="post" action="/invitation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="token" value="{{ token }}">
+<label>Password<input type="password" name="password" minlength="12" maxlength="256" autocomplete="new-password" required></label><button class="btn btn-primary">Accept invitation</button></form><p><a href="/login">Back to sign in</a></p></main>
+<script>const token = new URLSearchParams(location.hash.slice(1)).get('token'); if (token) { document.querySelector('input[name="token"]').value = token; history.replaceState(null, '', '/invitation'); }</script>
+</body></html>

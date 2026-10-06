@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CSV Import Result · LorrySystem{% endblock %}
+{% block title %}CSV Import Result · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>CSV Import Complete</h1>
 <p>Each row was processed independently through the Marketing API.</p>

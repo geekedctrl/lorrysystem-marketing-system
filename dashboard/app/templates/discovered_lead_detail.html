@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Discovered Lead Review · LorrySystem{% endblock %}
+{% block title %}Discovered Lead Review · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <div class="heading-row">
   <div>
@@ -176,7 +176,7 @@
     <div class="card decision-card">
       <h2>Review decision</h2>
 
-      {% if reviewable %}
+      {% if reviewable and current_workspace.role in ["ADMIN", "OPERATOR"] %}
       <form method="post" action="/discovered-leads/{{ candidate.id }}/accept" onsubmit="return confirm('Accept this candidate as an official Lead?')">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
 

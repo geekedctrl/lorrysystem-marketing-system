@@ -18,9 +18,10 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.workspaces import WorkspaceOwned
 
 
-class Company(Base):
+class Company(WorkspaceOwned, Base):
     __tablename__ = "companies"
 
     __table_args__ = (
@@ -83,7 +84,7 @@ class Company(Base):
     )
 
 
-class Contact(Base):
+class Contact(WorkspaceOwned, Base):
     __tablename__ = "contacts"
 
     id: Mapped[PyUUID] = mapped_column(
@@ -145,6 +146,7 @@ Index(
 
 Index(
     "idx_companies_domain_unique",
+    Company.workspace_id,
     func.lower(Company.domain),
     unique=True,
     postgresql_where=Company.domain.is_not(None),
@@ -157,6 +159,7 @@ Index(
 
 Index(
     "idx_contacts_email_unique",
+    Contact.workspace_id,
     func.lower(Contact.email),
     unique=True,
     postgresql_where=Contact.email.is_not(None),

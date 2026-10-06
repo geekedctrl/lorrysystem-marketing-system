@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CSV Preview · LorrySystem{% endblock %}
+{% block title %}CSV Preview · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>CSV Import Preview</h1>
 <p>Review validation results before any rows are imported.</p>

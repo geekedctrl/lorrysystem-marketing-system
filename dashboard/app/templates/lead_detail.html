@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ company.name }} · LorrySystem{% endblock %}
+{% block title %}{{ company.name }} · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <div class="heading-row">
   <div>
@@ -10,7 +10,7 @@
     <span class="badge status">{{ lead.status }}</span>
     <span class="badge priority">{{ lead.priority }}</span>
 
-    {% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] %}
+    {% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
     <button
       class="button secondary"
       type="button"
@@ -191,7 +191,7 @@
   {% endif %}
 </div>
 
-{% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] %}
+{% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
 <dialog id="close-lead-dialog" class="close-lead-dialog">
   <form
     method="post"

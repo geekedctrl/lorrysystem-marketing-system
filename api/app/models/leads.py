@@ -17,13 +17,14 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.workspaces import WorkspaceOwned
 
 
 # ============================================================
 # Lead
 # ============================================================
 
-class Lead(Base):
+class Lead(WorkspaceOwned, Base):
     __tablename__ = "leads"
 
     __table_args__ = (
@@ -136,7 +137,7 @@ class Lead(Base):
 # Lead Research
 # ============================================================
 
-class LeadResearch(Base):
+class LeadResearch(WorkspaceOwned, Base):
     __tablename__ = "lead_research"
 
     __table_args__ = (
@@ -269,7 +270,7 @@ class LeadResearch(Base):
 # Research Source
 # ============================================================
 
-class ResearchSource(Base):
+class ResearchSource(WorkspaceOwned, Base):
     __tablename__ = "research_sources"
 
     __table_args__ = (
@@ -344,7 +345,7 @@ class ResearchSource(Base):
 # Lead Score
 # ============================================================
 
-class LeadScore(Base):
+class LeadScore(WorkspaceOwned, Base):
     __tablename__ = "lead_scores"
 
     __table_args__ = (
@@ -414,7 +415,7 @@ class LeadScore(Base):
 # Product Match
 # ============================================================
 
-class ProductMatch(Base):
+class ProductMatch(WorkspaceOwned, Base):
     __tablename__ = "product_matches"
 
     __table_args__ = (

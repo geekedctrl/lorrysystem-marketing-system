@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}System · LorrySystem{% endblock %}
+{% block title %}System · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>System</h1>
 <p>Safe service status only. No credentials or infrastructure details are exposed.</p>

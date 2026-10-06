@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Discovered Leads · LorrySystem{% endblock %}
+{% block title %}Discovered Leads · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Discovered Leads</h1>
 <p>Review companies found by AI web discovery before they become official Leads.</p>

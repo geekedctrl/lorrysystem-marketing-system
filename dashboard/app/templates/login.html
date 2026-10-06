@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · Marketing</title><link rel="stylesheet" href="/static/app.css"></head>
+<body class="auth-page"><main class="auth-card"><h1>Marketing workspace</h1><p>Sign in to access your team's products and leads.</p>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<form method="post" action="/login"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Email<input type="email" name="email" autocomplete="username" required></label>
+<label>Password<input type="password" name="password" autocomplete="current-password" maxlength="256" required></label>
+<button class="btn btn-primary" type="submit">Sign in</button></form>
+<p class="muted">Need access or a password reset? Contact your workspace administrator.</p></main></body></html>

@@ -1,3 +1,13 @@
+# Marketing Dashboard
+
+The dashboard now supports private product workspaces, authenticated accounts,
+workspace switching, team invitations, role management and workspace catalogs.
+
+See [Product workspace guide](../docs/PRODUCT_WORKSPACES.md) for deployment,
+first-administrator setup and automation configuration. The historical MVP1 notes
+below describe the original single-workspace build; API-key, reviewer identity and
+ICP environment configuration have been replaced with account/workspace APIs.
+
 # LorrySystem MVP1 Dashboard
 
 Server-rendered FastAPI dashboard for the LorrySystem Marketing API.

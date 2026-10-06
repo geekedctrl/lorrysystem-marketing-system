@@ -2,15 +2,17 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID as PyUUID
 
-from sqlalchemy import Boolean, DateTime, Integer, Text, func, text
+from sqlalchemy import Boolean, DateTime, Integer, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.workspaces import WorkspaceOwned
 
 
-class Product(Base):
+class Product(WorkspaceOwned, Base):
     __tablename__ = "products"
+    __table_args__ = (UniqueConstraint("workspace_id", "code", name="uq_products_workspace_code"),)
 
     id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
@@ -21,7 +23,6 @@ class Product(Base):
     code: Mapped[str] = mapped_column(
         Text,
         nullable=False,
-        unique=True,
     )
 
     name: Mapped[str] = mapped_column(
@@ -52,8 +53,9 @@ class Product(Base):
     )
 
 
-class ICPProfile(Base):
+class ICPProfile(WorkspaceOwned, Base):
     __tablename__ = "icp_profiles"
+    __table_args__ = (UniqueConstraint("workspace_id", "code", name="uq_icp_profiles_workspace_code"),)
 
     id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
@@ -64,7 +66,6 @@ class ICPProfile(Base):
     code: Mapped[str] = mapped_column(
         Text,
         nullable=False,
-        unique=True,
     )
 
     name: Mapped[str] = mapped_column(

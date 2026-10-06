@@ -41,6 +41,7 @@ from app.routers.public_fetch import (
 
 # Existing MVP1 API-key security
 from app.security import install_api_key_security
+from app.routers.workspaces import router as workspaces_router
 
 
 # ============================================================
@@ -74,6 +75,7 @@ app.include_router(scoring_router)
 # ============================================================
 
 app.include_router(public_fetch_router)
+app.include_router(workspaces_router)
 
 
 # ============================================================
