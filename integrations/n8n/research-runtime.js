@@ -43,6 +43,7 @@ function researchSeed(value, input, context) {
   return {research_id:input.research_id,lead_id:input.lead_id,workspace_id:context.workspace_id,
     company:{name:String(value.company.name).slice(0,200),domain:website?.host||null,
       website_url:website?.url||null,industry:value.company.industry,country_code:value.company.country_code},
+    known_contact:value.primary_contact?.full_name?{name:value.primary_contact.full_name,job_title:value.primary_contact.job_title}:null,
     icp:value.icp_profile,sources};
 }
 
@@ -51,20 +52,21 @@ function researchQueries(seed, country) {
   return [
     {query:seed.company.domain?`site:${seed.company.domain} "${name}" about services contact team operations`:`"${name}" company services`,purpose:'COMPANY'},
     {query:`"${name}" managing director operations manager leadership`,purpose:'PEOPLE'},
+    ...(seed.known_contact?[{query:`"${String(seed.known_contact.name).replace(/["\r\n]/g,' ')}" "${name}" role company`,purpose:'KNOWN_PERSON'}]:[]),
   ].map(value=>({...value,country:/^[A-Z]{2}$/.test(seed.company.country_code||'')?seed.company.country_code:country}));
 }
 
-function researchSearchSources(responses) {
+function researchSearchSources(responses, requests=[]) {
   const values=[];
-  for (const response of responses) {
+  for (const [index,response] of responses.entries()) {
     if (response.statusCode && response.statusCode!==200) continue;
     const body=response.body??response;
     for (const result of (body.web?.results||[]).slice(0,10)) {
       const url=publicResearchUrl(result.url);
-      const evidence=String(result.description||'').replace(/<[^>]*>/g,' ').trim().slice(0,1500);
+      const evidence=[result.title,result.description].filter(value=>typeof value==='string').join(' — ').replace(/<[^>]*>/g,' ').trim().slice(0,1500);
       if (!url || evidence.length < 40) continue;
       values.push({url:url.url,source_type:'SEARCH',title:String(result.title||url.host).slice(0,250),
-        evidence,confidence:50,observed_at:new Date().toISOString(),origin:'SEARCH_SNIPPET'});
+        evidence,confidence:['PEOPLE','KNOWN_PERSON'].includes(requests[index]?.purpose)?55:50,observed_at:new Date().toISOString(),origin:'SEARCH_SNIPPET'});
     }
   }
   return values;
@@ -97,10 +99,21 @@ function cleanResearchPage(response, request, seed) {
   if (response.error || body.fetch_status !== 'SUCCESS' || !final) {
     return {url:request.url,failed:true,failure_reason:body.failure_reason||'FETCH_REQUEST_FAILED'};
   }
-  const html=String(body.body||'').slice(0,262144);
-  let text=decodeResearchText(html.replace(/<(script|style|noscript|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi,' ')
-    .replace(/<!--[\s\S]*?-->/g,' ').replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim();
-  const contacts=[];
+  const html=String(body.body||'').slice(0,262144)
+    .replace(/<(script|style|noscript|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi,' ')
+    .replace(/<!--[\s\S]*?-->/g,' ');
+  let text=decodeResearchText(html.replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim();
+  const contacts=[], professional_links=[];
+  if (final.host===seed.company.domain) {
+    for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      const link=publicResearchUrl(decodeResearchText(match[1]));
+      const label=decodeResearchText(match[2].replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,150);
+      if (link && /(?:^|\.)(linkedin|instagram|twitter|x|github)\.com$/.test(link.host) && label && professional_links.length<20) {
+        professional_links.push({url:link.url,label});
+        contacts.push(`Professional profile: ${label} ${link.url}`);
+      }
+    }
+  }
   for (const match of html.matchAll(/href\s*=\s*["'](mailto:|tel:)([^"']+)["']/gi)) {
     const value=decodeResearchText(match[2].split('?')[0]);
     if (value.length<150) contacts.push(`${match[1].toLowerCase()==='mailto:'?'Public business email':'Public business phone'}: ${value}`);
@@ -109,7 +122,7 @@ function cleanResearchPage(response, request, seed) {
   if (text.length<100) return {url:request.url,failed:true,failure_reason:'INSUFFICIENT_PAGE_TEXT'};
   return {url:final.url,source_type:'WEBSITE',title:decodeResearchText((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||final.host).trim().slice(0,250),
     evidence:text,confidence:final.host===seed.company.domain?90:65,observed_at:new Date().toISOString(),
-    origin:'FETCHED_PAGE',official:final.host===seed.company.domain};
+    origin:'FETCHED_PAGE',official:final.host===seed.company.domain,professional_links};
 }
 
 function assembleResearchEvidence(seed, searches, pages, settings) {
@@ -121,7 +134,10 @@ function assembleResearchEvidence(seed, searches, pages, settings) {
   }
   const values=[...unique.values()].sort((a,b)=>b.confidence-a.confidence).slice(0,settings.max_sources);
   const perSource=Math.min(4000,Math.floor(settings.max_evidence_chars/Math.max(1,values.length)));
-  const sources=values.map(source=>({...source,evidence:source.evidence.slice(0,perSource)}));
+  const sources=values.map(source=>{
+    const evidence=source.evidence.slice(0,perSource);
+    return {...source,evidence,professional_links:(source.professional_links||[]).filter(link=>evidence.includes(`Professional profile: ${link.label} ${link.url}`))};
+  });
   return {...seed,sources,coverage:{pages_fetched:pages.length,official_pages_read:pages.filter(page=>!page.failed&&page.official).length,
     fetch_failures:pages.filter(page=>page.failed).map(page=>({url:page.url,reason:page.failure_reason})),
     search_sources:searches.length,seed_sources:seed.sources.length}};

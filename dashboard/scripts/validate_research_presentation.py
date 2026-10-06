@@ -18,6 +18,28 @@ def report(identifier='old', created='2026-10-05T12:00:00Z', status='COMPLETED')
 
 
 class ResearchPresentationTests(unittest.TestCase):
+    def test_professional_profiles_keep_match_evidence_and_ambiguous_results_separate(self):
+        item = report()
+        matched = {'platform': 'LinkedIn', 'url': 'https://www.linkedin.com/in/jane', 'handle': 'jane',
+            'match_status': 'MATCHED', 'match_basis': 'PUBLIC_NAME_COMPANY_MATCH',
+            'evidence_quote': 'Jane Tan - Acme Logistics', 'source_urls': ['https://www.linkedin.com/in/jane']}
+        candidate = {**matched, 'url': 'https://www.linkedin.com/in/jane-other', 'match_status': 'NEEDS_REVIEW'}
+        item['company_facts']['people'] = [{'name': 'Jane Tan', 'profile_search_status': 'NEEDS_REVIEW',
+            'professional_profiles': [matched, {**matched, 'url': 'https://evil.com/in/jane'}], 'profile_candidates': [candidate]}]
+        person = present_report(item)['people'][0]
+        self.assertEqual(len(person['profiles']), 1)
+        self.assertEqual(len(person['profile_candidates']), 1)
+        self.assertEqual(person['profiles'][0]['quote'], matched['evidence_quote'])
+        self.assertEqual(person['profiles'][0]['citations'][0]['number'], 3)
+        self.assertEqual(person['profile_status'], 'Conflicting profiles need review')
+
+    def test_missing_profiles_and_search_outage_are_not_claimed_as_matches(self):
+        for status, label in [('NOT_FOUND', 'No supported profile found'), ('SEARCH_UNAVAILABLE', 'Profile search temporarily unavailable')]:
+            item = report(); item['company_facts']['people'] = [{'name': 'Jane Tan', 'profile_search_status': status, 'professional_profiles': []}]
+            person = present_report(item)['people'][0]
+            self.assertEqual(person['profile_status'], label)
+            self.assertEqual(person['profiles'], [])
+
     def test_one_consistent_reference_number_for_each_source(self):
         brief = present_report(report())
         self.assertEqual(len(brief['sources']), 2)
