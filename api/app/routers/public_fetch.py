@@ -1,13 +1,10 @@
 
 """Authenticated public webpage fetching endpoint for F2."""
 
-import hmac
-import os
 import threading
 
 from fastapi import (
     APIRouter,
-    Header,
     HTTPException,
 )
 
@@ -17,6 +14,7 @@ from app.services.public_fetch_guard import (
     FetchError,
     fetch_public,
 )
+from app.workspace_context import current_principal
 
 
 router = APIRouter(
@@ -83,38 +81,12 @@ def fetch_public_research_page(
 
     payload: PublicFetchRequest,
 
-    x_api_key: str | None = Header(
-        default=None,
-        alias="X-API-Key",
-    ),
-
 ):
 
-    # Reuse the existing Marketing API key.
-    expected = os.environ.get(
-        "MARKETING_API_KEY",
-        "",
-    )
-
-    if not expected:
-
-        raise HTTPException(
-            status_code=503,
-            detail="FETCH_AUTH_NOT_CONFIGURED",
-        )
-
-    if (
-        not x_api_key
-        or not hmac.compare_digest(
-            x_api_key,
-            expected,
-        )
-    ):
-
-        raise HTTPException(
-            status_code=401,
-            detail="UNAUTHORIZED",
-        )
+    # Business API middleware resolves the workspace credential and role.
+    # Do not authenticate a second time with the old global key.
+    if current_principal.get() is None:
+        raise HTTPException(401, 'Authentication required')
 
     # Reject excessive concurrent outbound requests.
     if not FETCH_SLOTS.acquire(blocking=False):

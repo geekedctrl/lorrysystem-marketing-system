@@ -83,7 +83,15 @@
 </div>
 
 <div class="card section-card">
-  <div class="card-head"><h2>Research</h2><span>{{ research|length }} run(s)</span></div>
+  <div class="card-head"><h2>Research</h2><span>{{ research|length }} run(s)</span>
+    {% if not research_active and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH','CONTACTED','REPLIED'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
+    <form method="post" action="/leads/{{ lead.id }}/research">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="button secondary" type="submit">{{ 'Run research again' if research else 'Queue research' }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if research_active %}<p>Research is queued or running automatically. This page refreshes while the worker processes it.</p>{% endif %}
   {% if research %}
     {% for item in research %}
     <div class="record-block">
@@ -93,6 +101,33 @@
         <span>Confidence: {{ item.confidence if item.confidence is not none else '—' }}</span>
       </div>
       {% if item.summary %}<p>{{ item.summary }}</p>{% endif %}
+      {% if item.research_status == 'PENDING' %}<p>Waiting for the workspace research worker.</p>{% endif %}
+      {% if item.research_status == 'RUNNING' %}<p>Checking public company pages and business contacts.</p>{% endif %}
+      {% if item.research_status == 'FAILED' %}<p>Research could not finish. Review the saved sources and queue another run when ready.</p>{% endif %}
+      {% set facts = item.company_facts or {} %}
+      {% if facts.research_version == 'workspace-research-v1' %}
+      {% for category in ['COMPANY','SERVICES','FLEET','TECHNOLOGY','LOCATION','SIGNAL','PAIN_POINT'] %}
+      {% set findings = facts.facts|selectattr('category','equalto',category)|list %}
+      {% if findings %}<h3>{{ category.replace('_',' ')|title }}</h3><ul>
+        {% for finding in findings %}<li>{{ finding.fact }} <span class="badge">{{ finding.evidence_status }} · {{ finding.confidence }}/100</span>
+          {% for url in finding.source_urls %}{% if url|research_url %}<a href="{{ url|research_url }}" target="_blank" rel="noopener noreferrer">Source {{ loop.index }}</a>{% endif %}{% endfor %}
+          <details><summary>Evidence</summary><p>{{ finding.evidence_quote }}</p></details>
+        </li>{% endfor %}
+      </ul>{% endif %}
+      {% endfor %}
+      <h3>Public business contacts</h3>
+      {% if facts.people %}{% for person in facts.people %}<div class="record-block">
+        <strong>{{ person.name }}</strong> · {{ person.job_title }}
+        <p>{{ person.role_classification.replace('_',' ')|title }} · Confidence {{ person.confidence }}/100</p>
+        {% if person.business_email %}<p>Business email: {{ person.business_email }}</p>{% endif %}
+        {% if person.business_phone %}<p>Business phone: {{ person.business_phone }}</p>{% endif %}
+        {% if person.linkedin_url|research_url %}<a href="{{ person.linkedin_url|research_url }}" target="_blank" rel="noopener noreferrer">LinkedIn profile</a>{% endif %}
+        {% for url in person.source_urls %}{% if url|research_url %}<a href="{{ url|research_url }}" target="_blank" rel="noopener noreferrer">Source {{ loop.index }}</a>{% endif %}{% endfor %}
+        <details><summary>Evidence</summary><p>{{ person.evidence_quote }}</p></details>
+      </div>{% endfor %}{% else %}<p>No named business contact was verified in the available sources.</p>{% endif %}
+      {% if facts.missing_information %}<h3>Still unknown</h3><ul>{% for missing in facts.missing_information %}<li>{{ missing }}</li>{% endfor %}</ul>{% endif %}
+      {% if facts.coverage %}<p>Official pages read: {{ facts.coverage.official_pages_read }} · Pages checked: {{ facts.coverage.pages_fetched }}</p>{% endif %}
+      {% endif %}
       {% if item.pain_points %}
       <h3>Pain points</h3>
       <ul>{% for p in item.pain_points %}<li>{{ p }}</li>{% endfor %}</ul>
@@ -105,7 +140,10 @@
       <h3>Sources</h3>
       <ul>
       {% for source in item.sources %}
-        <li><a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title or source.url }}</a></li>
+        <li>{% if source.url|research_url %}<a href="{{ source.url|research_url }}" target="_blank" rel="noopener noreferrer">{{ source.title or source.url }}</a>{% else %}{{ source.title or source.url }}{% endif %}
+          {% if source.confidence is not none %} · Confidence {{ source.confidence }}/100{% endif %}
+          {% if source.evidence %}<details><summary>Saved evidence</summary><p>{{ source.evidence }}</p></details>{% endif %}
+        </li>
       {% endfor %}
       </ul>
       {% endif %}
@@ -115,6 +153,8 @@
     <div class="empty"><span>No research available yet.</span></div>
   {% endif %}
 </div>
+
+{% if research_active %}<script>setInterval(() => { if (!document.querySelector('dialog[open]') && !document.hidden) window.location.reload(); }, 15000);</script>{% endif %}
 
 <div class="card section-card">
   <div class="card-head"><h2>Scoring</h2></div>

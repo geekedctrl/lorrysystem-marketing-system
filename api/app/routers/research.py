@@ -10,6 +10,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.workspace_context import current_principal
 from app.schemas.research import (
     ResearchComplete,
     ResearchContext,
@@ -39,6 +40,7 @@ from app.services.research_service import (
     list_research_for_lead,
     list_research_runs,
     mark_research_partial,
+    recover_stale_research,
     start_research,
 )
 
@@ -136,11 +138,12 @@ def list_research_endpoint(
     response_model=ResearchRead | None,
 )
 def claim_research_endpoint(
+    max_running: int | None = Query(default=None, ge=1, le=10),
     db: Session = Depends(get_db),
 ):
     try:
         return claim_next_research(
-            db,
+            db, max_running=max_running,
         )
 
     except LeadNotFoundError as exc:
@@ -154,6 +157,14 @@ def claim_research_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+
+
+@router.post('/api/research/recover-stale')
+def recover_stale_research_endpoint(db: Session = Depends(get_db)):
+    principal = current_principal.get()
+    if principal.role == 'SERVICE' and not principal.actor.startswith('service:'):
+        raise HTTPException(403, 'Use a named workspace automation credential')
+    return {'recovered': recover_stale_research(db)}
 
 
 @router.get(
