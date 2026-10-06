@@ -11,6 +11,7 @@ class Principal:
     actor: str
     role: str
     user_id: UUID | None = None
+    automation_job_id: UUID | None = None
 
 
 current_principal: ContextVar[Principal | None] = ContextVar('principal', default=None)

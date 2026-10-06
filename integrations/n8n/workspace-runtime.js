@@ -12,9 +12,10 @@ function assertWorkspaceContext(response, binding) {
   }
   const automation = response.automation;
   const namespace = `workspace:${id}:discovery`;
-  if (automation?.contract_version !== 1 || automation.credential_kind !== 'workspace'
+  const shared=binding.shared_job===true && automation?.credential_kind==='job' && automation.job_id===binding.job_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(binding.job_id||'');
+  if (automation?.contract_version !== 1 || (!shared && automation.credential_kind !== 'workspace')
       || automation.registry_namespace !== namespace
-      || automation.human_candidate_review_required !== true
+      || automation.human_candidate_review_required !== (shared?false:true)
       || automation.human_marketing_approval_required !== true) {
     throw new Error('A named workspace credential and supported automation contract are required');
   }

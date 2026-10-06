@@ -6,6 +6,12 @@ custom CSS and vanilla JavaScript; n8n runs the bounded model jobs.
 
 ## Team workflow
 
+Administrator-activated products now use [shared product automation](product-onboarding.md):
+the system accepts sourced candidates, selects supported contacts, qualifies under
+the configured automatic policy, matches and drafts through pending human approval.
+The steps below describe the manual controls and unactivated legacy workspaces.
+Sending remains separate in both modes.
+
 1. **Research.** Accept a discovered candidate to create an official lead and its
    research job. The existing research worker collects public company evidence,
    supported people and professional profiles. Existing leads can rerun research.

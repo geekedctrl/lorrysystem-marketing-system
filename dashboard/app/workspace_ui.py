@@ -3,7 +3,7 @@ import secrets
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -137,6 +137,7 @@ async def workspaces(request: Request, message: str = ''):
     selected = request.state.workspace
     members, credentials, audit, products, icps = [], [], [], [], []
     discovery_config = {}
+    automation_plan = {'configured':False,'profile':{},'jobs':[]}
     if selected and selected['role'] == 'ADMIN':
         api = request.app.state.api
         prefix = '/api/workspaces/' + selected['id']
@@ -146,8 +147,20 @@ async def workspaces(request: Request, message: str = ''):
         products = await api.get('/api/products')
         icps = await api.get('/api/icp-profiles')
         discovery_config = await api.get('/api/discovery/config')
+        try:automation_plan = await api.get('/api/automation/plan')
+        except MarketingAPIError:pass
     return page(request, 'workspaces.html', members=members, credentials=credentials,
-                audit=audit, products=products, icps=icps, message=message, discovery_config=discovery_config)
+                audit=audit, products=products, icps=icps, message=message, discovery_config=discovery_config,automation_plan=automation_plan)
+
+
+@router.get('/workspaces/automation-status')
+async def automation_status(request: Request):
+    try:
+        result = await request.app.state.api.get('/api/automation/plan')
+        return JSONResponse({'state': result['state'], 'enabled': result['enabled'],
+                             'jobs': [{'id': j['id'], 'status': j['status']} for j in result['jobs']]})
+    except MarketingAPIError as exc:
+        return JSONResponse({'error': exc.message}, status_code=exc.status_code)
 
 
 @router.post('/workspaces/switch')
@@ -172,7 +185,9 @@ async def manage(request: Request):
     # All authorization is checked again by the API, including malicious form actions.
     try:
         if action == 'create':
-            result = await api.post('/api/workspaces', json={'name': form.get('name'), 'slug': form.get('slug')})
+            import re,secrets
+            slug=re.sub(r'[^a-z0-9]+','-',str(form.get('name','')).lower()).strip('-')[:60] or 'product'
+            result = await api.post('/api/workspaces', json={'name': form.get('name'), 'slug':slug+'-'+secrets.token_hex(3)})
             request.session['workspace_id'] = result['id']
         elif action == 'invite':
             result = await api.post(prefix + '/invitations', json={'email': form.get('email'), 'role': form.get('role')})
@@ -182,6 +197,9 @@ async def manage(request: Request):
         elif action == 'credential':
             result = await api.post(prefix + '/credentials', json={'name': form.get('name')})
             return page(request, 'workspace_secret.html', heading='Automation credential created', secret=result['token'])
+        elif action == 'shared-worker':
+            result=await api.post('/api/automation/workers',json={'name':form.get('name')})
+            return page(request,'workspace_secret.html',heading='Shared worker credential created',secret=result['token'],shared_worker=True)
         elif action == 'revoke':
             await api.request('DELETE', prefix + '/credentials/' + str(form.get('credential_id')))
         elif action == 'role':
@@ -197,6 +215,18 @@ async def manage(request: Request):
         elif action == 'settings':
             await api.patch(prefix + '/settings', json={'description': form.get('description', ''),
                 'brand_voice': form.get('brand_voice', ''), 'monthly_budget_usd': form.get('monthly_budget_usd', 50)})
+        elif action == 'activate-product':
+            names,descriptions,ids=form.getlist('offering_name'),form.getlist('offering_description'),form.getlist('offering_id')
+            if len(names)!=len(descriptions) or len(names)!=len(ids):return HTMLResponse('Invalid catalog form.',status_code=422)
+            products=[{'id':ids[i] or None,'name':name.strip(),'description':descriptions[i].strip()} for i,name in enumerate(names) if name.strip()]
+            await api.post('/api/automation/activate',json={'product_type':form.get('product_type'),'description':form.get('description'),
+                'target_customers':form.get('target_customers',''),'country_code':form.get('country_code','MY').upper(),
+                'language':form.get('language','English'),'brand_voice':form.get('brand_voice','Clear, professional and helpful'),
+                'daily_new_companies':int(form.get('daily_new_companies',5)),'products':products})
+        elif action in ('pause-product','resume-product'):
+            await api.post('/api/automation/'+('pause' if action=='pause-product' else 'resume'),json={})
+        elif action == 'retry-automation':
+            await api.post('/api/automation/jobs/'+str(form.get('job_id'))+'/retry',json={})
         elif action in ('products', 'icps'):
             import json
             try:
@@ -207,6 +237,8 @@ async def manage(request: Request):
                 'description': form.get('description'), 'qualification_rules': rules})
         else:
             return HTMLResponse('Unknown action.', status_code=400)
+    except (ValueError,TypeError):
+        return RedirectResponse('/workspaces?' + urlencode({'message':'Check the product form values and try again.'}),status_code=303)
     except MarketingAPIError as exc:
         return RedirectResponse('/workspaces?' + urlencode({'message': exc.message}), status_code=303)
     return RedirectResponse('/workspaces', status_code=303)

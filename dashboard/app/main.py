@@ -1206,7 +1206,9 @@ async def find_leads(request: Request, csrf_token: str = Form(...), query: str =
         return HTMLResponse('Invalid form token. Reload the page.', status_code=403)
     try:
         run = await api.post('/api/discovery/runs', json={'query': query, 'target_new_companies': target_new_companies})
-        message = 'Discovery started. New candidates will appear here for review.' if run['status'] in ('QUEUED', 'RUNNING', 'COMPLETED') else 'The discovery workflow could not be reached. Please try again.'
+        config=await api.get('/api/discovery/config')
+        success='Discovery queued. Suitable companies will be accepted and prepared automatically.' if config.get('managed') else 'Discovery started. New candidates will appear here for review.'
+        message = success if run['status'] in ('QUEUED', 'RUNNING', 'COMPLETED') else 'The discovery workflow could not be reached. Please try again.'
     except MarketingAPIError as exc:
         message = exc.message
     return RedirectResponse('/discovered-leads?message=' + quote(message), status_code=303)

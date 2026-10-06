@@ -56,6 +56,9 @@ def selected_workspace(request: Request) -> UUID:
 
 
 def resolve_principal(request: Request) -> Principal:
+    if request.headers.get('X-Automation-Lease'):
+        from app.services.automation_access import lease_principal
+        return lease_principal(request)
     with ControlSession() as db:
         if request.headers.get('Authorization'):
             user = authenticated_user(db, request)
