@@ -103,12 +103,15 @@ once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header 
 with `X-Subscription-Token`. xKiro uses Header Auth with `x-api-key`.
 
 The DEV copy created on 2026-10-06 is **LorrySystem DEV - Workspace Lead Discovery**,
-inactive, with named Marketing API/Brave credentials and a new dedicated registry
+inactive, with named Marketing API/Brave/xKiro credentials and a new dedicated registry
 containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
 were verified against the original. The original table and workflows were left
-unchanged. Custom-model auth is unselected until the xKiro key is supplied; no AI calls or real
-candidate writes were performed. Live preflight confirmed 3 ICPs and 6 offerings,
-and one public Brave result verified the provider key.
+unchanged. Custom-model auth is bound to xKiro using the supplied key. A small
+synthetic JSON request passed both directly and through real DEV n8n, using the
+requested Mistral model; the remote check reported 19 total tokens. No real-lead
+AI calls or candidate writes were performed. Live preflight confirmed 3 ICPs and
+6 offerings, and one public Brave result verified the provider key. Temporary
+connectivity-check workflows and their authentication credentials were removed.
 
 ## Bind an existing workflow
 
