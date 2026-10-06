@@ -140,6 +140,12 @@ are reviewed. It does not automatically update live n8n workflows.
 
 ## Validation
 
+The [reviewed lead preparation pipeline](lead-preparation-pipeline.md) now supplies
+workspace-scoped contact review, scoring, human qualification, catalog matching,
+draft generation and approval revision controls. Its n8n worker uses named
+workspace/custom-model credentials and waits for the revision 011 API before
+claiming jobs. Sender setup and delivery remain later work.
+
 GitHub CI runs the workspace integration suite, the existing business-card/CSV
 regression with an authenticated test account, and a separate migration exercise.
 Tests run only with `APP_ENV=ci` or `workspace-test` for the database-mutating

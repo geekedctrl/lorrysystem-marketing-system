@@ -4,6 +4,27 @@ This package adapts exported n8n workflows offline. It does not change a running
 n8n instance or provision sender accounts. Workflow exports contain credential
 references only; API keys and provider secrets stay in n8n credentials.
 
+## Reviewed lead stages
+
+The [lead preparation guide](../../docs/lead-preparation-pipeline.md) covers
+**Research → Contact review → Qualification/scoring → Product matching → Outreach
+draft → Approval**. `pipeline-workflows.js` generates a shared stage child and a
+workspace-bound queue worker; `pipeline-runtime.js` supplies their strict
+context/evidence/output checks. Generate from the same workspace API/custom-model
+credential references used for research, with `llm.max_tokens: 6000`.
+
+Human contact confirmation and qualification remain dashboard decisions. The
+worker handles SCORING, MATCHING and DRAFTING, creates pending human approval,
+and stops there. No sender account or sending node is part of this pair. Publish
+the child first, then its worker. The worker waits for `/api/pipeline/health`
+version 1 until the application update and Alembic migration **011** are deployed.
+Exports remain inactive; publishing to a live n8n instance is a separate action.
+
+Run `node --test integrations/n8n/pipeline.test.js` alongside the existing runtime
+tests. `api/scripts/validate_lead_pipeline.py` verifies the complete stage lifecycle
+in disposable environments. See the guide for routes, rubric, roles, transaction
+rules, stale-context protection, deployment and current limitations.
+
 The API must first be deployed with the versioned `automation` metadata on
 `GET /api/workspace-context`. No database migration is needed for this addition.
 

@@ -1,0 +1,27 @@
+<section class="card section-card" id="contact-review" aria-labelledby="contact-review-heading">
+  <div class="card-head"><div><span class="research-eyebrow">Next step</span><h2 id="contact-review-heading">Contact review & qualification</h2></div>{% if pipeline_state.contact_reviewed %}<span class="badge success">Contact reviewed</span>{% endif %}</div>
+  {% if not pipeline_state.available %}<p>The stage API update is pending. These controls become available after deployment.</p>
+  {% else %}
+  <p class="stage-intro">Confirm who you will approach, assess the company against this workspace’s ICP, then review its qualification before matching products.</p>
+  {% if pipeline_active %}<div class="research-notice" role="status"><span class="research-pulse" aria-hidden="true"></span><div><strong>{{ pipeline_active[0].stage|title }} {{ 'in progress' if pipeline_active[0].status == 'RUNNING' else 'queued' }}</strong><p>Waiting for the workspace stage worker or its result. This page updates automatically.</p></div></div>{% endif %}
+  {% if pipeline_runs and pipeline_runs[0].status == 'FAILED' %}<div class="research-notice research-notice-warning"><div><strong>{{ pipeline_runs[0].stage|title }} needs attention</strong><p>The stage could not finish. Previous results are retained. Check the research and contact, then retry the relevant stage.</p></div></div>{% endif %}
+  {% if current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH'] and not pipeline_active %}
+  <div class="stage-control-grid">
+    <div class="stage-control"><h3>1. Confirm the primary contact</h3><p>Use a supported person in the research brief above, or review an existing company contact.</p>
+      {% if company_contacts %}<form class="form-stack" method="post" action="/leads/{{ lead.id }}/contact-review"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Company contact<select name="contact_id" required>{% for entry in company_contacts %}{% if entry.status == 'ACTIVE' %}<option value="{{ entry.id }}" {{ 'selected' if entry.id == lead.primary_contact_id else '' }}>{{ entry.full_name or 'Name not identified' }}{{ ' · ' ~ entry.email if entry.email else '' }}{{ ' · ' ~ entry.job_title if entry.job_title else '' }}</option>{% endif %}{% endfor %}</select></label>
+        <label class="stage-confirm"><input type="checkbox" name="confirmed" value="yes" required> I reviewed this contact’s connection to the company.</label><button type="submit" class="button secondary">Confirm primary contact</button></form>
+      {% else %}<p class="stage-muted">No official contact saved yet. Review a named person above and choose Use as primary contact.</p>{% endif %}
+    </div>
+    <div class="stage-control"><h3>2. Score the company</h3><p>Assess documented fit, operating needs, scale, buying signals and evidence. Unknowns earn no points.</p>
+      {% if pipeline_state.contact_reviewed and research_view.report and research_view.report.status in ['COMPLETED','PARTIAL'] %}<form method="post" action="/leads/{{ lead.id }}/pipeline"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="stage" value="SCORING"><button class="button secondary" type="submit">{{ 'Run scoring again' if scores else 'Run scoring' }}</button></form>{% else %}<p class="stage-muted">Complete research and confirm a primary contact to unlock scoring.</p>{% endif %}
+    </div>
+    <div class="stage-control"><h3>3. Review qualification</h3><p>The score informs your decision. Qualifying this lead queues product matching; it does not send outreach.</p>
+      {% if pipeline_state.scored and pipeline_state.contact_reviewed and lead.status == 'RESEARCHING' %}<form class="form-stack" method="post" action="/leads/{{ lead.id }}/qualify"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Why is this company suitable?<textarea name="note" minlength="8" maxlength="1000" rows="3" required placeholder="Explain the fit and any remaining details to confirm."></textarea></label><button class="button" type="submit">Qualify & match products</button></form>
+      {% elif lead.status in ['QUALIFIED','READY_FOR_OUTREACH'] %}<p class="stage-reviewed">Qualified by your team</p><form method="post" action="/leads/{{ lead.id }}/pipeline"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="stage" value="MATCHING"><button class="button secondary" type="submit">{{ 'Refresh product matches' if matches else 'Match products' }}</button></form>
+      {% else %}<p class="stage-muted">Review the score first. If the company is unsuitable, use Close Lead and record the reason.</p>{% endif %}
+    </div>
+  </div>{% endif %}
+  {% if pipeline_runs %}<details class="stage-history"><summary>Stage history · {{ pipeline_runs|length }} runs</summary>{% for run in pipeline_runs %}<div><strong>{{ run.stage|title }}</strong><span>{{ run.status|replace('_',' ')|title }}</span><time>{{ run.created_at|iso_date }}</time></div>{% endfor %}</details>{% endif %}
+  {% endif %}
+</section>

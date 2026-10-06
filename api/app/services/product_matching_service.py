@@ -109,6 +109,7 @@ def upsert_product_match(
     *,
     lead_id: UUID,
     data: ProductMatchCreate,
+    commit: bool = True,
 ) -> tuple[ProductMatch, bool]:
 
     # --------------------------------------------------------
@@ -277,7 +278,10 @@ def upsert_product_match(
         # explicitly-approved lifecycle rule.
         # ----------------------------------------------------
 
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         db.refresh(product_match)
 
         return (
