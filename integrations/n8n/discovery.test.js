@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
-const {adaptDiscovery, discoverySettings} = require('./adapt-discovery');
+const {adaptDiscovery, discoverySettings, modelSettings} = require('./adapt-discovery');
+const {completionContent} = require('./model-runtime');
 const {registryRecordIdentity} = require('./workspace-runtime');
 const {migrateMemory} = require('./bind-workflow');
 const example = JSON.parse(fs.readFileSync(path.join(__dirname,'discovery-binding.example.json'),'utf8'));
@@ -13,11 +14,13 @@ const B = '00000000-0000-0000-0000-000000000002';
 const ctx = (id, code = 'ACCOUNTING_FIRMS') => ({workspace_id:id, registry_namespace:`workspace:${id}:discovery`,
   icp_ids:{[code]:id === A ? '10000000-0000-0000-0000-000000000001':'20000000-0000-0000-0000-000000000001'}});
 const workflow = adaptDiscovery(example);
+const chat = (data, finishReason = 'stop') => ({statusCode:200,body:{
+  choices:[{finish_reason:finishReason,message:{content:JSON.stringify(data)}}]}});
 function run(name, json, context, previous = {}) {
   const node = workflow.nodes.find(node => node.name === name);
   const $ = name => {
     const value = name === 'Workspace Guard' ? {workspace_context:context}
-      : name === 'Workspace Configuration' ? {config: {discovery: discoverySettings(example.discovery)}} : previous[name];
+      : name === 'Workspace Configuration' ? {config: {discovery: discoverySettings(example.discovery), llm: modelSettings(example.llm)}} : previous[name];
     if (!value) throw new Error(`Missing fixture node: ${name}`);
     return {item: {json:value}, first: () => ({json:value}), all: () => [{json:value}]};
   };
@@ -71,15 +74,15 @@ test('two unrelated products classify the same company using current catalog IDs
     assert.equal(normalized.workspace_id,id);
     assert.equal(normalized.registry_key, `workspace:${id}:discovery:https://example.com/`);
     assert.equal(run('Cheap Relevance Gate',source,context).json.relevance_pass,true);
-    const extracted=run('Validate AI Extraction',ai,context,{'Cheap Relevance Gate':normalized}).json;
+    const extracted=run('Validate AI Extraction',chat(ai),context,{'Cheap Relevance Gate':normalized}).json;
     assert.equal(extracted.candidate_eligible,true);
     const payload=run('Build Candidate Payload',extracted,context).json.candidate_payload;
     assert.equal(payload.suggested_icp_profile_id,context.icp_ids.ACCOUNTING_FIRMS);
   }
-  const bad=run('Validate AI Extraction',{...ai,suggested_icp:'LOGISTICS_HAULAGE'},ctx(B),{'Cheap Relevance Gate':source}).json;
+  const bad=run('Validate AI Extraction',chat({...ai,suggested_icp:'LOGISTICS_HAULAGE'}),ctx(B),{'Cheap Relevance Gate':source}).json;
   assert.equal(bad.ai_extraction_error,'INVALID_ICP_CODE');
   assert.equal(bad.candidate_eligible,false);
-  const noFit=run('Validate AI Extraction',{...ai,suggested_icp:null},ctx(B),{'Cheap Relevance Gate':source}).json;
+  const noFit=run('Validate AI Extraction',chat({...ai,suggested_icp:null}),ctx(B),{'Cheap Relevance Gate':source}).json;
   assert.equal(noFit.ai_extraction_status,'VALID');
   assert.equal(noFit.candidate_eligible,false);
 });
@@ -143,4 +146,58 @@ test('result scanning obeys its limit even when Brave returns a full page', () =
     $input:{all:()=>[{json:{web:{results:[{url:'https://first.com/'},{url:'https://second.com/'}]}}}]}}, {timeout:1000});
   assert.equal(output.length,1);
   assert.equal(output[0].json.raw_results_scanned,1);
+});
+
+test('custom model HTTP request carries workspace evidence and bounded JSON generation', () => {
+  const node=workflow.nodes.find(node => node.name === 'Custom Model Structured Extraction');
+  assert.equal(node.type,'n8n-nodes-base.httpRequest');
+  assert.equal(node.credentials.httpHeaderAuth.id,example.llm.credential.id);
+  assert.equal(node.parameters.genericAuthType,'httpHeaderAuth');
+  assert.equal(node.parameters.options.redirect.redirect.followRedirects,false);
+  const context={workspace_prompt:'Workspace Alpha; ICP ACCOUNTING_FIRMS; product ACCOUNTING_SUITE'};
+  const model=modelSettings(example.llm);
+  const $=name=>({first:()=>({json:name==='Workspace Guard' ? context : {config:{llm:model}}})});
+  const source={query:'accounting firms',url:'https://example.com/',domain:'example.com',
+    clean_text:'A company with "quoted" facts\nand a newline.',structured_data:'{"name":"Example"}'};
+  const expression=node.parameters.jsonBody.slice(3,-2);
+  const body=JSON.parse(vm.runInNewContext(expression,{$,$json:source},{timeout:1000}));
+  assert.equal(body.model,'mistralai/mistral-large-2512');
+  assert.equal(body.messages[0].role,'system');
+  assert.ok(body.messages[0].content.includes('ACCOUNTING_SUITE'));
+  assert.ok(body.messages[1].content.includes(source.clean_text));
+  assert.equal(body.max_tokens,2000);
+  assert.equal(body.response_format.type,'json_object');
+  assert.equal(body.stream,false);
+  assert.equal(body.temperature,0);
+  assert.equal(JSON.stringify(body).includes('SELECT_WORKSPACE_API_CREDENTIAL'),false);
+  assert.throws(()=>modelSettings({...example.llm,base_url:'https://user:secret@api.xkiro.com/v1'}),/HTTPS/);
+  assert.throws(()=>modelSettings({...example.llm,base_url:'https://api.xkiro.com/v1?key=secret'}),/HTTPS/);
+  assert.throws(()=>modelSettings({...example.llm,max_tokens:100000}),/max_tokens/);
+  assert.throws(()=>adaptDiscovery({...example,llm:{...example.llm,credential:{...example.llm.credential,value:'secret'}}}),/never a key/);
+});
+
+test('provider failures and truncated output cannot create candidates or leak provider error details', () => {
+  const source={url:'https://example.com/',domain:'example.com',clean_text:'Verified company evidence'};
+  const valid={company_name:'Example',suggested_icp:'ACCOUNTING_FIRMS',icp_confidence:0.9,icp_reasoning:'Direct evidence'};
+  const failed=[
+    [{statusCode:401,body:{error:{message:'sensitive provider detail'}}},'AI_PROVIDER_HTTP_401'],
+    [{statusCode:429,body:{error:{message:'sensitive provider detail'}}},'AI_PROVIDER_HTTP_429'],
+    [chat(valid,'length'),'AI_PROVIDER_INCOMPLETE_RESPONSE'],
+    [{statusCode:200,body:{choices:[]}},'AI_PROVIDER_INVALID_RESPONSE'],
+    [{statusCode:200,body:{choices:[{finish_reason:'stop',message:{content:'not JSON'}}]}},'INVALID_OR_UNPARSEABLE_JSON'],
+    [{error:{message:'request authorization secret'}},'AI_PROVIDER_REQUEST_FAILED'],
+  ];
+  for (const [response,error] of failed) {
+    const item=run('Validate AI Extraction',response,ctx(A),{'Cheap Relevance Gate':source}).json;
+    assert.equal(item.ai_extraction_error,error);
+    assert.equal(item.candidate_eligible,false);
+    assert.equal(item.ai_provider,'xkiro');
+    assert.equal(item.ai_model,example.llm.model);
+    assert.equal(JSON.stringify(item).includes('sensitive provider detail'),false);
+    assert.equal(JSON.stringify(item).includes('authorization secret'),false);
+  }
+  const response=chat(valid);
+  response.body.usage={prompt_tokens:10,completion_tokens:20,total_tokens:30};
+  assert.equal(completionContent(response).usage.total_tokens,30);
+  assert.equal(completionContent({choices:[{finish_reason:'stop',message:{content:'{}',refusal:'refused'}}]}).error,'AI_PROVIDER_UNEXPECTED_MESSAGE');
 });

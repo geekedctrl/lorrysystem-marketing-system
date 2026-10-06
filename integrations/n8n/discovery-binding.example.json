@@ -3,7 +3,13 @@
   "api_base_url": "http://lorrysystem-dev-marketing-api:8000",
   "api_credential": {"id": "SELECT_WORKSPACE_API_CREDENTIAL", "name": "LorrySystem DEV discovery API"},
   "brave_credential": {"id": "SELECT_BRAVE_CREDENTIAL", "name": "Brave Search DEV"},
-  "openai_credential": {"id": "SELECT_OPENAI_CREDENTIAL", "name": "Select OpenAI credential when ready"},
+  "llm": {
+    "base_url": "https://api.xkiro.com/v1",
+    "provider": "xkiro",
+    "model": "mistralai/mistral-large-2512",
+    "max_tokens": 2000,
+    "credential": {"id": "SELECT_XKIRO_CREDENTIAL", "name": "xKiro DEV model API"}
+  },
   "registry_table_id": "SELECT_DEDICATED_WORKSPACE_TABLE",
   "discovery": {
     "query": "haulage company Selangor Malaysia",

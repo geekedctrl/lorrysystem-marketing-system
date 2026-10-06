@@ -44,10 +44,35 @@ node integrations/n8n/adapt-discovery.js \
 ```
 
 Start the binding from `discovery-binding.example.json`. Select the workspace's
-named Marketing API credential, a dedicated registry table, and Brave/OpenAI
+named Marketing API credential, a dedicated registry table, and Brave/custom-model
 credential references from the target n8n instance. Credential IDs from another
 instance are not portable. Only `id` and `name` belong in this file, never tokens.
 The example uses DEV's internal API origin; the API has no public DEV hostname.
+
+The `llm` binding selects an HTTPS base URL, model, provider label, output-token
+limit and n8n Header Auth credential reference. The default is xKiro at
+`https://api.xkiro.com/v1`, with `mistralai/mistral-large-2512`. **Custom Model
+Structured Extraction** sends a non-streaming JSON Chat Completions request to
+`/chat/completions`, with workspace catalog instructions and public company
+evidence. It uses `response_format: {type: "json_object"}`, temperature 0 and a
+default `max_tokens` ceiling of 2000. The response validator reads
+`choices[0].message.content`, requires `finish_reason: "stop"`, and checks the JSON
+and workspace ICP code. Truncated responses, provider/transport failures and
+invalid JSON follow the existing registry failure/retry path without creating
+candidates. Provider/model attribution and valid token-usage counters are retained;
+provider error bodies are not copied into candidate or registry results.
+
+For xKiro, put the key in the ignored `.env.n8n-dev` as `XKIRO_API_KEY`, then create
+or select an n8n **Header Auth** credential with header name `x-api-key` and the
+key as its value. The local file also contains `XKIRO_BASE_URL` and `XKIRO_MODEL`;
+the generated workflow takes those settings from its binding. Changing the local
+file alone does not configure a remote n8n credential. No OpenAI credential or
+SDK is required. Redirects are disabled on model requests. Other compatible
+gateways can use an appropriate Header Auth credential, such as `Authorization`
+with a `Bearer …` value, without changing the extraction pipeline.
+
+Provider contract: [xKiro Chat Completions](https://docs.xkiro.com/api/chat-completions/)
+and [authentication](https://docs.xkiro.com/guides/authentication/).
 
 The adapter preserves retry windows, existing-candidate/active-lead handling,
 website-credit contact checks, source evidence and the confidence thresholds.
@@ -75,13 +100,13 @@ For DEV setup, `.env.n8n-dev` stays ignored. `MARKETING_WORKSPACE_API_KEY` is cr
 in the dashboard: select the product, open **Workspaces & team → Automation
 credentials**, enter a name and select **Create credential**. Copy the token shown
 once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header Auth
-with `X-Subscription-Token`. OpenAI uses n8n's OpenAI credential type.
+with `X-Subscription-Token`. xKiro uses Header Auth with `x-api-key`.
 
 The DEV copy created on 2026-10-06 is **LorrySystem DEV - Workspace Lead Discovery**,
 inactive, with named Marketing API/Brave credentials and a new dedicated registry
 containing 34 migrated historical rows. Statuses, IDs, counters and retry dates
 were verified against the original. The original table and workflows were left
-unchanged. OpenAI is unselected until a DEV account is chosen; no AI calls or real
+unchanged. Custom-model auth is unselected until the xKiro key is supplied; no AI calls or real
 candidate writes were performed. Live preflight confirmed 3 ICPs and 6 offerings,
 and one public Brave result verified the provider key.
 
@@ -255,7 +280,10 @@ a swapped credential stopped before downstream execution. The full discovery gra
 was also run in disposable n8n 2.41.7 with native Data Tables and synthetic provider
 and candidate responses for two unrelated products. First runs passed candidate,
 source and final registry checks; identical second runs skipped fetch, AI and
-candidate creation. A mismatched workspace stopped before Brave Search. Sender
+candidate creation. The custom-model version passed the same full graph using
+an actual n8n HTTP Request against a local Chat Completions stub that checked
+the model, JSON settings, workspace evidence and `x-api-key` header. A mismatched
+workspace stopped before Brave Search. Sender
 accounts and real extraction still need their own validation before activation.
 
 References: [n8n HTTP credentials](https://docs.n8n.io/integrations/builtin/credentials/httprequest/),

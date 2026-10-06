@@ -55,6 +55,7 @@ function preflightNodes(binding) {
     registry_table_id: binding.registry_table_id || null,
     require_catalog: binding.require_catalog !== false,
     ...(binding.discovery ? { discovery: binding.discovery } : {}),
+    ...(binding.llm ? { llm: binding.llm } : {}),
   };
   return [
     { id: 'workspace-configuration', name: CONFIG, type: 'n8n-nodes-base.code', typeVersion: 2,
