@@ -92,11 +92,14 @@ def job_read(job):
     }
 
 
-def scoped_job(db, kind=None):
+def scoped_job(db, kind=None, lock=False):
     principal = current_principal.get()
     if not principal or not principal.automation_job_id:
         raise HTTPException(403, "A claimed job is required")
-    job = db.get(AutomationJob, principal.automation_job_id)
+    statement = select(AutomationJob).where(
+        AutomationJob.id == principal.automation_job_id
+    )
+    job = db.scalar(statement.with_for_update() if lock else statement)
     if not job or job.status != "RUNNING" or (kind and job.kind != kind):
         raise HTTPException(409, "Job is unavailable")
     return job
@@ -419,10 +422,9 @@ def candidate(data: dict, db=Depends(get_db)):
     )
     from pydantic import ValidationError
 
-    job = scoped_job(db, "DISCOVERY")
-    job = db.scalar(
-        select(AutomationJob).where(AutomationJob.id == job.id).with_for_update()
-    )
+    # Read under the lock once: a cached pre-lock result could lose accepted
+    # counts or allow concurrent requests to exceed the batch limit.
+    job = scoped_job(db, "DISCOVERY", lock=True)
     try:
         parsed = CandidateCreate.model_validate(data)
     except ValidationError:

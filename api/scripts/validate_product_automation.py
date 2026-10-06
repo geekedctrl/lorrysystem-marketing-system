@@ -37,9 +37,10 @@ def call(method, path, data=None, headers=None, expected=200):
             status, body = response.status, json.load(response)
     except urllib.error.HTTPError as error:
         status, body = error.code, json.load(error)
+    accepted_statuses = expected if isinstance(expected, tuple) else (expected,)
     assert (
-        status == expected
-    ), f'{method} {path}: {status}, expected {expected}; {body if status!=expected else ""}'
+        status in accepted_statuses
+    ), f'{method} {path}: {status}, expected {expected}; {body if status not in accepted_statuses else ""}'
     return body
 
 
@@ -160,6 +161,25 @@ for _ in range(2):
     assert finish(job)["status"] == "COMPLETED"
     call("GET", "/api/workspace-context", headers=lease(job), expected=401)
     f["catalog"] = call("GET", "/api/workspace-context", headers=f["headers"])
+for f in fixtures:
+    legacy = {
+        "X-API-Key": call(
+            "POST",
+            f"/api/workspaces/{f['wid']}/credentials",
+            {"name": "Legacy stop regression"},
+            f["headers"],
+            201,
+        )["token"],
+        "X-Workspace-ID": f["wid"],
+    }
+    contract = call("GET", "/api/workspace-context", headers=legacy)["automation"]
+    assert (
+        contract["credential_kind"] == "workspace"
+        and contract["human_candidate_review_required"] is False
+        and "job_id" not in contract
+    )
+    assert call("POST", "/api/research/claim", headers=legacy) is None
+    assert call("POST", "/api/pipeline/claim", headers=legacy) is None
 print(
     "PASS admin form activation, unrelated catalogs, root credential isolation and exact workspace/job leases",
     flush=True,
@@ -520,6 +540,57 @@ with ControlSession() as db:
 assert finish(scoring)["result"]["outcome"] == "SCORING_CONTEXT_CHANGED"
 assert claim() is None
 assert call("GET", f"/api/leads/{lead}/actions", headers=f["headers"]) == []
+# Concurrent HTTP items must not bypass the batch bound or lose accepted counts.
+with ControlSession() as db:
+    db.add(
+        AutomationJob(
+            workspace_id=UUID(f["wid"]),
+            kind="DISCOVERY",
+            payload={"query": "Business services", "target_new_companies": 1},
+        )
+    )
+    db.commit()
+batch = claim()
+assert batch["kind"] == "DISCOVERY"
+
+
+def bounded_candidate(label):
+    url = "https://budget-" + label.lower() + ".com/"
+    return {
+        "company_name": "Concurrent " + label,
+        "website_url": url,
+        "domain": "budget-" + label.lower() + ".com",
+        "suggested_icp_profile_id": f["catalog"]["icps"][0]["id"],
+        "icp_confidence": 0.85,
+        "icp_reasoning": "Documented services fit the active customer profile.",
+        "source": {
+            "source_type": "COMPANY_WEBSITE",
+            "url": url,
+            "evidence": "Concurrent "
+            + label
+            + " provides professional business services in Malaysia.",
+        },
+    }
+
+
+with ThreadPoolExecutor(max_workers=2) as pool:
+    results = list(
+        pool.map(
+            lambda label: call(
+                "POST",
+                "/api/automation/candidates",
+                bounded_candidate(label),
+                lease(batch),
+                (200, 409),
+            ),
+            ["Alpha", "Beta"],
+        )
+    )
+assert sum(r.get("outcome") == "ACCEPTED" for r in results) == 1
+assert finish(batch)["result"]["accepted_leads"] == 1
+batch_research = claim()
+assert batch_research["kind"] == "RESEARCH"
+finish(batch_research, reason="VALIDATION_TEST_FAILURE")
 job = review_job
 second = call(
     "POST",

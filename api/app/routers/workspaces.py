@@ -329,7 +329,11 @@ def icp_profiles(db=Depends(get_db)):
 @router.get('/api/workspace-context')
 def workspace_context(db=Depends(get_db)):
     from app.workspace_context import current_principal
+    from app.models.automation import ProductAutomationPlan
     principal = current_principal.get()
+    # Bound legacy discovery graphs must stop at preflight too, before a paid
+    # search/model call. Pausing a managed plan never restores the old workers.
+    managed_service = principal.role == 'SERVICE' and bool(db.scalar(select(ProductAutomationPlan.id)))
     with ControlSession() as control:
         workspace = control.get(Workspace, principal.workspace_id)
         return {'workspace': workspace_read(workspace, principal.role), 'icps': icp_profiles(db),
@@ -338,9 +342,9 @@ def workspace_context(db=Depends(get_db)):
                     'credential_kind': ('job' if principal.automation_job_id else 'legacy' if principal.actor == 'legacy-lorrysystem-worker'
                                         else 'workspace' if principal.role == 'SERVICE' else 'user'),
                     'registry_namespace': f'workspace:{principal.workspace_id}:discovery',
-                    'human_candidate_review_required': not bool(principal.automation_job_id),
+                    'human_candidate_review_required': not bool(principal.automation_job_id or managed_service),
                     'human_marketing_approval_required': True,
-            **({'job_id': str(principal.automation_job_id)} if principal.automation_job_id else {}),
+                    **({'job_id': str(principal.automation_job_id)} if principal.automation_job_id else {}),
                 },
                 'products': [{'id': str(p.id), 'code': p.code, 'name': p.name, 'description': p.description}
                              for p in db.scalars(select(Product).where(Product.active.is_(True)))]}

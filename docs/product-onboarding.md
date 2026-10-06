@@ -32,7 +32,7 @@ A claim returns one job, its workspace UUID and a random 30-minute lease. Busine
 
 One job runs per workspace; different products can run concurrently. Claims serialize scheduler decisions and use database locks. Finishing is serialized per job and idempotent. Lease expiry marks the native job failed as well, allowing explicit retry. Approval/sending endpoints are excluded from every lease. Audit events distinguish automatic contact selection and the shared service actor from human decisions.
 
-The shared n8n graph set is fixed: **Product Setup**, **Company Discovery**, **Company and People Research**, **Qualification and Outreach Preparation**, and one scheduled queue dispatcher. Each receives current job/workspace context. Discovery memory is database-owned, without per-product n8n Data Tables. Legacy workers stop claiming managed products, including paused ones.
+The shared n8n graph set is fixed: **Product Setup**, **Company Discovery**, **Company and People Research**, **Qualification and Outreach Preparation**, and one scheduled queue dispatcher. Each receives current job/workspace context. Discovery memory is database-owned, without per-product n8n Data Tables. Legacy research/stage workers cannot claim managed products, including paused ones. The legacy workspace preflight contract also stops bound discovery graphs before search/model calls when a product is managed; only job leases satisfy the shared contract.
 
 ## One-time platform connection and release
 
