@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Business Card Review · LorrySystem{% endblock %}
+{% block title %}Business Card Review · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Review Business Card</h1>
 <p>OCR results are suggestions only. Correct anything that is wrong before creating the lead.</p>

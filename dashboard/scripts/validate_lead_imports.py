@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import csv
+import os
 import io
 import re
 import sys
@@ -8,7 +9,7 @@ import uuid
 import httpx
 from PIL import Image, ImageDraw
 
-BASE_URL = "http://127.0.0.1:8080"
+BASE_URL = os.getenv('DASHBOARD_BASE_URL', 'http://127.0.0.1:8080')
 passed = failed = 0
 
 def check(name, ok, detail=""):
@@ -44,7 +45,15 @@ def make_csv(rows):
     w.writerows(rows)
     return out.getvalue().encode()
 
-with httpx.Client(base_url=BASE_URL, timeout=60.0) as client:
+with httpx.Client(base_url=BASE_URL, timeout=60.0, follow_redirects=True) as client:
+    login_page = client.get('/login')
+    token = re.search(r'name="csrf_token" value="([^"]+)"', login_page.text)
+    if not token or not os.getenv('DASHBOARD_TEST_EMAIL') or not os.getenv('DASHBOARD_TEST_PASSWORD'):
+        raise RuntimeError('Set DASHBOARD_TEST_EMAIL and DASHBOARD_TEST_PASSWORD for a disposable administrator account.')
+    login_response = client.post('/login', data={'email': os.environ['DASHBOARD_TEST_EMAIL'],
+        'password': os.environ['DASHBOARD_TEST_PASSWORD'], 'csrf_token': token[1]})
+    if login_response.url.path == '/login':
+        raise RuntimeError('Dashboard test account could not sign in.')
     r = client.get("/leads/import")
     check("Import page", r.status_code == 200, f"HTTP {r.status_code}")
     csrf = csrf_from(r.text)

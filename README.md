@@ -8,6 +8,18 @@ This repository contains the core application used by the **development environm
 
 ---
 
+## Product workspaces update
+
+The application now supports private product workspaces with email/password
+accounts, workspace roles, catalogs and automation credentials. Existing data
+migrates into the LorrySystem workspace. The API applies Alembic migrations before
+serving requests, and the dashboard requires sign-in.
+
+Read [Product workspace deployment and access guide](docs/PRODUCT_WORKSPACES.md)
+for first-administrator setup, migration/backup requirements and the n8n transition.
+This update supersedes the single-workspace authentication and ICP environment
+configuration described in older sections below.
+
 ## 1. Project Overview
 
 The system is built around four main components:
@@ -241,10 +253,11 @@ The current FastAPI OpenAPI specification contains:
 
 | Method | Endpoints |
 |---|---:|
-| GET | 27 |
-| POST | 15 |
-| PATCH | 11 |
-| **Total** | **53** |
+| GET | 34 |
+| POST | 23 |
+| PATCH | 13 |
+| DELETE | 2 |
+| **Total** | **72** |
 
 > Update this count whenever routes are added or removed.
 
@@ -261,6 +274,7 @@ The current FastAPI OpenAPI specification contains:
 - Public Fetch
 - Research
 - Scoring
+- Workspaces and accounts
 
 ### Authentication
 
@@ -323,7 +337,7 @@ Database schema changes are managed using **Alembic**.
 Current migration head:
 
 ```text
-008
+009
 ```
 
 Current migration chain:
@@ -344,6 +358,8 @@ d62d40479f83
 007
  ↓
 008
+ ↓
+009
 ```
 
 Never edit an already-applied migration simply to change production behavior. Create a new migration instead.
@@ -694,7 +710,7 @@ The isolated DEV environment currently includes:
 - DEV n8n
 - Separate DEV Docker networks
 - API authentication
-- Database migrations through revision `008`
+- Database migrations through revision `009`
 - Public DEV Dashboard
 - Public DEV n8n
 - Git `main` and `develop` workflow

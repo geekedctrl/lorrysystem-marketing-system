@@ -15,9 +15,10 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.workspaces import WorkspaceOwned
 
 
-class MarketingAction(Base):
+class MarketingAction(WorkspaceOwned, Base):
     __tablename__ = "marketing_actions"
 
     __table_args__ = (
@@ -144,7 +145,7 @@ class MarketingAction(Base):
     )
 
 
-class ApprovalRequest(Base):
+class ApprovalRequest(WorkspaceOwned, Base):
     __tablename__ = "approval_requests"
 
     __table_args__ = (
@@ -213,7 +214,7 @@ class ApprovalRequest(Base):
     )
 
 
-class Event(Base):
+class Event(WorkspaceOwned, Base):
     __tablename__ = "events"
 
     id: Mapped[PyUUID] = mapped_column(

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} · LorrySystem{% endblock %}
+{% block title %}{{ title }} · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}<h1>{{ title }}</h1>{% endblock %}
 {% block content %}
 <div class="card empty">

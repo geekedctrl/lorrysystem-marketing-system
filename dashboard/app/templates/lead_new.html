@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Add Lead · LorrySystem{% endblock %}
+{% block title %}Add Lead · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 
 {% block page_heading %}
 <h1>Add Lead</h1>

@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from .config import Settings
+from .workspace_context import request_auth
 
 
 class MarketingAPIError(Exception):
@@ -35,7 +36,12 @@ class MarketingAPI:
     ) -> Any:
         headers = {}
         if authenticated:
-            headers["X-API-Key"] = self.settings.api_key
+            auth = request_auth.get()
+            if not auth or not auth.get('token'):
+                raise MarketingAPIError(401, 'Sign in required.')
+            headers['Authorization'] = 'Bearer ' + auth['token']
+            if auth.get('workspace_id'):
+                headers['X-Workspace-ID'] = auth['workspace_id']
 
         try:
             async with httpx.AsyncClient(
@@ -89,7 +95,7 @@ class MarketingAPI:
             detail = payload.get("detail")
 
         if status_code == 401:
-            return "Dashboard authentication to the Marketing API failed."
+            return "Sign in again or check your credentials."
         if status_code == 404:
             return "The requested record was not found."
         if status_code == 409:

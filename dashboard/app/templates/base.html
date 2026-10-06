@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}LorrySystem AI Marketing{% endblock %}</title>
+  <title>{% block title %}Marketing{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">LS</div>
+        <div class="brand-mark">{{ current_workspace.name[:2]|upper if current_workspace else "MK" }}</div>
         <div>
-          <strong>LorrySystem</strong>
+          <strong>{{ current_workspace.name if current_workspace else 'Marketing' }}</strong>
           <span>AI Marketing</span>
         </div>
       </div>
@@ -25,15 +25,18 @@
           Leads
         </a>
 
+        {% if current_workspace and current_workspace.role in ["ADMIN", "OPERATOR"] %}
         <a href="/leads/new"
            class="nav-add {% if request.url.path.startswith('/leads/new') or request.url.path.startswith('/leads/import') %}active{% endif %}">
           + Add Lead
         </a>
+        {% endif %}
 
         <a href="/discovered-leads" class="{% if request.url.path.startswith('/discovered-leads') %}active{% endif %}">Discovered Leads</a>
         <a href="/actions" class="{% if request.url.path.startswith('/actions') %}active{% endif %}">Marketing Actions</a>
         <a href="/approvals" class="{% if request.url.path.startswith('/approvals') %}active{% endif %}">Approvals</a>
         <div class="nav-spacer"></div>
+        <a href="/workspaces" class="{% if request.url.path.startswith('/workspaces') %}active{% endif %}">Workspaces & team</a>
         <a href="/system" class="{% if request.url.path == '/system' %}active{% endif %}">System</a>
       </nav>
     </aside>
@@ -46,6 +49,7 @@
         <div class="user-chip">
           <span class="status-dot"></span>
           {{ reviewer_identity }}
+          <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn">Sign out</button></form>
         </div>
       </header>
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Import Leads · LorrySystem{% endblock %}
+{% block title %}Import Leads · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Import Leads</h1>
 <p>Add leads from a business card or CSV without bypassing the Marketing API.</p>

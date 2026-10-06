@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Approvals · LorrySystem{% endblock %}
+{% block title %}Approvals · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Approval Queue</h1>
 <p>Human review for AI-generated marketing actions.</p>

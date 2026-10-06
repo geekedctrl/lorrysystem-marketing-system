@@ -334,6 +334,30 @@ jobs:
 
           echo "Dashboard page loaded successfully."
 
+      - name: Test workspace isolation, roles and browser sessions
+        run: |
+          docker exec \
+            -e APP_ENV=ci \
+            -e EXPORT_TEST_LOGIN=true \
+            -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+            lorrysystem-dev-marketing-api \
+            python scripts/validate_workspaces.py
+
+      - name: Test business-card OCR and CSV import regression
+        run: |
+          docker cp lorrysystem-dev-marketing-api:/tmp/workspace-validation-account.json /tmp/workspace-validation-account.json
+          docker exec -i lorrysystem-dev-dashboard python -c \
+            "import json,os,runpy,sys; account=json.load(sys.stdin); os.environ['DASHBOARD_TEST_EMAIL']=account['email']; os.environ['DASHBOARD_TEST_PASSWORD']=account['password']; runpy.run_path('scripts/validate_lead_imports.py',run_name='__main__')" \
+            < /tmp/workspace-validation-account.json
+          rm -f /tmp/workspace-validation-account.json
+
+      - name: Test workspace migration and guarded rollback
+        run: |
+          docker exec \
+            -e APP_ENV=ci \
+            lorrysystem-dev-marketing-api \
+            python scripts/validate_workspace_migration.py
+
       - name: Test Dashboard to API connectivity
         run: |
           docker exec lorrysystem-dev-dashboard \

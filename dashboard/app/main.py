@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
 from datetime import datetime
 from typing import Any
@@ -14,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .api_client import MarketingAPI, MarketingAPIError
 from .config import Settings, icp_options
+from .workspace_ui import WorkspaceDashboardMiddleware, router as workspace_router
 
 from .import_helpers import (
     CSV_HEADERS,
@@ -40,11 +42,16 @@ app = FastAPI(
     openapi_url=None,
 )
 
+app.state.api = api
+app.include_router(workspace_router)
+app.add_middleware(WorkspaceDashboardMiddleware, api=api)
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
     same_site="lax",
-    https_only=False,  # Cloudflare provides HTTPS externally; set True if origin also uses HTTPS.
+    https_only=os.getenv("DASHBOARD_SECURE_COOKIES", "false").lower() == "true",
+    max_age=43200,
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -185,14 +192,7 @@ def verify_csrf(request: Request, token: str) -> bool:
 
 
 def reviewer_identity(request: Request) -> str:
-    if settings.trust_cloudflare_identity:
-        email = request.headers.get(
-            "Cf-Access-Authenticated-User-Email",
-            "",
-        ).strip()
-        if email:
-            return email
-    return settings.reviewer_identity
+    return getattr(request.state, 'user', {}).get('email', '')
 
 
 def render(
@@ -206,6 +206,8 @@ def render(
         "request": request,
         "csrf_token": csrf_token(request),
         "reviewer_identity": reviewer_identity(request),
+        "current_user": getattr(request.state, "user", None),
+        "current_workspace": getattr(request.state, "workspace", None),
     }
     if context:
         payload.update(context)
@@ -1652,23 +1654,13 @@ async def system_page(request: Request) -> HTMLResponse:
 
 
 def icp_code_to_id() -> dict[str, str]:
-    options = icp_options()
-    label_map = {
-        "Logistics / Haulage": "LOGISTICS_HAULAGE",
-        "Passenger Transport": "PASSENGER_TRANSPORT",
-        "Commercial / Enterprise Fleet": "COMMERCIAL_ENTERPRISE",
-    }
-    return {
-        label_map[item["label"]]: item["id"]
-        for item in options
-        if item["label"] in label_map
-    }
+    return {i['code']: i['id'] for i in icp_options()}
 
 
 @app.get("/leads/import/csv/template")
 async def csv_template() -> Response:
     return Response(
-        content=csv_template_text(),
+        content=csv_template_text(icp_options()[0]["code"] if icp_options() else ""),
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": (

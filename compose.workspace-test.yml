@@ -1,0 +1,39 @@
+# Disposable integration environment. Never mounts the existing data directory.
+services:
+  workspace-test-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: workspace_test
+      POSTGRES_USER: workspace_test
+      POSTGRES_PASSWORD: ${WORKSPACE_TEST_DB_PASSWORD:?Set a disposable test password}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U workspace_test -d workspace_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - workspace-test-data:/var/lib/postgresql/data
+  workspace-test-api:
+    build: ./api
+    environment:
+      APP_ENV: workspace-test
+      POSTGRES_HOST: workspace-test-db
+      POSTGRES_DB: workspace_test
+      POSTGRES_USER: workspace_test
+      POSTGRES_PASSWORD: ${WORKSPACE_TEST_DB_PASSWORD}
+      MARKETING_API_KEY: ${WORKSPACE_TEST_API_KEY:?Set a disposable API key}
+    depends_on:
+      workspace-test-db:
+        condition: service_healthy
+    volumes:
+      - ./database/migrations/versions:/app/alembic/versions:ro
+    ports: ['127.0.0.1:8011:8000']
+  workspace-test-dashboard:
+    build: ./dashboard
+    environment:
+      MARKETING_API_BASE_URL: http://workspace-test-api:8000
+      DASHBOARD_SESSION_SECRET: ${WORKSPACE_TEST_SESSION_SECRET:?Set a disposable cookie secret}
+      DASHBOARD_SECURE_COOKIES: 'false'
+    ports: ['127.0.0.1:8091:8080']
+volumes:
+  workspace-test-data:

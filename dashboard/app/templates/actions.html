@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Marketing Actions · LorrySystem{% endblock %}
+{% block title %}Marketing Actions · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Marketing Actions</h1>
 <p>Operational visibility across generated outreach content.</p>
