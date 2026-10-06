@@ -333,6 +333,14 @@ def workspace_context(db=Depends(get_db)):
     with ControlSession() as control:
         workspace = control.get(Workspace, principal.workspace_id)
         return {'workspace': workspace_read(workspace, principal.role), 'icps': icp_profiles(db),
+                'automation': {
+                    'contract_version': 1,
+                    'credential_kind': ('legacy' if principal.actor == 'legacy-lorrysystem-worker'
+                                        else 'workspace' if principal.role == 'SERVICE' else 'user'),
+                    'registry_namespace': f'workspace:{principal.workspace_id}:discovery',
+                    'human_candidate_review_required': True,
+                    'human_marketing_approval_required': True,
+                },
                 'products': [{'id': str(p.id), 'code': p.code, 'name': p.name, 'description': p.description}
                              for p in db.scalars(select(Product).where(Product.active.is_(True)))]}
 

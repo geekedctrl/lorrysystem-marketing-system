@@ -17,6 +17,8 @@ serving requests, and the dashboard requires sign-in.
 
 Read [Product workspace deployment and access guide](docs/PRODUCT_WORKSPACES.md)
 for first-administrator setup, migration/backup requirements and the n8n transition.
+The [n8n workspace adaptation package](integrations/n8n/README.md) includes an
+importable preflight and tools for binding exported automation to each workspace.
 This update supersedes the single-workspace authentication and ICP environment
 configuration described in older sections below.
 

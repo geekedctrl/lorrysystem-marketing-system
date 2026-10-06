@@ -112,6 +112,10 @@ for workspace, headers in ((a, ha), (b, hb)):
         {'description': 'Distinct product', 'brand_voice': 'Clear', 'monthly_budget_usd': 50}, headers)
     context = request('GET', '/api/workspace-context', headers=headers)
     check('worker receives matching workspace configuration', context['workspace']['id'] == workspace and context['icps'][0]['id'] == icps[workspace])
+    check('automation contract namespaces discovery and requires human decisions',
+          context['automation'] == {'contract_version': 1, 'credential_kind': 'user',
+            'registry_namespace': f'workspace:{workspace}:discovery',
+            'human_candidate_review_required': True, 'human_marketing_approval_required': True})
 
 companies, contacts, leads = {}, {}, {}
 for workspace, headers in ((a, ha), (b, hb)):
@@ -161,6 +165,13 @@ request('DELETE', f'/api/workspaces/{b}/members/{roles["VIEWER"]["id"]}', header
 
 credential = request('POST', f'/api/workspaces/{a}/credentials', {'name': 'Alpha worker'}, ha, 201)
 machine = {'X-API-Key': credential['token']}
+machine_context = request('GET', '/api/workspace-context', headers=machine)
+check('named automation credential receives only its workspace catalog',
+      machine_context['workspace']['id'] == a and machine_context['automation']['credential_kind'] == 'workspace'
+      and [p['id'] for p in machine_context['products']] == [products[a]]
+      and [i['id'] for i in machine_context['icps']] == [icps[a]])
+check('legacy credential is explicitly marked for migration',
+      request('GET', '/api/workspace-context', headers=legacy)['automation']['credential_kind'] == 'legacy')
 request('GET', '/api/leads', headers=machine)
 request('GET', '/api/leads', headers={**machine, 'X-Workspace-ID': b}, expected=403)
 request('GET', f'/api/workspaces/{a}/members', headers=machine, expected=401)
@@ -248,6 +259,7 @@ with ControlSession() as db:
 
 request('DELETE', f'/api/workspaces/{a}/credentials/{credential["id"]}', headers=ha)
 request('GET', '/api/leads', headers=machine, expected=401)
+request('GET', '/api/workspace-context', headers=machine, expected=401)
 request('PATCH', f'/api/workspaces/{a}/members/{roles["OPERATOR"]["id"]}', {'role': 'VIEWER'}, ha)
 request('POST', '/api/companies', {'name': 'Revoked write'}, roles['OPERATOR']['headers'], 403)
 request('DELETE', f'/api/workspaces/{a}/members/{roles["OPERATOR"]["id"]}', headers=ha)
