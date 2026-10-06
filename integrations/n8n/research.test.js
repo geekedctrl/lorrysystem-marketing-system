@@ -57,6 +57,15 @@ test('sourced official services complete research; missing people does not block
   assert.deepEqual(result.research_payload.company_facts.model_usage,{prompt_tokens:100,completion_tokens:200,total_tokens:300});
   data.people=[];assert.equal(validate(data).research_outcome,'COMPLETED');
 });
+
+test('new finding titles are retained while prior untitled findings remain compatible',()=>{
+  const data=extraction();data.facts[0].title='Freight and haulage services';
+  assert.equal(validate(data).research_payload.company_facts.facts[0].title,data.facts[0].title);
+  data.facts[0].title='x'.repeat(81);assert.equal(validate(data).research_outcome,'COMPLETED');
+  assert.equal(validate(data).research_payload.company_facts.facts[0].title,undefined);
+  const child=researchChild(binding);
+  assert.ok(child.nodes.find(n=>n.name==='Prepare Research Model').parameters.jsCode.includes('dashboard handles presentation'));
+});
 test('unverified identity or snippet-only coverage becomes partial research',()=>{
   assert.equal(validate(extraction(),{...evidence,coverage:{official_pages_read:0}}).research_outcome,'PARTIAL');
   const data=extraction();data.company_identity_verified=false;

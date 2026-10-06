@@ -1,0 +1,58 @@
+{% macro references(refs) -%}
+{% if refs %}<span class="research-citations" aria-label="Supporting sources">{% for ref in refs %}<a href="#{{ ref.anchor }}" aria-label="Source {{ ref.number }}: {{ ref.domain }}" title="{{ ref.title }}">{{ ref.number }}</a>{% endfor %}</span>{% endif %}
+{%- endmacro %}
+{% macro proof(quote, refs) -%}
+{% if quote %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary><div><blockquote>{{ quote }}</blockquote>{% for ref in refs %}<a class="research-external" href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.domain }} <span aria-hidden="true">↗</span></a>{% endfor %}</div></details>{% endif %}
+{%- endmacro %}
+
+<section class="research-brief section-card" id="research-brief" aria-labelledby="research-heading">
+  <header class="research-heading">
+    <div><span class="research-eyebrow">Company intelligence</span><h2 id="research-heading">Research brief</h2><p>Public-source insights to prepare your next conversation.</p></div>
+    {% if not research_active and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH','CONTACTED','REPLIED'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
+    <form method="post" action="/leads/{{ lead.id }}/research"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="button secondary" type="submit"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16 8a6 6 0 1 0 0 4M16 3v5h-5"/></svg>{{ 'Run research again' if research else 'Queue research' }}</button></form>
+    {% endif %}
+  </header>
+  {% set report = research_view.report %}
+  {% set latest = research_view.latest %}
+  {% set active = research_view.active %}
+  {% if research_active %}<div class="research-notice" role="status"><span class="research-pulse" aria-hidden="true"></span><div><strong>{{ 'Research in progress' if active and active.status == 'RUNNING' else 'Research queued' }}</strong><p>{{ 'Checking public company pages and business contacts.' if active and active.status == 'RUNNING' else 'Waiting for the workspace research worker.' }} This page updates automatically.</p></div></div>
+  {% elif latest and latest.status == 'FAILED' %}<div class="research-notice research-notice-warning"><div><strong>The latest research run needs attention</strong><p>Research could not finish. {% if report and report.status in ['COMPLETED','PARTIAL'] %}Your previous brief is available below. {% endif %}Review the saved evidence or run research again.</p></div></div>{% endif %}
+  {% if research_view.viewing_history %}<div class="research-history-notice">Viewing an earlier run from {{ report.date }}. <a href="?#research-brief">Return to latest brief</a></div>{% endif %}
+  {% if report and (report.summary or report.sections or report.people or report.sources) %}
+  <div class="research-report-meta"><span class="research-status research-status-{{ report.status|lower }}">{{ report.status_label }}</span><span>{{ report.date }}</span><span>{{ report.finding_count }} finding{{ 's' if report.finding_count != 1 else '' }}</span><span>{{ report.sources|length }} source{{ 's' if report.sources|length != 1 else '' }}</span></div>
+  <div class="research-layout">
+    <div class="research-main">
+      {% if not (report.summary or report.sections or report.people) %}<div class="research-saved-note"><h3>Evidence saved; brief incomplete</h3><p>Public-source evidence was saved for this run, but the company brief could not be completed. You can review the source library and run research again.</p></div>{% endif %}
+      {% if report.summary %}<section class="research-overview"><h3>At a glance</h3>{% for paragraph in report.summary %}<p>{{ paragraph }}</p>{% endfor %}</section>{% endif %}
+      {% if report.status == 'PARTIAL' %}<p class="research-partial-note">This is a partial brief. Some details still need confirmation; research gaps are listed alongside the findings.</p>{% endif %}
+      <div class="research-sections">
+      {% for section in report.sections %}
+        <section class="research-topic" aria-labelledby="research-topic-{{ section.category|lower }}">
+          <div class="research-topic-heading"><span class="research-topic-mark" aria-hidden="true">{{ '%02d'|format(loop.index) }}</span><div><h3 id="research-topic-{{ section.category|lower }}">{{ section.title }}</h3><p>{{ section.description }}</p></div></div>
+          {% for finding in section.findings %}<article class="research-finding">
+            {% if finding.title %}<h4>{{ finding.title }}</h4>{% endif %}<p>{{ finding.body }}</p>
+            <div class="research-finding-meta"><span class="{{ 'research-hypothesis' if finding.inferred else 'research-documented' }}">{{ 'Hypothesis' if finding.inferred else 'Documented' }}</span>{% if finding.confidence is not none %}<span>Confidence {{ finding.confidence }}/100</span>{% endif %}{{ references(finding.citations) }}</div>
+            {{ proof(finding.quote, finding.citations) }}
+          </article>{% endfor %}
+        </section>
+      {% endfor %}
+      </div>
+      {% if report.people or report.status in ['COMPLETED','PARTIAL'] %}<section class="research-contacts" aria-labelledby="research-contacts-heading"><div class="research-topic-heading"><div><h3 id="research-contacts-heading">Public business contacts</h3><p>Named people supported by public company evidence.</p></div></div>
+        {% if report.people %}<div class="research-contact-grid">{% for person in report.people %}<article class="research-contact">
+          <div class="research-contact-heading"><span class="research-avatar" aria-hidden="true">{{ person.initials }}</span><div><h4>{{ person.name }}</h4><p>{{ person.title }}</p></div></div>
+          {% if person.role %}<span class="research-contact-role">{{ person.role }}</span>{% endif %}
+          <dl class="research-contact-details">{% if person.email %}<div><dt>Email</dt><dd>{% if person.email_href %}<a href="{{ person.email_href }}">{{ person.email }}</a>{% else %}{{ person.email }}{% endif %}</dd></div>{% endif %}{% if person.phone %}<div><dt>Phone</dt><dd>{% if person.phone_href %}<a href="{{ person.phone_href }}">{{ person.phone }}</a>{% else %}{{ person.phone }}{% endif %}</dd></div>{% endif %}{% if person.profile %}<div><dt>Profile</dt><dd><a href="{{ person.profile }}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></dd></div>{% endif %}</dl>
+          <div class="research-finding-meta">{% if person.confidence is not none %}<span>Confidence {{ person.confidence }}/100</span>{% endif %}{{ references(person.citations) }}</div>{{ proof(person.quote, person.citations) }}
+        </article>{% endfor %}</div>{% else %}<div class="research-contact-empty"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/></svg><div><strong>No named contact confirmed yet</strong><p>No named business contact was verified in the available sources.</p></div></div>{% endif %}
+      </section>{% endif %}
+    </div>
+    <aside class="research-aside" aria-label="Research quality and sources">
+      <section class="research-quality"><h3>Evidence quality</h3><div class="research-confidence"><strong>{{ report.confidence if report.confidence is not none else '—' }}{% if report.confidence is not none %}<span>/100</span>{% endif %}</strong><span>{{ 'Not assessed' if report.confidence is none else report.confidence_label ~ ' confidence' }}</span></div>{% if report.confidence is not none %}<div class="research-confidence-track" aria-hidden="true"><span style="width:{{ report.confidence }}%"></span></div>{% endif %}<p>Confidence is a model estimate based on the available public evidence.</p><dl><div><dt>Sources saved</dt><dd>{{ report.sources|length }}</dd></div>{% if report.official_pages is not none %}<div><dt>Official pages read</dt><dd>{{ report.official_pages }}</dd></div>{% endif %}<div><dt>Research date</dt><dd>{{ report.date }}</dd></div></dl></section>
+      {% if report.gaps %}<section class="research-gaps"><h3>Research gaps</h3><p>Details to confirm before relying on them.</p><ul>{% for gap in report.gaps %}<li>{{ gap }}</li>{% endfor %}</ul></section>{% endif %}
+      {% if report.sources %}<section class="research-sources"><h3>Source library <span>{{ report.sources|length }}</span></h3><ol>{% for source in report.sources %}<li id="{{ source.anchor }}"><div class="research-source-heading"><span class="research-source-number" aria-label="Source {{ source.number }}">{{ source.number }}</span><div><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }} <span aria-hidden="true">↗</span></a><span class="research-source-domain">{{ source.domain }}</span></div></div>{% if source.evidence %}<details class="research-source-proof"><summary>Saved evidence</summary><blockquote>{{ source.evidence }}</blockquote></details>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+    </aside>
+  </div>
+  {% elif research_active %}<div class="research-working"><div class="research-skeleton" aria-hidden="true"><span></span><span></span><span></span></div><p>Findings and source links will appear here when research finishes.</p></div>
+  {% else %}<div class="research-empty"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h5"/></svg><strong>{{ 'No findings saved for this run' if report else 'Your company brief will appear here' }}</strong><p>{{ 'Run research again to build a sourced company brief.' if report else 'Accept a discovered candidate to start research automatically, or queue research for this lead.' }}</p></div>{% endif %}
+  {% if research_view.history|length > 1 %}<details class="research-history"><summary><span>Research history <span class="research-history-count">{{ research_view.history|length }} runs</span></span><span aria-hidden="true">+</span></summary><div>{% for run in research_view.history %}<a href="{{ run.href }}" class="research-history-row" {% if report and run.id == report.id %}aria-current="true"{% endif %}><span>{{ run.date }}{% if run.time %} · {{ run.time }}{% endif %}{% if report and run.id == report.id %}<small>Currently shown</small>{% endif %}</span><span class="research-status research-status-{{ run.status|lower }}">{{ run.status_label }}</span><span>{{ run.sources|length }} source{{ 's' if run.sources|length != 1 else '' }} <span aria-hidden="true">→</span></span></a>{% endfor %}</div></details>{% endif %}
+</section>
