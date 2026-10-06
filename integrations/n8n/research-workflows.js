@@ -5,6 +5,7 @@ const path=require('node:path');
 const {preflightNodes}=require('./bind-workflow');
 const {modelSettings}=require('./adapt-discovery');
 const runtime=fs.readFileSync(path.join(__dirname,'research-runtime.js'),'utf8');
+const peopleRuntime=fs.readFileSync(path.join(__dirname,'people-runtime.js'),'utf8');
 const modelRuntime=fs.readFileSync(path.join(__dirname,'model-runtime.js'),'utf8');
 const edge=(node,index=0)=>({node,type:'main',index});
 const code=(name,jsCode)=>({id:name.toLowerCase().replace(/\W+/g,'-'),name,type:'n8n-nodes-base.code',typeVersion:2,position:[0,0],parameters:{jsCode}});
@@ -74,7 +75,7 @@ return [{json:researchSeed($json,guard,guard.workspace_context)}];`),
       full:true,soft:true,timeout:30000,headers:[{name:'Accept',value:'application/json'}],query:[
         {name:'q',value:'={{ $json.query }}'},{name:'country',value:'={{ $json.country }}'},{name:'count',value:'5'}]}),
     code('Select Research Pages',`${runtime}\nconst seed=$('Validate Research Seed').first().json;
-const searches=researchSearchSources($input.all().map(item=>item.json));
+const searches=researchSearchSources($input.all().map(item=>item.json),$('Company Search Queries').all().map(item=>item.json));
 const config=$('Workspace Configuration').first().json.config.research;
 const urls=selectResearchUrls(seed,searches,config.max_pages);
 return (urls.length?urls:[{no_fetch:true}]).map(json=>({json:{...json,searches}}));`),
@@ -96,11 +97,27 @@ const workspace=$('Workspace Guard').first().json;
 const llm=$('Workspace Configuration').first().json.config.llm;
 return [{json:{request:{model:llm.model,temperature:0,max_tokens:llm.max_tokens,
 messages:[{role:'system',content:${JSON.stringify(EXTRACTION_INSTRUCTIONS)}+'\\n'+workspace.workspace_prompt},
-{role:'user',content:JSON.stringify({company:evidence.company,icp:evidence.icp,coverage:evidence.coverage,sources:evidence.sources})}]}}}];`),
+{role:'user',content:JSON.stringify({company:evidence.company,known_contact:evidence.known_contact,icp:evidence.icp,coverage:evidence.coverage,sources:evidence.sources})}]}}}];`),
     http('xKiro Research Extraction',`=${normalized.llm.base_url}/chat/completions`,credential(binding.llm.credential,'llm.credential'),{
       method:'POST',body:'={{ JSON.stringify($json.request) }}',full:true,soft:true,timeout:120000}),
     code('Validate Research Findings',`${runtime}\n${modelRuntime}\nreturn [{json:validateResearchExtraction($json,$('Assemble Research Evidence').first().json,$('Workspace Configuration').first().json.config.llm,completionContent)}];`),
     gate('Research Findings Valid?','={{ $json.research_outcome !== "FAILED" }}'),
+    code('People Search Queries',`${runtime}\n${peopleRuntime}\nconst seed=$('Validate Research Seed').first().json;
+const queries=peopleQueries($json,seed,$('Workspace Configuration').first().json.config.research.country);
+return (queries.length?queries:[{no_people:true}]).map(json=>({json}));`),
+    gate('Has Named People?','={{ !$json.no_people }}'),
+    http('Search Professional Profiles','https://api.search.brave.com/res/v1/web/search',credential(binding.brave_credential,'brave_credential'),{
+      full:true,soft:true,timeout:15000,headers:[{name:'Accept',value:'application/json'}],query:[
+        {name:'q',value:'={{ $json.query }}'},{name:'country',value:'={{ $json.country }}'},{name:'count',value:'5'}]}),
+    code('Match Professional Profiles',`${runtime}\n${peopleRuntime}\nconst result=$('Validate Research Findings').first().json;
+const requests=$('People Search Queries').all().map(item=>item.json).filter(item=>!item.no_people);
+const responses=$input.all().map(item=>item.json).filter(item=>!item.no_people);
+return [{json:enrichPeopleProfiles(result,$('Validate Research Seed').first().json,responses,requests,$('Assemble Research Evidence').first().json)}];`),
+    code('Prepare People Sources',`const value=$json;
+return (value.sources.length?value.sources:[null]).map(source=>({json:{research_id:value.result.research_id,source,no_source:!source}}));`),
+    gate('Has Profile Source?','={{ !$json.no_source }}'),
+    apiNode(binding,'Save Profile Source','/api/research/{{ $json.research_id }}/sources',{method:'POST',body:'={{ JSON.stringify($json.source) }}'}),
+    code('Prepare Enriched Research',"return [{json:$('Match Professional Profiles').first().json.result}];"),
     apiNode(binding,'Finish Research','/api/research/{{ $json.research_id }}/{{ $json.finish_endpoint }}',{method:'PATCH',body:'={{ JSON.stringify($json.research_payload) }}'}),
     code('Research Result',"const expected=$('Validate Research Findings').first().json; if ($json.id!==expected.research_id || $json.research_status!==expected.research_outcome) throw new Error('Research completion mismatch'); return [{json:{research_id:expected.research_id,lead_id:expected.lead_id,research_outcome:expected.research_outcome}}];"),
     code('Research Failure Result','return $input.all();')
@@ -110,9 +127,14 @@ messages:[{role:'system',content:${JSON.stringify(EXTRACTION_INSTRUCTIONS)}+'\\n
   chain('Fetch Guarded Research Page','Clean Research Pages','Assemble Research Evidence','Has Useful Research Evidence?');
   connections['Has Useful Research Evidence?']={main:[[edge('Prepare Research Sources')],[edge('No Research Evidence')]]};
   chain('Prepare Research Sources','Save Research Source','Prepare Research Model','xKiro Research Extraction','Validate Research Findings','Research Findings Valid?');
-  connections['Research Findings Valid?']={main:[[edge('Finish Research')],[edge('Research Failure Result')]]};
+  connections['Research Findings Valid?']={main:[[edge('People Search Queries')],[edge('Research Failure Result')]]};
+  chain('People Search Queries','Has Named People?');
+  connections['Has Named People?']={main:[[edge('Search Professional Profiles')],[edge('Match Professional Profiles')]]};
+  chain('Search Professional Profiles','Match Professional Profiles','Prepare People Sources','Has Profile Source?');
+  connections['Has Profile Source?']={main:[[edge('Save Profile Source')],[edge('Prepare Enriched Research')]]};
+  chain('Save Profile Source','Prepare Enriched Research','Finish Research');
   chain('Finish Research','Research Result');
-  return workflow(`Workspace Company Research — ${binding.workspace_id}`,nodes,connections,600);
+  return workflow(`Workspace Company Research — ${binding.workspace_id}`,nodes,connections,780);
 }
 
 function researchWorker(binding,childId) {
@@ -143,7 +165,7 @@ return [{json:{...job,research_outcome:result?.research_outcome||'FAILED',failur
   connections['Research Job Claimed?']={main:[[edge('Prepare Claimed Research')],[]]};
   chain('Prepare Claimed Research','Run Company Research','Check Research Outcome','Research Failed?');
   connections['Research Failed?']={main:[[edge('Fail Research Job')],[]]};
-  return workflow(`Workspace Research Queue — ${binding.workspace_id}`,nodes,connections,650);
+  return workflow(`Workspace Research Queue — ${binding.workspace_id}`,nodes,connections,840);
 }
 module.exports={researchSettings,researchChild,researchWorker};
 if (require.main===module) {

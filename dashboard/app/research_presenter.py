@@ -31,6 +31,19 @@ def text(value):
     return value.strip() if isinstance(value, str) else ''
 
 
+def safe_profile_url(value, platform):
+    url = safe_research_url(value)
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    host = parsed.hostname.removeprefix('www.')
+    path = parsed.path.rstrip('/')
+    if platform == 'LinkedIn':
+        return url if re.fullmatch(r'(?:[a-z]{2}\.)?linkedin\.com', host) and re.fullmatch(r'/in/[a-zA-Z0-9_%.-]+', path) else None
+    hosts = {'X': ('x.com', 'twitter.com'), 'Instagram': ('instagram.com',), 'GitHub': ('github.com',)}
+    return url if host in hosts.get(platform, ()) and re.fullmatch(r'/[a-zA-Z0-9_.-]{1,50}', path) else None
+
+
 def strings(value):
     return [text(item) for item in value if text(item)] if isinstance(value, list) else []
 
@@ -114,12 +127,30 @@ def present_report(item):
         name = text(person['name'])
         email = text(person.get('business_email'))
         phone = text(person.get('business_phone'))
+        profiles, candidates = [], []
+        for field, target, status in (('professional_profiles', profiles, 'MATCHED'), ('profile_candidates', candidates, 'NEEDS_REVIEW')):
+            for profile in person.get(field) if isinstance(person.get(field), list) else []:
+                if not isinstance(profile, dict) or profile.get('match_status') != status:
+                    continue
+                platform = text(profile.get('platform'))
+                url = safe_profile_url(profile.get('url'), platform)
+                if not url or platform not in ('LinkedIn', 'X', 'Instagram', 'GitHub'):
+                    continue
+                target.append({'url': url, 'platform': platform, 'handle': text(profile.get('handle')),
+                    'quote': text(profile.get('evidence_quote')), 'citations': citations(profile.get('source_urls')),
+                    'basis': 'Named link on company website' if profile.get('match_basis') == 'OFFICIAL_NAMED_LINK' else 'Name and company match in public search evidence'})
+        legacy_profile = safe_profile_url(person.get('linkedin_url'), 'LinkedIn')
+        if legacy_profile and 'professional_profiles' not in person:
+            profiles.append({'url': legacy_profile, 'platform': 'LinkedIn', 'handle': '', 'quote': '', 'citations': [], 'basis': 'Saved in company research'})
         people.append({'name': name, 'initials': ''.join(part[0] for part in name.split()[:2]).upper(),
             'title': text(person.get('job_title')) or 'Role not specified',
             'role': text(person.get('role_classification')).replace('_', ' ').title(),
             'email': email, 'email_href': 'mailto:' + email if re.fullmatch(r'[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+', email) else None,
             'phone': phone, 'phone_href': 'tel:' + re.sub(r'[^+\d]', '', phone) if re.fullmatch(r'[+\d ().-]{7,60}', phone) else None,
             'profile': safe_research_url(person.get('linkedin_url')), 'quote': text(person.get('evidence_quote')),
+            'profiles': profiles, 'profile_candidates': candidates,
+            'profile_status': {'MATCHED': 'Professional profiles found', 'NEEDS_REVIEW': 'Conflicting profiles need review',
+                'NOT_FOUND': 'No supported profile found', 'SEARCH_UNAVAILABLE': 'Profile search temporarily unavailable'}.get(person.get('profile_search_status'), 'Profile search not yet run'),
             'confidence': score(person.get('confidence')), 'citations': citations(person.get('source_urls'))})
     coverage = facts.get('coverage') if isinstance(facts.get('coverage'), dict) else {}
     confidence = score(item.get('confidence'))
@@ -130,6 +161,7 @@ def present_report(item):
         'time': report_time(item.get('completed_at') or item.get('created_at')),
         'summary': [paragraph.strip() for paragraph in re.split(r'\n\s*\n', text(item.get('summary'))) if paragraph.strip()],
         'sections': sections, 'people': people, 'sources': sources, 'gaps': strings(facts.get('missing_information')),
+        'people_search': facts.get('people_search') if isinstance(facts.get('people_search'), dict) else None,
         'confidence': confidence, 'confidence_label': 'Not assessed' if confidence is None else 'High' if confidence >= 80 else 'Moderate' if confidence >= 60 else 'Limited',
         'official_pages': coverage.get('official_pages_read') if type(coverage.get('official_pages_read')) is int else None,
         'finding_count': sum(len(section['findings']) for section in sections),
