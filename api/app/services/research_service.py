@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +44,65 @@ class InvalidResearchTransitionError(Exception):
 
 class InvalidLeadResearchStateError(Exception):
     pass
+
+
+def apply_researched_industry(db: Session, research: LeadResearch, data: ResearchComplete) -> None:
+    """Fill a missing industry only from evidence saved on this workspace research run."""
+    facts = data.company_facts
+    classification = facts.get('industry_classification')
+    if facts.get('company_identity_verified') is not True or not isinstance(classification, dict):
+        return
+    label = classification.get('label')
+    confidence = classification.get('confidence')
+    quote = classification.get('evidence_quote')
+    urls = classification.get('source_urls')
+    if (not isinstance(label, str) or not 3 <= len(label.strip()) <= 120
+            or any(ord(char) < 32 or char in '<>' for char in label)
+            or label.strip().casefold() in ('unknown', 'not determined', 'n/a', 'other')
+            or type(confidence) is not int or not 75 <= confidence <= 100
+            or not isinstance(quote, str) or not 8 <= len(quote.strip()) <= 500
+            or not isinstance(urls, list) or not 1 <= len(urls) <= 5
+            or any(not isinstance(url, str) for url in urls)):
+        return
+    lead = db.get(Lead, research.lead_id)
+    if lead is None:
+        return
+    company = db.scalar(select(Company).where(Company.id == lead.company_id).with_for_update())
+    if company is None or (company.industry and company.industry.strip()):
+        return
+
+    def parsed_url(value):
+        try:
+            parsed = urlsplit(value)
+            if parsed.scheme not in ('https', 'http') or not parsed.hostname or parsed.username or parsed.password:
+                return None
+            return parsed
+        except (TypeError, ValueError):
+            return None
+
+    def url_key(value):
+        parsed = parsed_url(value)
+        return urlunsplit((parsed.scheme, parsed.netloc.lower(), parsed.path or '/', parsed.query, '')) if parsed else None
+
+    website = parsed_url(company.website_url)
+    official_host = (website.hostname if website else company.domain or '').lower().removeprefix('www.')
+    sources = db.scalars(select(ResearchSource).where(ResearchSource.research_id == research.id)).all()
+    by_url = {url_key(source.url): source for source in sources if url_key(source.url)}
+    keys = [url_key(url) for url in urls]
+    if not official_host or any(key not in by_url for key in keys):
+        return
+    normalize = lambda value: ' '.join(str(value or '').casefold().split())
+    supported = any(parsed_url(by_url[key].url).hostname.lower().removeprefix('www.') == official_host
+        and normalize(quote) in normalize(by_url[key].evidence) for key in keys)
+    if not supported:
+        return
+    company.industry = label.strip()
+    company.metadata_json = {**(company.metadata_json or {}), 'industry_research': {
+        'research_id': str(research.id), 'label': company.industry, 'confidence': confidence,
+        'evidence_quote': quote, 'source_urls': urls, 'classified_at': datetime.now(timezone.utc).isoformat()}}
+    db.add(Event(event_type='company_industry_determined', entity_type='COMPANY', entity_id=company.id,
+        actor_type='API', actor_id='marketing-api', metadata_json={
+            'research_id': str(research.id), 'industry': company.industry, 'confidence': confidence}))
 
 
 class ResearchContextIntegrityError(Exception):
@@ -844,6 +904,7 @@ def complete_research(
 
     research.research_status = "COMPLETED"
     research.completed_at = now
+    apply_researched_industry(db, research, data)
 
     # Legacy compatibility field.
     research.researched_at = now

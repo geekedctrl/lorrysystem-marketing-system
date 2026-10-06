@@ -56,13 +56,11 @@
   <div class="metric-card"><span>Last Updated</span><strong class="small-strong">{{ lead.updated_at|iso_date }}</strong></div>
 </div>
 
-{% include "research_brief.html" %}
-
 <div class="two-column">
   <div class="card">
     <div class="card-head"><h2>Company</h2></div>
     <dl class="details">
-      <div><dt>Industry</dt><dd>{{ company.industry or '—' }}</dd></div>
+      <div><dt>Industry</dt><dd>{{ company.industry or 'Not determined yet' }}</dd></div>
       <div><dt>Location</dt><dd>{{ company.city or '' }}{% if company.city and company.state %}, {% endif %}{{ company.state or '—' }}</dd></div>
       <div><dt>Fleet estimate</dt><dd>{{ company.fleet_size_estimate if company.fleet_size_estimate is not none else '—' }}</dd></div>
       <div><dt>Website</dt><dd>{% if company.website_url %}<a href="{{ company.website_url }}" target="_blank" rel="noopener">{{ company.website_url }}</a>{% else %}—{% endif %}</dd></div>
@@ -73,7 +71,7 @@
     <div class="card-head"><h2>Primary Contact</h2></div>
     {% if contact %}
     <dl class="details">
-      <div><dt>Name</dt><dd>{{ contact.full_name }}</dd></div>
+      <div><dt>Name</dt><dd>{{ contact.full_name or 'Name not identified' }}</dd></div>
       <div><dt>Role</dt><dd>{{ contact.job_title or '—' }}</dd></div>
       <div><dt>Email</dt><dd>{{ contact.email or '—' }}</dd></div>
       <div><dt>Phone</dt><dd>{{ contact.phone or '—' }}</dd></div>
@@ -83,6 +81,8 @@
     {% endif %}
   </div>
 </div>
+
+{% include "research_brief.html" %}
 
 {% if research_active %}<script>setInterval(() => { if (!document.querySelector('dialog[open]') && !document.hidden) window.location.reload(); }, 15000);</script>{% endif %}
 
