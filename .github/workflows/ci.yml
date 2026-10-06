@@ -36,6 +36,9 @@ jobs:
           python3 -m compileall -q api/app
           python3 -m compileall -q dashboard/app
 
+      - name: Test research brief presentation
+        run: python3 dashboard/scripts/validate_research_presentation.py
+
       - name: Test n8n workspace adaptation
         run: node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js integrations/n8n/research.test.js
 

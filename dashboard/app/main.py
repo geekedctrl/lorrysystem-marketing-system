@@ -5,7 +5,7 @@ import os
 import secrets
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .api_client import MarketingAPI, MarketingAPIError
 from .config import Settings, icp_options
 from .workspace_ui import WorkspaceDashboardMiddleware, router as workspace_router
+from .research_presenter import research_view, safe_research_url
 
 from .import_helpers import (
     CSV_HEADERS,
@@ -56,16 +57,6 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
-
-
-def safe_research_url(value):
-    if not isinstance(value, str) or any(ord(char) < 33 for char in value):
-        return None
-    try:
-        parsed = urlsplit(value)
-        return value if parsed.scheme in ('http', 'https') and parsed.hostname and not parsed.username and not parsed.password else None
-    except ValueError:
-        return None
 
 
 templates.env.filters['research_url'] = safe_research_url
@@ -883,6 +874,7 @@ async def lead_detail(
     lead_id: str,
     created: int = 0,
     closed: int = 0,
+    research_run: str | None = None,
     error: str | None = None,
 ) -> HTMLResponse:
     try:
@@ -942,6 +934,7 @@ async def lead_detail(
                 "company": company,
                 "contact": contact,
                 "research": research_details,
+                "research_view": research_view(research_details, research_run),
                 "research_active": any(item['research_status'] in ('PENDING', 'RUNNING') for item in research_details),
                 "scores": scores,
                 "matches": matches,

@@ -150,7 +150,7 @@ function validateResearchExtraction(response, evidence, llm, completion) {
   const facts=data.facts.filter(fact=>fact&&categories.includes(fact.category)&&typeof fact.fact==='string'
     && fact.fact.length>=8&&fact.fact.length<=600&&confidence(fact.confidence)&&supported(fact)
     && (fact.evidence_status==='OBSERVED'||(fact.category==='PAIN_POINT'&&fact.evidence_status==='INFERRED')))
-    .map(fact=>({category:fact.category,fact:fact.fact,evidence_status:fact.evidence_status,
+    .map(fact=>({category:fact.category,...(typeof fact.title==='string'&&fact.title.trim().length>=3&&fact.title.trim().length<=80?{title:fact.title.trim()}:{}),fact:fact.fact,evidence_status:fact.evidence_status,
       evidence_quote:fact.evidence_quote,source_urls:fact.source_urls,confidence:fact.confidence}));
   const people=[];
   for (const person of data.people) {

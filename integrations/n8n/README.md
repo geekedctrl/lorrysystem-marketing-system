@@ -403,6 +403,16 @@ public business contacts, per-finding confidence, quotes, source links and missi
 information. It refreshes while work is pending/running and retains previous
 runs when research is queued again.
 
+Research is presented as a company brief, with a concise overview, grouped
+findings, contact cards and an evidence sidebar. Citation numbers are consistent
+across the report and point into its source library. The latest useful report
+remains visible while a new job runs or after a retry fails; previous runs can
+be opened from research history. Existing saved findings use the same layout
+without needing to run the providers again. New extractions can also save a
+short `title` for each finding; older untitled findings remain valid. The model
+prompt requests focused plain-text findings, while the dashboard owns their
+formatting and continues to escape untrusted source content.
+
 Validation: `api/scripts/validate_workspace_research.py` covers acceptance,
 concurrent claims, RLS, named-key guarded fetch, stale recovery, dashboard display,
 retry CSRF and role restrictions in disposable environments. Native n8n 2.41.7
