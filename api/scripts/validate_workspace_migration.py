@@ -81,7 +81,7 @@ try:
     result = subprocess.run(['alembic', 'downgrade', '008'], env=env, capture_output=True, text=True)
     assert result.returncode != 0 and 'Downgrade requires' in result.stderr
     with scratch.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '009'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == subprocess.check_output(['alembic', 'heads'], env=env, text=True).split()[0]
         assert connection.scalar(text('SELECT count(*) FROM workspaces')) == 2
     print('PASS unsafe multi-workspace downgrade is rejected atomically')
     print('Migration regression PASSED')

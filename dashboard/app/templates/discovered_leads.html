@@ -6,6 +6,35 @@
 {% endblock %}
 {% block content %}
 {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert">{{ message }}</div>{% endif %}
+{% set latest_run = discovery_runs[0] if discovery_runs else none %}
+{% set discovery_active = latest_run and latest_run.status in ['QUEUED','RUNNING'] %}
+<div class="card discovery-panel">
+  <h2>Find new leads</h2>
+  <p>Search public websites for companies that match this workspace’s customer profiles. Results arrive here for review.</p>
+  {% if current_workspace and current_workspace.role in ['ADMIN','OPERATOR'] %}
+  <form method="post" action="/discovered-leads/find" class="filters" id="find-leads-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Search<input name="query" value="{{ discovery_config.default_query or '' }}" placeholder="Customer type and location" minlength="3" maxlength="300" required></label>
+    <label>New websites<input type="number" name="target_new_companies" min="1" max="10" value="5" required></label>
+    <button class="button primary" id="find-leads-button" {% if discovery_active or not discovery_config.enabled %}disabled{% endif %}>{{ 'Finding leads…' if discovery_active else 'Find Leads' }}</button>
+  </form>
+  {% endif %}
+  {% if not discovery_config.enabled %}
+  <p>Lead discovery needs to be connected for this workspace.{% if current_workspace and current_workspace.role == 'ADMIN' %} <a href="/workspaces">Connect the discovery workflow</a>.{% else %} Ask a workspace administrator.{% endif %}</p>
+  {% endif %}
+  {% if latest_run %}
+  <div role="status" aria-live="polite" id="discovery-run-status" data-run-id="{{ latest_run.id }}" data-status="{{ latest_run.status }}">
+    {% if latest_run.status in ['QUEUED','RUNNING'] %}<strong>Finding leads…</strong> This page will refresh when discovery finishes.
+    {% elif latest_run.status == 'COMPLETED' %}<strong>Discovery finished.</strong> {{ latest_run.summary.get('new_candidates', 0) }} new candidates saved from {{ latest_run.summary.get('websites_fetched', 0) }} websites. {{ latest_run.summary.get('existing_skipped', 0) }} previously seen websites skipped.
+    {% if latest_run.summary.get('fetch_failures', 0) or latest_run.summary.get('model_failures', 0) %}<span class="sub">{{ latest_run.summary.get('fetch_failures', 0) }} websites could not be read; {{ latest_run.summary.get('model_failures', 0) }} extractions failed.</span>{% endif %}
+    {% else %}<strong>Discovery did not finish.</strong> You can try again. Any candidates already saved remain available for review.
+    {% endif %}
+    <span class="sub">{{ latest_run.query }} · {{ latest_run.created_at|iso_date }}</span>
+  </div>
+  {% endif %}
+</div>
+<script src="/static/discovery.js" defer></script>
 
 <div class="toolbar">
   <div class="tabs">

@@ -1,4 +1,5 @@
 from app.models.workspaces import Workspace, User, Membership, LoginSession, Invitation, ServiceCredential, AccessAudit, LoginAttempt
+from app.models.discovery_runs import DiscoveryAutomation, DiscoveryRun
 from app.models.catalog import ICPProfile, Product
 from app.models.companies import Company, Contact
 from app.models.discovery import (

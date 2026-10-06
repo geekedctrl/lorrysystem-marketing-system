@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { bindWorkflow } = require('./bind-workflow');
+const { addDashboardInput } = require('./dashboard-discovery');
 const modelRuntime = fs.readFileSync(path.join(__dirname,'model-runtime.js'),'utf8').replace(/\r\n/g,'\n');
 
 function providerCredential(value, label) {
@@ -85,7 +86,7 @@ function adaptDiscovery(binding) {
     sender_nodes: {}, shared_nodes: ['Brave Search', 'Custom Model Structured Extraction'],
   });
   result.name = `Workspace Lead Discovery — ${binding.workspace_id}`;
-  return result;
+  return addDashboardInput(result);
 }
 
 module.exports = {adaptDiscovery, discoverySettings, modelSettings};

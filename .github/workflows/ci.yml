@@ -49,7 +49,7 @@ jobs:
           DASHBOARD_SECRET="$(openssl rand -hex 32)"
 
           cat > .env <<EOF
-          APP_ENV=development
+          APP_ENV=ci
 
           POSTGRES_HOST=postgres-dev
           POSTGRES_PORT=5432
@@ -353,6 +353,11 @@ jobs:
             "import json,os,runpy,sys; account=json.load(sys.stdin); os.environ['DASHBOARD_TEST_EMAIL']=account['email']; os.environ['DASHBOARD_TEST_PASSWORD']=account['password']; runpy.run_path('scripts/validate_lead_imports.py',run_name='__main__')" \
             < /tmp/workspace-validation-account.json
           rm -f /tmp/workspace-validation-account.json
+
+      - name: Test dashboard discovery runs and workspace boundaries
+        run: |
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+            lorrysystem-dev-marketing-api python scripts/validate_discovery_runs.py
 
       - name: Test workspace migration and guarded rollback
         run: |

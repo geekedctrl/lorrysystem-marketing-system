@@ -260,6 +260,48 @@ enforce provider spend caps.
 
 ## Acceptance before activation
 
+### Dashboard Find Leads
+
+Discovered Leads now starts bounded discovery with a search phrase and 1–10 new
+websites. Only workspace administrators/operators can start runs; a database
+constraint allows one queued/running job per workspace. The page polls saved
+status and refreshes the reviewable candidates when the run finishes. Counts
+distinguish new candidates, existing candidates, skipped websites and failures.
+
+The discovery child keeps its manual trigger and also accepts an Execute
+Sub-workflow Trigger. Generate the dashboard dispatcher with
+`dashboardDispatcher(binding, discoveryWorkflowId, webhookPath)` from
+`dashboard-discovery.js`. Publish the child first, then the dispatcher; n8n 2.41
+requires published referenced sub-workflows. The dispatcher webhook validates
+the bound workspace and exchanges a one-use run proof at
+`POST /api/discovery/runs/{id}/claim` using the named workspace API credential
+before invoking search. It waits for the child and reports completion or a
+sanitized failure at `/complete`. Unknown, expired, replayed and foreign-workspace
+requests stop before Brave/model calls. Webhook execution data is not retained.
+Do not add a search schedule: discovery runs only when a human starts a saved job.
+
+The child returns one completion summary after all terminal branches, including
+empty searches, all-skipped memory results, fetch failures and rejected
+extractions. Dashboard runs only fetch unseen websites and never accept
+candidates or send marketing. Fatal child errors are caught by the dispatcher;
+a worker lost during a run times out rather than permanently blocking the button.
+
+DEV startup registers the LorrySystem connection from `api/discovery.dev.json`
+after migration 010, only when `APP_ENV=development` and no connection exists.
+This is configuration, not a credential: the webhook cannot start discovery
+without a genuine API-created run and its one-use proof. Existing administrator
+settings (including disabled connections) are preserved. Production/test modes
+do not inherit this DEV connection. Other products can connect their own
+dispatcher in **Workspaces & team → Lead discovery**. Allowed destination hosts
+are restricted by `DISCOVERY_WEBHOOK_ALLOWED_HOSTS` in the API environment;
+DEV defaults to `n8n-dev.obsidian.cam`. An explicit `DISCOVERY_BOOTSTRAP_FILE`
+can supply a different deployment's initial connection.
+
+Validation includes the disposable `api/scripts/validate_discovery_runs.py`
+integration suite and native n8n 2.41.7 runs covering a successful discovery,
+all-skipped memory, empty search and fatal child failure. No paid providers are
+called by these fixture tests.
+
 Validate both workspaces independently: overlapping company domains do not
 suppress each other; AI sees the correct catalog; candidates use that workspace's
 ICP IDs; a swapped/revoked API credential stops the run; registry rows with wrong

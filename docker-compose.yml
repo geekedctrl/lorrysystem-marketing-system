@@ -38,7 +38,8 @@ services:
     restart: unless-stopped
 
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
+      DISCOVERY_WEBHOOK_ALLOWED_HOSTS: ${DISCOVERY_WEBHOOK_ALLOWED_HOSTS:-n8n-dev.obsidian.cam}
 
       POSTGRES_HOST: postgres-dev
       POSTGRES_PORT: 5432

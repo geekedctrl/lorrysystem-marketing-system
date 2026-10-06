@@ -959,11 +959,15 @@ async def discovered_leads_page(
     request: Request,
     status: str = "REVIEWABLE",
     q: str | None = None,
+    message: str = "",
 ) -> HTMLResponse:
     if status not in CANDIDATE_FILTERS:
         status = "REVIEWABLE"
 
     try:
+        discovery_config, discovery_runs = await asyncio.gather(
+            api.get('/api/discovery/config'), api.get('/api/discovery/runs'),
+        )
         if status == "REVIEWABLE":
             groups = await asyncio.gather(
                 *[
@@ -1029,6 +1033,9 @@ async def discovered_leads_page(
                 "selected_status": status,
                 "query": q or "",
                 "error": None,
+                "message": message,
+                "discovery_config": discovery_config,
+                "discovery_runs": discovery_runs,
             },
         )
 
@@ -1042,9 +1049,31 @@ async def discovered_leads_page(
                 "selected_status": status,
                 "query": q or "",
                 "error": exc.message,
+                "discovery_config": {},
+                "discovery_runs": [],
             },
             status_code=503,
         )
+
+
+@app.post('/discovered-leads/find')
+async def find_leads(request: Request, csrf_token: str = Form(...), query: str = Form(...), target_new_companies: int = Form(5)):
+    if not verify_csrf(request, csrf_token):
+        return HTMLResponse('Invalid form token. Reload the page.', status_code=403)
+    try:
+        run = await api.post('/api/discovery/runs', json={'query': query, 'target_new_companies': target_new_companies})
+        message = 'Discovery started. New candidates will appear here for review.' if run['status'] in ('QUEUED', 'RUNNING', 'COMPLETED') else 'The discovery workflow could not be reached. Please try again.'
+    except MarketingAPIError as exc:
+        message = exc.message
+    return RedirectResponse('/discovered-leads?message=' + quote(message), status_code=303)
+
+
+@app.get('/discovered-leads/discovery-status')
+async def discovery_status():
+    try:
+        return JSONResponse(await api.get('/api/discovery/runs'))
+    except MarketingAPIError as exc:
+        return JSONResponse({'error': exc.message}, status_code=exc.status_code)
 
 
 @app.get(

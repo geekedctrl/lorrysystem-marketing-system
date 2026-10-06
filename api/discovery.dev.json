@@ -1,0 +1,6 @@
+{
+  "workspace_id": "00000000-0000-0000-0000-000000000001",
+  "webhook_url": "https://n8n-dev.obsidian.cam/webhook/workspace-00000000-0000-0000-0000-000000000001-find-leads",
+  "default_query": "container haulage transport company Port Klang Malaysia",
+  "enabled": true
+}
