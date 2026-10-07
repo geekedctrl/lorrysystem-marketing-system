@@ -14,17 +14,38 @@
     {% elif job.stalled %}<p class="research-notice research-notice-warning">{{ job.kind|title }} is taking longer than expected. Check <a href="/workspaces?section=product">automation activity</a> for worker and provider status.</p>
     {% elif job.outcome in ['BELOW_QUALIFICATION_THRESHOLD','NO_SUPPORTED_PRODUCT_MATCH','SCORING_CONTEXT_CHANGED'] %}<p class="research-notice research-notice-warning">{{ job.outcome|replace('_',' ')|capitalize }}. No outreach draft was prepared. Review the evidence before proceeding.</p>{% endif %}
   {% endfor %}
-  {% if pipeline_state.automation_jobs %}<details class="stage-history"><summary>Automation history</summary>{% for job in pipeline_state.automation_jobs %}<div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}{{ ' · Earlier attempt' if not job.current|default(true) else '' }}</span></div>{% endfor %}</details>{% endif %}
+  {% if pipeline_state.automation_jobs %}<details class="stage-history"><summary>Automation history</summary>{% for job in pipeline_state.automation_jobs %}<div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}{{ ' Â· Earlier attempt' if not job.current|default(true) else '' }}</span></div>{% endfor %}</details>{% endif %}
+  {% if current_workspace.role in ['ADMIN','OPERATOR'] and not pipeline_active and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH'] %}
+  <div class="stage-control"><h3>Resolve the company contact</h3>
+  <p>Add a named company contact from a public source you have reviewed. Supply a published business email or individual LinkedIn profile; do not guess contact details.</p>
+  {% if company_contacts %}<form class="form-stack" method="post" action="/leads/{{ lead.id }}/contact-review">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>Choose an existing company contact<select name="contact_id" required>{% for entry in company_contacts if entry.status == 'ACTIVE' %}<option value="{{ entry.id }}" {{ 'selected' if entry.id == lead.primary_contact_id else '' }}>{{ entry.full_name or 'Name not identified' }}{{ ' · ' ~ entry.email if entry.email else '' }}</option>{% endfor %}</select></label>
+  <label class="stage-confirm"><input type="checkbox" name="confirmed" value="yes" required> I verified this contact's connection to the company.</label><button class="button secondary">Select primary contact</button></form>{% endif %}
+  <details><summary>Add a verified contact</summary>
+  <form class="form-stack" method="post" action="/leads/{{ lead.id }}/resolve-contact">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Full name<input name="full_name" minlength="2" maxlength="200" required></label>
+    <label>Role<input name="job_title" maxlength="200"></label>
+    <label>Business email<input name="email" type="email" maxlength="254"></label>
+    <label>LinkedIn profile<input name="linkedin_url" type="url" maxlength="1500" placeholder="https://www.linkedin.com/in/..."></label>
+    <label>Source URL<input name="source_url" type="url" maxlength="1500" required></label>
+    <label class="stage-confirm"><input name="confirmed" type="checkbox" value="yes" required> I verified this person's company affiliation and contact channel from the source.</label>
+    <button class="button secondary" type="submit">Save as primary contact</button>
+  </form></details>
+  {% if pipeline_state.contact_reviewed %}<form method="post" action="/leads/{{ lead.id }}/continue-preparation"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="button" {{ 'disabled' if not pipeline_state.automation_enabled else '' }}>Continue preparation</button><p class="stage-muted">Resumes scoring, product matching and drafting. Outreach waits for approval.</p></form>{% endif %}
+  </div>
+  {% endif %}
   <details class="stage-history"><summary>Manual review and preparation controls</summary>
-  {% else %}<p class="stage-intro">Confirm who you will approach, assess the company against this workspace’s ICP, then review its qualification before matching products.</p>{% endif %}
+  {% else %}<p class="stage-intro">Confirm who you will approach, assess the company against this workspaceâ€™s ICP, then review its qualification before matching products.</p>{% endif %}
   {% if pipeline_active %}<div class="research-notice" role="status"><span class="research-pulse" aria-hidden="true"></span><div><strong>{{ pipeline_active[0].stage|title }} {{ 'in progress' if pipeline_active[0].status == 'RUNNING' else 'queued' }}</strong><p>Waiting for the workspace stage worker or its result. This page updates automatically.</p></div></div>{% endif %}
   {% if not pipeline_state.managed and pipeline_runs and pipeline_runs[0].status == 'FAILED' %}<div class="research-notice research-notice-warning"><div><strong>{{ pipeline_runs[0].stage|title }} needs attention</strong><p>The stage could not finish. Previous results are retained. Check the research and contact, then retry the relevant stage.</p></div></div>{% endif %}
   {% if current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH'] and not pipeline_active %}
   <div class="stage-control-grid">
     <div class="stage-control"><h3>1. Confirm the primary contact</h3><p>Use a supported person in the research brief above, or review an existing company contact.</p>
       {% if company_contacts %}<form class="form-stack" method="post" action="/leads/{{ lead.id }}/contact-review"><input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <label>Company contact<select name="contact_id" required>{% for entry in company_contacts %}{% if entry.status == 'ACTIVE' %}<option value="{{ entry.id }}" {{ 'selected' if entry.id == lead.primary_contact_id else '' }}>{{ entry.full_name or 'Name not identified' }}{{ ' · ' ~ entry.email if entry.email else '' }}{{ ' · ' ~ entry.job_title if entry.job_title else '' }}</option>{% endif %}{% endfor %}</select></label>
-        <label class="stage-confirm"><input type="checkbox" name="confirmed" value="yes" required> I reviewed this contact’s connection to the company.</label><button type="submit" class="button secondary">Confirm primary contact</button></form>
+        <label>Company contact<select name="contact_id" required>{% for entry in company_contacts %}{% if entry.status == 'ACTIVE' %}<option value="{{ entry.id }}" {{ 'selected' if entry.id == lead.primary_contact_id else '' }}>{{ entry.full_name or 'Name not identified' }}{{ ' Â· ' ~ entry.email if entry.email else '' }}{{ ' Â· ' ~ entry.job_title if entry.job_title else '' }}</option>{% endif %}{% endfor %}</select></label>
+        <label class="stage-confirm"><input type="checkbox" name="confirmed" value="yes" required> I reviewed this contactâ€™s connection to the company.</label><button type="submit" class="button secondary">Confirm primary contact</button></form>
       {% else %}<p class="stage-muted">No official contact saved yet. Review a named person above and choose Use as primary contact.</p>{% endif %}
     </div>
     <div class="stage-control"><h3>2. Score the company</h3><p>Assess documented fit, operating needs, scale, buying signals and evidence. Unknowns earn no points.</p>
@@ -37,6 +58,6 @@
     </div>
   </div>{% endif %}
   {% if pipeline_state.managed %}</details>{% endif %}
-  {% if pipeline_runs %}<details class="stage-history"><summary>Stage history · {{ pipeline_runs|length }} runs</summary>{% for run in pipeline_runs %}<div><strong>{{ run.stage|title }}</strong><span>{{ run.status|replace('_',' ')|title }}</span><time>{{ run.created_at|iso_date }}</time></div>{% endfor %}</details>{% endif %}
+  {% if pipeline_runs %}<details class="stage-history"><summary>Stage history Â· {{ pipeline_runs|length }} runs</summary>{% for run in pipeline_runs %}<div><strong>{{ run.stage|title }}</strong><span>{{ run.status|replace('_',' ')|title }}</span><time>{{ run.created_at|iso_date }}</time></div>{% endfor %}</details>{% endif %}
   {% endif %}
 </section>

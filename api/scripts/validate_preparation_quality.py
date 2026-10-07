@@ -375,6 +375,65 @@ for lead_id, c in companies.items():
     assert all(a["status"] == "PENDING_APPROVAL" for a in actions)
     other = next(p for p in products if p is not c["product"])
     call("GET", f"/api/leads/{lead_id}", headers=other["headers"], expected=404)
+    if c["scenario"] == "missing_contact":
+        headers = c["product"]["headers"]
+        path = f"/api/leads/{lead_id}/contact-review"
+        manual = {
+            "full_name": "Reviewed Contact " + suffix,
+            "job_title": "Operations manager",
+            "email": f"reviewed-{lead_id}@example.test",
+            "source_url": "https://example.com/team",
+        }
+        call(
+            "POST",
+            f"/api/leads/{lead_id}/continue-preparation",
+            headers=headers,
+            expected=409,
+        )
+        call("POST", path, {"confirmed": True, "manual": manual}, other["headers"], 404)
+        call(
+            "POST",
+            path,
+            {"confirmed": True, "manual": {**manual, "email": "invalid"}},
+            headers,
+            422,
+        )
+        call(
+            "POST",
+            path,
+            {
+                "confirmed": True,
+                "manual": {**manual, "source_url": "http://127.0.0.1/team"},
+            },
+            headers,
+            422,
+        )
+        contact = call("POST", path, {"confirmed": True, "manual": manual}, headers)
+        assert contact["source_url"] == manual["source_url"]
+        call("POST", path, {"confirmed": True, "manual": manual}, headers, 409)
+        resumed = call(
+            "POST",
+            f"/api/leads/{lead_id}/continue-preparation",
+            headers=headers,
+            expected=202,
+        )
+        again = call(
+            "POST",
+            f"/api/leads/{lead_id}/continue-preparation",
+            headers=headers,
+            expected=202,
+        )
+        assert resumed["job_id"] == again["job_id"]
+        # Remove only this fixture's pending work so repeated suites do not claim it.
+        from app.models.automation import AutomationJob
+        from app.models.pipeline import PipelineRun
+
+        with ControlSession() as cleanup:
+            pending = cleanup.get(AutomationJob, UUID(resumed["job_id"]))
+            cleanup.get(PipelineRun, pending.related_id).status = "FAILED"
+            pending.status = "FAILED"
+            pending.failure_reason = "TEST_CLEANUP"
+            cleanup.commit()
     if c["scenario"] == "documented_need":
         aid = c["draft"]
         headers = c["product"]["headers"]
@@ -430,6 +489,7 @@ for lead_id, c in companies.items():
                         "password": password,
                         "workspace_id": c["product"]["wid"],
                         "approval_id": approval["id"],
+                        "lead_id": lead_id,
                     }
                 )
             )

@@ -97,7 +97,16 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class ManualContact(Strict):
+    full_name: str = Field(min_length=2, max_length=200)
+    job_title: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=254)
+    linkedin_url: str | None = Field(default=None, max_length=1500)
+    source_url: str = Field(min_length=8, max_length=1500)
+
+
 class ContactReview(Strict):
+    manual: ManualContact | None = None
     contact_id: UUID | None = None
     research_id: UUID | None = None
     person_index: int | None = Field(default=None, ge=0, le=4, strict=True)
@@ -264,7 +273,38 @@ def review_contact(lead_id: UUID, data: ContactReview, db=Depends(get_db)):
         raise HTTPException(
             409, "Wait for the current stage to finish before changing the contact"
         )
-    if data.contact_id:
+    if data.manual:
+        if any(value is not None for value in (data.contact_id, data.research_id, data.person_index, data.linkedin_url)):
+            raise HTTPException(422, "Choose one contact review method")
+        entry = data.manual
+        from app.services.public_fetch_guard import checked_url, FetchError
+        try:
+            checked_url(entry.source_url)
+        except FetchError:
+            raise HTTPException(422, "Provide a public HTTP(S) source URL") from None
+        email = (entry.email or "").strip().lower() or None
+        linkedin = profile_url(entry.linkedin_url) if entry.linkedin_url else None
+        if entry.linkedin_url and not linkedin:
+            raise HTTPException(422, "Use an individual HTTPS LinkedIn profile")
+        if email and not re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", email):
+            raise HTTPException(422, "Provide a valid business email")
+        if not email and not linkedin:
+            raise HTTPException(422, "Provide a verified business email or LinkedIn profile")
+        contact = db.scalar(select(Contact).where(Contact.email == email)) if email else None
+        if contact:
+            if contact.company_id != lead.company_id or normalized(contact.full_name) != normalized(entry.full_name) or contact.status != "ACTIVE":
+                raise HTTPException(409, "This email belongs to another contact; review the existing record")
+            raise HTTPException(409, "Contact already exists. Select it from company contacts")
+        contact = Contact(company_id=lead.company_id, full_name=entry.full_name,
+                          job_title=entry.job_title, email=email, linkedin_url=linkedin,
+                          source_url=entry.source_url)
+        db.add(contact)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(409, "Contact already exists; select the existing contact") from None
+    elif data.contact_id:
         if (
             data.research_id is not None
             or data.person_index is not None
@@ -437,6 +477,8 @@ def review_contact(lead_id: UUID, data: ContactReview, db=Depends(get_db)):
         contact_id=str(contact.id),
         research_id=str(data.research_id) if data.research_id else None,
         person_index=data.person_index,
+        source_url=contact.source_url,
+        manually_supplied=bool(data.manual),
         profile_url=contact.linkedin_url,
         contact_signature=contact_signature(contact),
         review_mode="AUTOMATIC" if current_principal.get().automation_job_id else "HUMAN",
@@ -632,6 +674,34 @@ def queue(lead_id: UUID, data: QueueStage, db=Depends(get_db)):
         schedule(db, run.stage, run.id)
     db.commit()
     return run_read(run)
+
+
+@router.post("/api/leads/{lead_id}/continue-preparation", status_code=202)
+def continue_preparation(lead_id: UUID, db=Depends(get_db)):
+    permit("ADMIN", "OPERATOR")
+    lead = lead_for(db, lead_id)
+    from app.models.automation import AutomationJob, ProductAutomationPlan
+    from app.services.product_automation import attach_stage
+    plan = db.scalar(select(ProductAutomationPlan))
+    if not plan or not plan.enabled:
+        raise HTTPException(409, "An administrator must activate product automation first")
+    contact = db.get(Contact, lead.primary_contact_id) if lead.primary_contact_id else None
+    report = get_latest_usable_research(db, lead_id=lead.id)
+    if not report or report.company_facts.get("company_identity_verified") is not True:
+        raise HTTPException(409, "Complete verified company research first")
+    if not reviewed(db, lead) or not contact or not contact.full_name or not (contact.email or profile_url(contact.linkedin_url)):
+        raise HTTPException(409, "Confirm a named reachable company contact first")
+    job = attach_stage(db, lead, "SCORING")
+    for interrupted in db.scalars(select(AutomationJob).where(
+        AutomationJob.kind == "RESEARCH", AutomationJob.related_id == report.id,
+        AutomationJob.status == "NEEDS_REVIEW", AutomationJob.failure_reason == "SUPPORTED_CONTACT_REQUIRED"
+    )):
+        interrupted.status = "COMPLETED"
+        interrupted.failure_reason = None
+        interrupted.finished_at = datetime.now(timezone.utc)
+    audit(db, "lead_preparation_resumed", lead, contact_id=str(contact.id))
+    db.commit()
+    return {"job_id": str(job.id), "status": job.status}
 
 
 @router.post("/api/leads/{lead_id}/qualify", status_code=202)
