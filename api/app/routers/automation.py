@@ -67,6 +67,20 @@ class Finish(Strict):
     lease_token: str = Field(min_length=32, max_length=128)
     output: dict = Field(default_factory=dict)
     failure_reason: str | None = Field(default=None, pattern=r"^[A-Z0-9_]{1,80}$")
+    usage: "JobUsage | None" = None
+
+
+class JobUsage(Strict):
+    search_requests: int = Field(default=0, ge=0, le=100, strict=True)
+    fetch_requests: int = Field(default=0, ge=0, le=100, strict=True)
+    model_requests: int = Field(default=0, ge=0, le=10, strict=True)
+    input_tokens: int | None = Field(default=None, ge=0, le=1000000, strict=True)
+    output_tokens: int | None = Field(default=None, ge=0, le=1000000, strict=True)
+    search_status: str = Field(default="NOT_USED", pattern=r"^(OK|ERROR|NOT_USED)$")
+    model_status: str = Field(default="NOT_USED", pattern=r"^(OK|ERROR|NOT_USED)$")
+
+
+Finish.model_rebuild()
 
 
 def admin():
@@ -107,6 +121,8 @@ def scoped_job(db, kind=None, lock=False):
 
 @router.get("/plan")
 def plan(db=Depends(get_db)):
+    from app.services.automation_metrics import operational_summary
+
     row = db.scalar(select(ProductAutomationPlan))
     if not row:
         return {
@@ -115,7 +131,18 @@ def plan(db=Depends(get_db)):
             "state": "DRAFT",
             "profile": {},
             "jobs": [],
+            "operations": operational_summary(db, [], set(), False),
         }
+    from app.services.automation_status import current_job_ids, describe_job
+
+    jobs = list(
+        db.scalars(
+            select(AutomationJob).order_by(AutomationJob.created_at.desc()).limit(25)
+        )
+    )
+    current_ids = current_job_ids(db, jobs)
+    from app.services.automation_metrics import operational_summary
+
     return {
         "configured": True,
         "enabled": row.enabled,
@@ -123,14 +150,8 @@ def plan(db=Depends(get_db)):
         "profile": row.profile,
         "configuration": row.configuration,
         "next_discovery_at": row.next_discovery_at,
-        "jobs": [
-            job_read(j)
-            for j in db.scalars(
-                select(AutomationJob)
-                .order_by(AutomationJob.created_at.desc())
-                .limit(25)
-            )
-        ],
+        "operations": operational_summary(db, jobs, current_ids, row.enabled),
+        "jobs": [describe_job(j, j.id in current_ids, row.enabled) for j in jobs],
     }
 
 
@@ -292,6 +313,13 @@ def retry_job(job_id, db):
         raise HTTPException(409, "Resume product automation before retrying")
     if job.status not in ("FAILED", "NEEDS_REVIEW"):
         raise HTTPException(409, "Only interrupted jobs can be retried")
+    from app.services.automation_status import current_job_ids
+
+    if job.id not in current_job_ids(db, [job]):
+        raise HTTPException(
+            409,
+            "A newer attempt supersedes this job. Review the current preparation status.",
+        )
     from app.models.pipeline import PipelineRun
 
     if job.kind == "RESEARCH":
@@ -551,14 +579,17 @@ def revoke_worker(worker_id: UUID, request: Request):
 @router.get("/worker/health")
 def health(request: Request):
     with ControlSession() as control:
-        worker_for(control, request.headers.get("X-API-Key", ""))
-    return {"shared_automation_version": 1}
+        worker = worker_for(control, request.headers.get("X-API-Key", ""))
+        worker.last_seen_at = datetime.now(timezone.utc)
+        control.commit()
+    return {"shared_automation_version": 1, "automation_metrics_version": 1}
 
 
 @router.post("/worker/claim")
 def claim(request: Request):
     with ControlSession() as control:
         worker = worker_for(control, request.headers.get("X-API-Key", ""))
+        worker.last_seen_at = datetime.now(timezone.utc)
         control.execute(
             text(
                 "SELECT pg_advisory_xact_lock(hashtextextended('shared-automation-claim',0))"
@@ -729,6 +760,10 @@ def finish_scoped(job, data):
             )
             if owned.status in ("COMPLETED", "FAILED", "NEEDS_REVIEW"):
                 return {"status": owned.status}
+            if data.usage is not None:
+                from app.services.automation_metrics import usage_snapshot
+
+                owned.usage = usage_snapshot(data.usage.model_dump())
             p = scoped.scalar(select(ProductAutomationPlan))
             if data.failure_reason or not p.enabled:
                 owned.status = "FAILED"
@@ -779,6 +814,17 @@ def finish_scoped(job, data):
                             "language": p.profile["language"],
                         }
                         settings_db.commit()
+                elif owned.kind == "DISCOVERY":
+                    accepted = owned.result.get("accepted_leads", 0)
+                    owned.result = {
+                        **owned.result,
+                        "accepted_leads": accepted,
+                        "outcome": (
+                            "COMPANIES_ACCEPTED"
+                            if accepted
+                            else "NO_NEW_SUITABLE_COMPANIES"
+                        ),
+                    }
                 elif owned.kind == "RESEARCH":
                     after_research(scoped, owned)
                 elif owned.kind in ("SCORING", "MATCHING", "DRAFTING"):

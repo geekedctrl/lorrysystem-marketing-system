@@ -11,6 +11,14 @@ const citation={source_url:url,evidence_quote:quote};
 const scoring={components:[{criterion:'icp_fit',points:80,max_points:100,rationale:'Documented fleet operations.',evidence:[citation]}],rationale:'Public fleet evidence supports this ICP.',gaps:['Buying intent is unknown.']};
 const response=output=>({statusCode:200,body:{choices:[{message:{content:JSON.stringify(output)},finish_reason:'stop'}]}});
 const validate=(output,stage='SCORING')=>R.validatePipelineOutput(response(output),{...job,stage},context,completionContent);
+test('existing systems are not buying intent and drafts reject unsupported improvement promises',()=>{
+  const scoringPrompt=R.preparePipelineModel(context,workspace,binding.llm,()=> 'Professional').request.messages[0].content;
+  assert.match(scoringPrompt,/not an unmet need/);
+  assert.match(scoringPrompt,/generic marketing text is not buying intent/);
+  const draft={subject:'Your fleet operations',content:'Our product will improve your existing system and reduce costs.',evidence:[citation]};
+  assert.equal(validate(draft,'DRAFTING').failure_reason,'UNSUPPORTED_DRAFT_CLAIM');
+  assert.equal(validate({...draft,content:'Your public fleet operations caught our attention. Would you be open to discussing how you currently coordinate them?'},'DRAFTING').pipeline_outcome,'VALID');
+});
 test('context rejects foreign workspaces, contacts, catalogs and stale research before model work',()=>{
   assert.equal(R.validatePipelineContext(context,job,workspace),context);
   for(const modified of [{...context,run:{...context.run,workspace_id:'foreign'}},{...context,contact:{id:'foreign'}},{...context,products:[{id:'foreign',code:'MAIN'}]},{...context,research:{...context.research,research_status:'RUNNING'}}])assert.throws(()=>R.validatePipelineContext(modified,job,workspace),/context/);

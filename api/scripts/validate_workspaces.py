@@ -253,7 +253,7 @@ with SessionLocal(info={'workspace_id': UUID(b)}) as db:
     check('pool does not leak alpha context', db.scalar(text('SELECT count(*) FROM companies WHERE workspace_id=:a'), {'a': a}) == 0)
 with ControlSession() as db:
     rls = db.execute(text("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND rowsecurity")).scalar()
-    check('all 19 business, discovery, pipeline and automation tables have RLS', rls == 19)
+    check('all 22 business, discovery, pipeline, automation and sending tables have RLS', rls == 22)
     stored = db.get(LoginSession, token_hash(admin_token))
     check('session stored as token hash', stored is not None and stored.token_hash != admin_token)
 

@@ -46,7 +46,7 @@ jobs:
           node --check dashboard/app/static/theme.js
 
       - name: Test n8n workspace adaptation
-        run: node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js integrations/n8n/research.test.js integrations/n8n/people.test.js integrations/n8n/pipeline.test.js integrations/n8n/shared.test.js
+        run: node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js integrations/n8n/research.test.js integrations/n8n/people.test.js integrations/n8n/pipeline.test.js integrations/n8n/shared.test.js integrations/n8n/usage.test.js
 
       - name: Create disposable CI environment
         shell: bash
@@ -391,6 +391,11 @@ jobs:
             lorrysystem-dev-marketing-api python scripts/validate_product_automation.py
 
       - name: Test Dashboard to API connectivity
+        run: |
+          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_preparation_quality.py
+          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_smtp_sending.py
+
+      - name: Verify Dashboard to API connectivity
         run: |
           docker exec lorrysystem-dev-dashboard \
             python -c \

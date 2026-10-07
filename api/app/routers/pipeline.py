@@ -744,12 +744,13 @@ def state(lead_id: UUID, db=Depends(get_db)):
     jobs = list(db.scalars(select(AutomationJob).where(
         AutomationJob.related_id.in_(related)
     ).order_by(AutomationJob.created_at.desc()).limit(15))) if plan else []
+    from app.services.automation_status import current_job_ids, describe_job
+    current_ids = current_job_ids(db, jobs) if jobs else set()
     return {
         "managed": bool(plan),
         "automation_enabled": bool(plan and plan.enabled),
         "automation_jobs": [
-            {"id": str(j.id), "kind": j.kind, "status": j.status,
-             "failure_reason": j.failure_reason, "outcome": j.result.get("outcome")}
+            {**describe_job(j, j.id in current_ids, bool(plan and plan.enabled)), "outcome": j.result.get("outcome")}
             for j in jobs
         ],
         "available": True,
@@ -999,6 +1000,10 @@ def complete(run_id: UUID, data: Complete, db=Depends(get_db)):
                         "components": [c.model_dump() for c in output.components],
                         "rubric": rubric,
                         "gaps": output.gaps,
+                        "opportunity": {
+                            "status": "SIGNAL_REQUIRES_REVIEW" if any(c.criterion == "buying_signals" and c.points > 0 for c in output.components) else "UNCONFIRMED",
+                            "explanation": "A preparation score measures documented fit. It does not establish purchase intent or a need to replace existing systems.",
+                        },
                         "research_id": str(research.id),
                         "contact_id": str(contact.id),
                         "context_hash": run.input_snapshot["context_hash"],
@@ -1049,6 +1054,8 @@ def complete(run_id: UUID, data: Complete, db=Depends(get_db)):
                 )
         else:
             output = DraftOutput.model_validate(data.output)
+            if re.search(r"\b(?:will (?:further )?(?:improve|reduce|increase|save|boost)|can further improve|guarantee(?:d)?|double your|cut your costs)\b", output.subject + " " + output.content, re.I):
+                raise HTTPException(422, "The draft promises an unsupported outcome. Use neutral, exploratory language.")
             verify_evidence(output.evidence, sources)
             channel = run.input_snapshot["channel"]
             action = create_action(

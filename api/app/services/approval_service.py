@@ -75,8 +75,12 @@ def serialize_approval(
 
 def build_content_snapshot(
     action: MarketingAction,
+    db: Session | None = None,
 ) -> dict:
+    from app.models.companies import Contact
+    contact = db.get(Contact, action.contact_id) if db and action.contact_id else None
     return {
+        "recipient_email": contact.email.strip().lower() if contact and contact.email and action.channel == "EMAIL" else None,
         "marketing_action_id": str(
             action.id
         ),
@@ -241,7 +245,7 @@ def submit_action_for_approval(
         status="PENDING",
         content_snapshot=(
             build_content_snapshot(
-                action
+                action, db
             )
         ),
     )

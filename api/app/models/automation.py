@@ -25,6 +25,7 @@ class AutomationWorker(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -93,6 +94,7 @@ class AutomationJob(WorkspaceOwned, Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     result: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    usage: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     failure_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

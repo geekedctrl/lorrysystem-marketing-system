@@ -45,6 +45,7 @@ from app.routers.workspaces import router as workspaces_router
 from app.routers.discovery_runs import router as discovery_runs_router
 from app.routers.pipeline import router as pipeline_router
 from app.routers.automation import router as automation_router
+from app.routers.sending import router as sending_router
 
 
 # ============================================================
@@ -82,6 +83,7 @@ app.include_router(workspaces_router)
 app.include_router(discovery_runs_router)
 app.include_router(pipeline_router)
 app.include_router(automation_router)
+app.include_router(sending_router)
 
 
 # ============================================================

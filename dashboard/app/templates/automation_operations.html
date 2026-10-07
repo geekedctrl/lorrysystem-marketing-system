@@ -1,0 +1,21 @@
+{% if automation_plan.operations %}{% set ops = automation_plan.operations %}
+<section class="card section-card" aria-labelledby="automation-health-heading">
+<div class="card-head"><div><h2 id="automation-health-heading">Automation health & usage</h2><p>Worker connection and the last observed provider requests. Usage covers this product over the last {{ ops.period_days }} days.</p></div><span class="badge {{ 'success' if ops.worker_state == 'ONLINE' else 'warning' }}">Worker {{ ops.worker_state|replace('_',' ')|lower }}</span></div>
+{% if automation_plan.enabled and ops.worker_state != 'ONLINE' %}<p class="research-notice research-notice-warning">The shared worker has not checked in recently. Queued work is retained. Ask your administrator to check the shared connection.</p>{% endif %}
+{% for job in ops.stalled_jobs %}<p class="research-notice research-notice-warning">{{ job.kind|title }} has been {{ job.status|lower }} longer than expected. Review automation activity before retrying; a slow job may still be running.</p>{% endfor %}
+<dl class="research-contact-details"><dt>Search provider · last request</dt><dd>{{ ops.providers.search.status|replace('UNKNOWN','Not observed')|title }}</dd><dt>Model provider · last request</dt><dd>{{ ops.providers.model.status|replace('UNKNOWN','Not observed')|title }}</dd><dt>Search / page fetch / model attempts</dt><dd>{{ ops.usage.search_requests }} / {{ ops.usage.fetch_requests }} / {{ ops.usage.model_requests }}</dd><dt>Input / output tokens</dt><dd>{{ ops.usage.input_tokens }} / {{ ops.usage.output_tokens }}{{ ' · Partial reporting' if not ops.token_usage_complete else '' }}</dd><dt>Estimated search & model cost (USD)</dt><dd>{% if ops.estimated_cost_usd is not none %}${{ ops.estimated_cost_usd }}{{ ' · Partial estimate' if not ops.cost_complete else '' }}{% else %}Unavailable · pricing or token usage not configured{% endif %}</dd></dl>
+<p class="stage-muted">{{ ops.measured_jobs }} measured attempts. {{ ops.unmeasured_finished_jobs }} earlier finished attempts have no usage records. Estimates use configured rates and are not provider invoices.</p>
+</section>
+{% if section == 'operations' %}<script>
+const initialAutomationHealth = {{ {'state':automation_plan.state,'enabled':automation_plan.enabled,'worker_state':ops.worker_state,'jobs':automation_plan.jobs}|tojson }};
+const automationHealthKey = value => JSON.stringify([value.state,value.enabled,value.worker_state,value.jobs.map(job => [job.id,job.status,job.stalled || false])]);
+let editingAutomationSettings = false;
+document.addEventListener('input', () => { editingAutomationSettings = true; });
+setInterval(async () => {
+  if (document.hidden || editingAutomationSettings) return;
+  try { const response = await fetch('/workspaces/automation-status');
+    if (response.ok && automationHealthKey(await response.json()) !== automationHealthKey(initialAutomationHealth)) window.location.reload();
+  } catch (_) {}
+}, 15000);
+</script>{% endif %}
+{% endif %}
