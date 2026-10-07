@@ -4,7 +4,7 @@
 <h1>Approval Review</h1>
 <p>Review the immutable action snapshot before deciding.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/approvals">← Back to approvals</a><span> / Review</span></div>
 {% if request.query_params.get('decision') %}
 <div class="alert success">Decision saved successfully.</div>
 {% endif %}
@@ -40,7 +40,7 @@
   </div>
 
   <div class="card decision-card">
-    <h2>Decision</h2>
+    {% if lead %}<a class="text-link" href="/leads/{{ lead.id }}">View company, contact & qualification →</a>{% endif %}<h2>Review decision</h2><p class="stage-muted">Approval records your decision. Sending is a separate stage.</p>
     {% if approval.status == 'PENDING' and current_workspace.role in ['ADMIN', 'REVIEWER'] %}
       <form method="post" action="/approvals/{{ approval.id }}/approve">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -49,18 +49,18 @@
       </form>
 
       <hr>
-
+      <details class="review-alternative"><summary>Request changes</summary>
       <form method="post" action="/approvals/{{ approval.id }}/request-changes" onsubmit="return confirm('Request changes to this marketing action?')">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <label>Required notes<textarea name="reviewer_notes" rows="4" required></textarea></label>
-        <button class="button warning full" type="submit">Request Changes</button>
+        <button class="button secondary full" type="submit">Request Changes</button>
       </form>
 
-      <form method="post" action="/approvals/{{ approval.id }}/reject" onsubmit="return confirm('Reject this marketing action?')">
+      </details><details class="review-alternative"><summary>Reject this draft</summary><form method="post" action="/approvals/{{ approval.id }}/reject" onsubmit="return confirm('Reject this marketing action?')">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <label>Required rejection reason<textarea name="reviewer_notes" rows="4" required></textarea></label>
         <button class="button danger full" type="submit">Reject</button>
-      </form>
+      </form></details>
     {% else %}
       <div class="empty compact">
         <strong>{{ approval.status.replace('_',' ')|title }}</strong>

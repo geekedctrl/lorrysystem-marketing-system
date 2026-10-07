@@ -1,10 +1,4 @@
-{% macro references(refs) -%}
-{% if refs %}<span class="research-citations" aria-label="Supporting sources">{% for ref in refs %}<a href="#{{ ref.anchor }}" aria-label="Source {{ ref.number }}: {{ ref.domain }}" title="{{ ref.title }}">{{ ref.number }}</a>{% endfor %}</span>{% endif %}
-{%- endmacro %}
-{% macro proof(quote, refs) -%}
-{% if quote %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary><div><blockquote>{{ quote }}</blockquote>{% for ref in refs %}<a class="research-external" href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.domain }} <span aria-hidden="true">↗</span></a>{% endfor %}</div></details>{% endif %}
-{%- endmacro %}
-
+{% from 'research_macros.html' import proof, references %}
 <section class="research-brief section-card" id="research-brief" aria-labelledby="research-heading">
   <header class="research-heading">
     <div><span class="research-eyebrow">Company intelligence</span><h2 id="research-heading">Research brief</h2><p>Public-source insights to prepare your next conversation.</p></div>
@@ -37,25 +31,6 @@
         </section>
       {% endfor %}
       </div>
-      {% if report.people or report.status in ['COMPLETED','PARTIAL'] %}<section class="research-contacts" aria-labelledby="research-contacts-heading"><div class="research-topic-heading"><div><h3 id="research-contacts-heading">People & professional profiles</h3><p>Company-linked contacts and their public professional presence.</p></div></div>
-        {% if report.people %}<div class="research-contact-grid">{% for person in report.people %}<article class="research-contact">
-          <div class="research-contact-heading"><span class="research-avatar" aria-hidden="true">{{ person.initials }}</span><div><h4>{{ person.name }}</h4><p>{{ person.title }}</p></div></div>
-          {% if person.role %}<span class="research-contact-role">{{ person.role }}</span>{% endif %}
-          <dl class="research-contact-details">{% if person.email %}<div><dt>Email</dt><dd>{% if person.email_href %}<a href="{{ person.email_href }}">{{ person.email }}</a>{% else %}{{ person.email }}{% endif %}</dd></div>{% endif %}{% if person.phone %}<div><dt>Phone</dt><dd>{% if person.phone_href %}<a href="{{ person.phone_href }}">{{ person.phone }}</a>{% else %}{{ person.phone }}{% endif %}</dd></div>{% endif %}</dl>
-          <div class="research-profile-section"><p class="research-profile-status">{{ person.profile_status }}</p>
-            {% for profile in person.profiles %}<div class="research-profile"><a class="research-profile-link" href="{{ profile.url }}" target="_blank" rel="noopener noreferrer"><strong>{{ profile.platform }}</strong><span>{{ '@' ~ profile.handle if profile.handle else 'View profile' }} ↗</span></a><small>{{ profile.basis }}</small>{{ proof(profile.quote, profile.citations) }}</div>{% endfor %}
-            {% if person.profile_candidates %}<details class="research-profile-review"><summary>Review possible profiles ({{ person.profile_candidates|length }})</summary><p>Multiple profiles match the public evidence. Confirm the identity before using a profile.</p>{% for profile in person.profile_candidates %}<div class="research-profile"><a href="{{ profile.url }}" target="_blank" rel="noopener noreferrer">{{ profile.platform }} · {{ profile.handle }} ↗</a>{{ proof(profile.quote, profile.citations) }}</div>{% endfor %}</details>{% endif %}
-          </div>
-          <div class="research-finding-meta">{% if person.confidence is not none %}<span>Confidence {{ person.confidence }}/100</span>{% endif %}{{ references(person.citations) }}</div>{{ proof(person.quote, person.citations) }}
-          {% if pipeline_state.available and not pipeline_active and current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['DISCOVERED','RESEARCHING','QUALIFIED','READY_FOR_OUTREACH'] %}
-          <form class="stage-contact-form" method="post" action="/leads/{{ lead.id }}/contact-review">
-            <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="research_id" value="{{ report.id }}"><input type="hidden" name="person_index" value="{{ person.research_index }}">
-            {% if person.profile_candidates %}<label>LinkedIn identity<select name="linkedin_url"><option value="">Leave unresolved</option>{% for profile in person.profiles + person.profile_candidates %}{% if profile.platform == 'LinkedIn' %}<option value="{{ profile.url }}">{{ profile.handle }}</option>{% endif %}{% endfor %}</select></label>{% endif %}
-            <label class="stage-confirm"><input type="checkbox" name="confirmed" value="yes" required> I reviewed the company connection and selected profile.</label>
-            <button class="button secondary" type="submit">Use as primary contact</button>
-          </form>{% endif %}
-        </article>{% endfor %}</div>{% else %}<div class="research-contact-empty"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-16a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v2"/></svg><div><strong>No named contact confirmed yet</strong><p>No named business contact was verified in the available sources.</p></div></div>{% endif %}
-      </section>{% endif %}
     </div>
     <aside class="research-aside" aria-label="Research quality and sources">
       <section class="research-quality"><h3>Evidence quality</h3><div class="research-confidence"><strong>{{ report.confidence if report.confidence is not none else '—' }}{% if report.confidence is not none %}<span>/100</span>{% endif %}</strong><span>{{ 'Not assessed' if report.confidence is none else report.confidence_label ~ ' confidence' }}</span></div>{% if report.confidence is not none %}<div class="research-confidence-track" aria-hidden="true"><span style="width:{{ report.confidence }}%"></span></div>{% endif %}<p>Confidence is a model estimate based on the available public evidence.</p><dl><div><dt>Sources saved</dt><dd>{{ report.sources|length }}</dd></div>{% if report.official_pages is not none %}<div><dt>Official pages read</dt><dd>{{ report.official_pages }}</dd></div>{% endif %}<div><dt>Research date</dt><dd>{{ report.date }}</dd></div></dl></section>

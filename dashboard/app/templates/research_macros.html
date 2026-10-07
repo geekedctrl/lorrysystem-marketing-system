@@ -1,0 +1,12 @@
+{% macro references(refs) -%}
+{% if refs %}<span class="research-citations" aria-label="Supporting sources">{% for ref in refs %}
+<a href="#{{ ref.anchor }}" aria-label="Source {{ ref.number }}: {{ ref.domain }}" title="{{ ref.title }}">{{ ref.number }}
+</a>{% endfor %}</span>{% endif %}
+{%- endmacro %}
+{% macro proof(quote, refs) -%}
+{% if quote %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary>
+<div><blockquote>{{ quote }}</blockquote>{% for ref in refs %}
+<a class="research-external" href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.domain }} <span aria-hidden="true">↗</span>
+</a>{% endfor %}
+</div></details>{% endif %}
+{%- endmacro %}

@@ -2,17 +2,10 @@
 {% block title %}Import Leads · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <h1>Import Leads</h1>
-<p>Add leads from a business card or CSV without bypassing the Marketing API.</p>
+<p>Upload leads, review the details and confirm before importing.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/leads/new">← Back to intake options</a></div>
 
-<div class="breadcrumbs">
-  <a href="/leads">Leads</a>
-  <span>›</span>
-  <a href="/leads/new">Add Lead</a>
-  <span>›</span>
-  <strong>Import</strong>
-</div>
 
 {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 

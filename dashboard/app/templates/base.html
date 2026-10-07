@@ -1,63 +1,75 @@
+{% macro icon(name) -%}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if name == 'overview' %}<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>{% elif name == 'leads' %}<path d="M4 21V5l8-3 8 3v16M8 8h1m6 0h1M8 12h1m6 0h1M9 21v-5h6v5"/>{% elif name == 'discovery' %}<circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M7 10h6m-3-3v6"/>{% elif name == 'outreach' %}<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/>{% elif name == 'approvals' %}<path d="m8 12 3 3 5-6"/><rect x="4" y="3" width="16" height="18" rx="3"/>{% elif name == 'settings' %}<path d="m9 3-1 3-3 1v4l3 1 1 3h4l1-3 3-1V7l-3-1-1-3z"/><circle cx="11" cy="9" r="2"/>{% elif name == 'collapse' %}<path d="M4 4h16v16H4zM9 4v16m7-12-4 4 4 4"/>{% else %}<circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>{% endif %}</svg>{%- endmacro %}
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Marketing{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css?v=20261007-onboarding">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}Marketing{% endblock %}</title>
+<script src="/static/theme.js?v=ux1">
+</script>
+<link rel="stylesheet" href="/static/app.css?v=ux1">
+<link rel="stylesheet" href="/static/design-system.css?v=ux1">
+<script defer src="/static/ui.js?v=ux1">
+</script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">{{ current_workspace.name[:2]|upper if current_workspace else "MK" }}</div>
-        <div>
-          <strong>{{ current_workspace.name if current_workspace else 'Marketing' }}</strong>
-          <span>AI Marketing</span>
-        </div>
-      </div>
-
-      <nav>
-        <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">Overview</a>
-
-        <a href="/leads"
-           class="{% if request.url.path == '/leads' or (request.url.path.startswith('/leads/') and not request.url.path.startswith('/leads/new') and not request.url.path.startswith('/leads/import')) %}active{% endif %}">
-          Leads
-        </a>
-
-        {% if current_workspace and current_workspace.role in ["ADMIN", "OPERATOR"] %}
-        <a href="/leads/new"
-           class="nav-add {% if request.url.path.startswith('/leads/new') or request.url.path.startswith('/leads/import') %}active{% endif %}">
-          + Add Lead
-        </a>
-        {% endif %}
-
-        <a href="/discovered-leads" class="{% if request.url.path.startswith('/discovered-leads') %}active{% endif %}">Discovered Leads</a>
-        <a href="/actions" class="{% if request.url.path.startswith('/actions') %}active{% endif %}">Marketing Actions</a>
-        <a href="/approvals" class="{% if request.url.path.startswith('/approvals') %}active{% endif %}">Approvals</a>
-        <div class="nav-spacer"></div>
-        <a href="/workspaces" class="{% if request.url.path.startswith('/workspaces') %}active{% endif %}">Workspaces & team</a>
-        <a href="/system" class="{% if request.url.path == '/system' %}active{% endif %}">System</a>
-      </nav>
-    </aside>
-
-    <main>
-      <header class="topbar">
-        <div>
-          {% block page_heading %}{% endblock %}
-        </div>
-        <div class="user-chip">
-          <span class="status-dot"></span>
-          {{ reviewer_identity }}
-          <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn">Sign out</button></form>
-        </div>
-      </header>
-
-      <section class="page">
-        {% block content %}{% endblock %}
-      </section>
-    </main>
-  </div>
-  {% block scripts %}{% endblock %}
+<a class="skip-link" href="#main-content">Skip to content
+</a>
+<div class="app-shell">
+<aside class="sidebar" id="app-sidebar" aria-label="Application navigation">
+<a class="brand" href="/dashboard">
+<div class="brand-mark">M
+</div>
+<div><strong>Marketing</strong><span>Product operations</span>
+</div>
+</a>
+{% if current_user and current_user.workspaces %}
+<form method="post" action="/workspaces/switch" class="workspace-switcher">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="workspace-switch">Product workspace
+</label>
+<select id="workspace-switch" name="workspace_id">{% for workspace in current_user.workspaces %}<option value="{{ workspace.id }}" {{ 'selected' if current_workspace and current_workspace.id == workspace.id else '' }}>{{ workspace.name }}</option>{% endfor %}
+</select>
+<button class="button secondary" type="submit">Switch workspace
+</button>
+</form>{% endif %}
+<nav class="app-nav"><span class="nav-label">Workspace</span>{% for url,label,key in [('/dashboard','Overview','overview'),('/leads','Leads','leads'),('/discovered-leads','Discovery','discovery'),('/actions','Outreach','outreach'),('/approvals','Approvals','approvals')] %}
+<a href="{{ url }}" title="{{ label }}" {% if request.url.path == url or (url != '/dashboard' and request.url.path.startswith(url+'/')) %}class="active" aria-current="page"{% endif %}>{{ icon(key) }}<span>{{ label }}</span>
+</a>{% endfor %}<span class="nav-label">Management</span>{% if current_workspace and current_workspace.role == 'ADMIN' %}
+<a href="/workspaces?section=product" title="Product setup" {% if request.url.path == "/workspaces" and request.query_params.get("section","product") == "product" %}class="active" aria-current="page"{% endif %}>{{ icon('overview') }}<span>Product setup</span>
+</a>
+<a href="/workspaces?section=team" title="Team" {% if request.url.path == "/workspaces" and request.query_params.get("section") == "team" %}class="active" aria-current="page"{% endif %}>{{ icon('team') }}<span>Team</span>
+</a>{% endif %}
+<a href="/workspaces?section=account" title="Settings" {% if request.url.path == "/workspaces" and request.query_params.get("section") in ["account","integrations"] %}class="active" aria-current="page"{% endif %}>{{ icon('settings') }}<span>Settings & account</span>
+</a>
+<div class="nav-spacer">
+</div>
+<button type="button" class="nav-collapse" aria-label="Collapse sidebar" aria-expanded="true">{{ icon('collapse') }}<span>Collapse sidebar</span>
+</button>
+</nav>
+</aside>
+<div class="sidebar-scrim" hidden>
+</div>
+<main id="main-content" tabindex="-1">
+<header class="topbar">
+<button type="button" class="icon-button mobile-nav" aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation">☰
+</button>
+<div class="page-heading">{% block page_heading %}{% endblock %}
+</div>
+<div class="topbar-tools">
+<button type="button" class="icon-button theme-toggle" aria-label="Change color theme" title="Change color theme">◐
+</button><details class="account-menu"><summary aria-label="Account menu">{{ reviewer_identity[:1]|upper if reviewer_identity else 'U' }}</summary>
+<div><strong>{{ reviewer_identity }}</strong><span>{{ current_workspace.role|title if current_workspace else '' }}</span>
+<a href="/workspaces?section=account">Account settings
+</a>
+<form method="post" action="/logout">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<button class="button secondary">Sign out
+</button>
+</form>
+</div></details>
+</div>
+</header>
+<section class="page">{% block content %}{% endblock %}
+</section>
+</main>
+</div>{% block scripts %}{% endblock %}
 </body>
 </html>

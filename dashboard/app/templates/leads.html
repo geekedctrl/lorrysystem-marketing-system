@@ -44,14 +44,14 @@
     </a>
   </div>
 
-  <div class="toolbar-actions">
+  {% if current_workspace.role in ["ADMIN","OPERATOR"] %}<div class="toolbar-actions">
     <a
       class="button primary"
       href="/leads/new"
     >
       + Add Lead
     </a>
-  </div>
+  </div>{% endif %}
 
 </div>
 
@@ -67,12 +67,13 @@
     >
 
     <input
+      aria-label="Search company or contact"
       name="q"
       value="{{ query }}"
       placeholder="Search company or contact"
     >
 
-    <select name="status">
+    <select name="status" aria-label="Lead status">
       <option value="">
         All statuses
       </option>
@@ -87,7 +88,7 @@
       {% endfor %}
     </select>
 
-    <select name="priority">
+    <select name="priority" aria-label="Lead priority">
       <option value="">
         All priorities
       </option>
@@ -102,6 +103,7 @@
       {% endfor %}
     </select>
 
+    <select name="sort" aria-label="Sort leads">{% for key,label in [("recent","Newest first"),("company","Company name"),("score","Highest score")] %}<option value="{{ key }}" {{ "selected" if selected_sort == key else "" }}>{{ label }}</option>{% endfor %}</select>
     <button
       class="button secondary"
       type="submit"
@@ -125,7 +127,7 @@
         <tr>
           <th>Company</th>
           <th>Status</th>
-          <th>Priority</th>
+          <th>Preparation</th>
           <th>Score</th>
           <th>Primary Contact</th>
           <th></th>
@@ -155,8 +157,8 @@
           </td>
 
           <td>
-            <span class="badge priority">
-              {{ lead.priority }}
+            <span class="badge {{ lead.preparation.tone }}">
+              {{ lead.preparation.label }}
             </span>
           </td>
 
@@ -167,7 +169,7 @@
           </td>
 
           <td>
-            {{ (lead.contact or {}).get('full_name') or '—' }}
+            {{ (lead.contact or {}).get('full_name') or 'Contact not confirmed' }}
 
             {% if (lead.contact or {}).get('email') %}
             <span class="sub">
@@ -181,7 +183,7 @@
               class="text-link"
               href="/leads/{{ lead.id }}"
             >
-              View →
+              {{ lead.preparation.next }} →
             </a>
           </td>
 
@@ -222,17 +224,16 @@
     </span>
     {% endif %}
 
-    <a
+    {% if current_workspace.role in ["ADMIN","OPERATOR"] %}<a
       class="button primary"
       href="/leads/new"
     >
       + Add Lead
-    </a>
+    </a>{% endif %}
 
   </div>
 
 {% endif %}
-
+{% if total is defined %}<div class="pagination"><span>{{ total }} leads · Page {{ page_number }} of {{ page_count }}</span><div>{% if page_number > 1 %}<a class="button secondary" href="{{ request.url.include_query_params(page_number=page_number-1) }}">Previous</a>{% endif %}{% if page_number < page_count %}<a class="button secondary" href="{{ request.url.include_query_params(page_number=page_number+1) }}">Next</a>{% endif %}</div></div>{% endif %}
 </div>
-
 {% endblock %}

@@ -4,7 +4,7 @@
 <h1>CSV Import Complete</h1>
 <p>Each row was processed independently through the Marketing API.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/leads">← Back to leads</a></div>
 <div class="metric-grid">
   <div class="metric-card"><span>Imported</span><strong>{{ imported }}</strong></div>
   <div class="metric-card"><span>Skipped Duplicates</span><strong>{{ skipped_duplicates }}</strong></div>

@@ -39,6 +39,12 @@ jobs:
       - name: Test research brief presentation
         run: python3 dashboard/scripts/validate_research_presentation.py
 
+      - name: Test dashboard UX state summaries
+        run: |
+          python3 dashboard/scripts/validate_ux_states.py
+          node --check dashboard/app/static/ui.js
+          node --check dashboard/app/static/theme.js
+
       - name: Test n8n workspace adaptation
         run: node --test integrations/n8n/workspace-runtime.test.js integrations/n8n/discovery.test.js integrations/n8n/research.test.js integrations/n8n/people.test.js integrations/n8n/pipeline.test.js integrations/n8n/shared.test.js
 

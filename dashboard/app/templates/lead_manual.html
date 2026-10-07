@@ -4,20 +4,13 @@
 <h1>Manual Entry</h1>
 <p>Create a single Lead manually.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/leads/new">← Back to intake options</a></div>
 
-<div class="breadcrumbs">
-  <a href="/leads">Leads</a>
-  <span>›</span>
-  <a href="/leads/new">Add Lead</a>
-  <span>›</span>
-  <strong>Manual Entry</strong>
-</div>
 
 {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 {% if not icps %}
 <div class="alert warning">
-  No ICP profiles are configured on the dashboard server. Add the ICP IDs to the dashboard <code>.env</code> before creating leads.
+  No customer profiles are configured for this product. Ask an administrator to complete product setup before adding leads.
 </div>
 {% endif %}
 

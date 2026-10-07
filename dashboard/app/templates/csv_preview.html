@@ -4,7 +4,7 @@
 <h1>CSV Import Preview</h1>
 <p>Review validation results before any rows are imported.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/leads/import">← Back to import</a></div>
 <div class="metric-grid">
   <div class="metric-card"><span>Ready</span><strong>{{ counts.READY }}</strong></div>
   <div class="metric-card"><span>Duplicates</span><strong>{{ counts.DUPLICATE }}</strong></div>

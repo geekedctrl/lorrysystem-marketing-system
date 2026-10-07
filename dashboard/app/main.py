@@ -385,6 +385,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             reverse=True,
         )
 
+        automation_plan = await safe_get("/api/automation/plan", {})
         metrics = {
             "active_leads": sum(
                 1
@@ -402,6 +403,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             "dashboard.html",
             {
                 "metrics": metrics,
+                "automation_plan": automation_plan,
                 "recent_leads": leads[:8],
                 "pending_approvals": approvals[:5],
                 "recent_actions": recent_actions[:6],
@@ -435,6 +437,8 @@ async def leads_page(
     status: str | None = None,
     priority: str | None = None,
     q: str | None = None,
+    page_number: int = 1,
+    sort: str = "recent",
 ) -> HTMLResponse:
 
     selected_view = (
@@ -541,11 +545,32 @@ async def leads_page(
             ).lower()
         ]
 
+    sort = sort if sort in ("recent", "company", "score") else "recent"
+    if sort == "company":
+        leads.sort(key=lambda item: ((item.get("company") or {}).get("name") or "").casefold())
+    elif sort == "score":
+        leads.sort(key=lambda item: item.get("current_score") if item.get("current_score") is not None else -1, reverse=True)
+    else:
+        leads.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    total = len(leads)
+    page_count = max(1, (total + 24) // 25)
+    page_number = min(max(1, page_number), page_count)
+    leads = leads[(page_number - 1) * 25:page_number * 25]
+    from .ux_presenter import preparation_summary
+    states = await asyncio.gather(*[asyncio.gather(
+        safe_get(f"/api/leads/{item['id']}/pipeline-state", {}),
+        safe_get(f"/api/leads/{item['id']}/actions", []),
+    ) for item in leads])
+    for item, (state, actions) in zip(leads, states):
+        item["preparation"] = preparation_summary(item, state, actions)
+
+
     return render(
         request,
         "leads.html",
         {
             "leads": leads,
+            "total": total, "page_number": page_number, "page_count": page_count, "selected_sort": sort,
             "statuses": allowed_statuses,
             "priorities": PRIORITIES,
             "selected_view": selected_view,

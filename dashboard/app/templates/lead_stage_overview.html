@@ -1,6 +1,6 @@
 {% set usable_report = research_view.report and research_view.report.status in ['COMPLETED','PARTIAL'] %}
 <nav class="lead-stages" id="lead-stages" aria-label="Lead preparation stages">
   {% for name, href, done in [('Research','#research-brief',usable_report),('Contact review','#contact-review',pipeline_state.contact_reviewed),('Qualification & scoring','#lead-scoring',pipeline_state.scored and lead.status in ['QUALIFIED','READY_FOR_OUTREACH']),('Product matching','#lead-matches',pipeline_state.matching_current),('Outreach draft','#lead-actions',actions|length > 0),('Approval','#lead-actions',actions|selectattr('status','equalto','APPROVED')|list|length > 0)] %}
-  <a href="{{ href }}" class="lead-stage {{ 'lead-stage-complete' if done else '' }}"><span>{{ loop.index }}</span><strong>{{ name }}</strong><small>{{ 'Complete' if done else ('Awaiting approval' if pipeline_state.managed and name == 'Approval' else ('Automatic' if pipeline_state.managed else 'To review')) }}</small></a>
+  <a href="{{ href }}" class="lead-stage {{ 'lead-stage-complete' if done else '' }}"><span>{{ loop.index }}</span><strong>{{ name }}</strong><small>{{ 'Complete' if done else ('Awaiting approval' if name == 'Approval' and actions|selectattr('status','equalto','PENDING_APPROVAL')|list|length > 0 else ('Automatic' if pipeline_state.managed else 'To review')) }}</small></a>
   {% endfor %}
 </nav>

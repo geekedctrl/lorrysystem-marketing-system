@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Marketing Actions · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
+{% block title %}Outreach · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
-<h1>Marketing Actions</h1>
+<h1>Outreach</h1>
 <p>Operational visibility across generated outreach content.</p>
 {% endblock %}
 {% block content %}
 {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 <form class="filters toolbar" method="get">
-  <select name="status">
+  <select name="status" aria-label="Filter by status">
     <option value="">All statuses</option>
     {% for item in ['DRAFT','PENDING_APPROVAL','APPROVED','QUEUED','SENT','PUBLISHED','REJECTED','FAILED','CANCELLED'] %}
     <option value="{{ item }}" {% if item == selected_status %}selected{% endif %}>{{ item }}</option>
     {% endfor %}
   </select>
-  <select name="channel">
+  <select name="channel" aria-label="Filter by channel">
     <option value="">All channels</option>
     {% for item in ['EMAIL','LINKEDIN','FACEBOOK','INSTAGRAM','X'] %}
     <option value="{{ item }}" {% if item == selected_channel %}selected{% endif %}>{{ item }}</option>
@@ -30,7 +30,7 @@
   <tbody>
   {% for action in actions %}
   <tr>
-    <td>{{ (action.company or {}).get('name', 'Unknown') }}</td>
+    <td><a href="/leads/{{ action.lead_id }}#lead-actions">{{ (action.company or {}).get('name', 'Unknown') }}</a></td>
     <td>{{ action.channel }}</td>
     <td>{{ action.action_type }}</td>
     <td><span class="badge status">{{ action.status }}</span></td>

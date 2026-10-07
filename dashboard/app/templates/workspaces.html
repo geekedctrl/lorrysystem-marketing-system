@@ -1,34 +1,171 @@
-{% extends "base.html" %}
-{% block page_heading %}<h1>Workspaces & team</h1>{% endblock %}
-{% block content %}
-{% if message %}<div class="alert">{{ message }}</div>{% endif %}
+{% extends 'base.html' %}{% set section = request.query_params.get('section','product' if current_workspace and current_workspace.role == 'ADMIN' else 'account') %}{% block title %}Settings · Marketing{% endblock %}
+{% block page_heading %}<h1>{{ {'product':'Product setup','team':'Team','integrations':'Connections','account':'Account & workspaces'}.get(section,'Settings') }}</h1><p>Manage this product and your access.</p>{% endblock %}
+{% block content %}{% if message %}
+<div class="alert" role="status">{{ message }}
+</div>{% endif %}
+<nav class="section-tabs" aria-label="Settings sections">{% for key,label in [('product','Product setup'),('team','Team'),('integrations','Connections'),('account','Account & workspaces')] %}{% if key == 'account' or (current_workspace and current_workspace.role == 'ADMIN') %}
+<a href="/workspaces?section={{ key }}" {{ 'aria-current=page' if section == key else '' }}>{{ label }}
+</a>{% endif %}{% endfor %}
+</nav>
+{% if section == 'account' %}
 <div class="card"><h2>Your workspaces</h2><p>Each workspace keeps its leads, research and approvals private to its team.</p>
-{% for workspace in current_user.workspaces %}<form method="post" action="/workspaces/switch" class="workspace-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="workspace_id" value="{{ workspace.id }}"><strong>{{ workspace.name }}</strong><span>{{ workspace.role | lower }}</span><button class="btn">{% if current_workspace and workspace.id == current_workspace.id %}Open current workspace{% else %}Switch{% endif %}</button></form>{% else %}<p>You have no workspace memberships. Ask an administrator for an invitation.</p>{% endfor %}</div>
-{% if current_user.platform_admin %}<div class="card"><h2>Create a product workspace</h2><form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="create"><label>Name<input name="name" maxlength="120" required></label><button class="btn btn-primary">Create workspace</button></form></div>{% endif %}
-{% if current_workspace and current_workspace.role == 'ADMIN' %}
-{% include 'product_setup.html' %}
-<details class="card stage-history"><summary>Advanced settings for existing integrations</summary>
-<div class="card"><h2>{{ current_workspace.name }} settings</h2><form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="settings"><label>Product description<textarea name="description" maxlength="5000">{{ current_workspace.settings.get('description', '') }}</textarea></label><label>Brand voice<textarea name="brand_voice" maxlength="5000">{{ current_workspace.settings.get('brand_voice', '') }}</textarea></label><label>Monthly budget (USD)<input type="number" min="0" step="0.01" name="monthly_budget_usd" value="{{ current_workspace.settings.get('monthly_budget_usd', 50) }}"></label><button class="btn">Save settings</button></form></div>
-<div class="card"><h2>Lead discovery</h2><p>Connect this product’s discovery workflow to the Find Leads button. Use a workflow bound to this workspace’s automation credential and discovery memory.</p>
-<form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="discovery">
-<label>n8n discovery webhook<input type="url" name="webhook_url" value="{{ discovery_config.webhook_url or '' }}" placeholder="https://n8n-dev.obsidian.cam/webhook/..." required></label>
-<label>Default search<input name="default_query" value="{{ discovery_config.default_query or '' }}" minlength="3" maxlength="300" required placeholder="Customer type and location"></label>
-<label><input type="checkbox" name="enabled" {% if discovery_config.enabled %}checked{% endif %}> Enable Find Leads</label><button class="btn">Save discovery connection</button></form></div>
-</details>
+{% for workspace in current_user.workspaces %}
+<form method="post" action="/workspaces/switch" class="workspace-inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="workspace_id" value="{{ workspace.id }}"><strong>{{ workspace.name }}</strong><span>{{ workspace.role | lower }}</span>
+<button class="btn">{% if current_workspace and workspace.id == current_workspace.id %}Open current workspace{% else %}Switch{% endif %}
+</button>
+</form>{% else %}<p>You have no workspace memberships. Ask an administrator for an invitation.</p>{% endfor %}
+</div>
+{% if current_user.platform_admin %}
+<div class="card"><h2>Create a product workspace</h2>
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="create">
+<label>Name
+<input name="name" maxlength="120" required>
+</label>
+<button class="btn btn-primary">Create workspace
+</button>
+</form>
+</div>{% endif %}
+{% elif current_workspace and current_workspace.role == 'ADMIN' %}{% if section == 'product' %}{% include 'product_setup.html' %}{% elif section == 'team' %}
 <div class="card"><h2>Team access</h2><p>Operators manage leads and drafts. Reviewers make approval decisions. Viewers can read. Administrators manage the workspace and team.</p>
-{% for member in members %}<form method="post" action="/workspaces/manage" class="workspace-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="user_id" value="{{ member.user_id }}"><strong>{{ member.email }}</strong><select name="role" aria-label="Role for {{ member.email }}">{% for role in ['ADMIN','OPERATOR','REVIEWER','VIEWER'] %}<option {% if member.role == role %}selected{% endif %}>{{ role }}</option>{% endfor %}</select><button class="btn" name="action" value="role">Update role</button><button class="btn btn-danger" name="action" value="remove">Remove access</button></form>{% endfor %}
-<h3>Invite a team member</h3><form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="invite"><label>Email<input type="email" name="email" required></label><label>Role<select name="role">{% for role in ['OPERATOR','REVIEWER','VIEWER','ADMIN'] %}<option>{{ role }}</option>{% endfor %}</select></label><button class="btn btn-primary">Create invitation link</button></form></div>
-<details class="card stage-history"><summary>Advanced catalog and integration access</summary>
-{% if current_user.platform_admin %}<div class="card"><h2>Platform automation connection</h2><p>Platform operations connects the shared worker once. Product teams do not need workflow templates or API keys. Store this credential in n8n Header Auth as <strong>X-API-Key</strong>, then use the shared workflows for every product.</p><form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="shared-worker"><label>Worker name<input name="name" minlength="3" maxlength="100" required placeholder="DEV shared product worker"></label><button class="button secondary">Create shared worker credential</button></form></div>{% endif %}
-<div class="card"><h2>Product catalog</h2>{% for product in products %}<p><strong>{{ product.name }}</strong> · {{ product.code }}</p>{% else %}<p>Add this workspace's offerings before matching leads.</p>{% endfor %}
-<form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="products"><label>Code<input name="code" pattern="[A-Z0-9_]+" required placeholder="PRODUCT_CODE"></label><label>Name<input name="name" required></label><label>Description<textarea name="description"></textarea></label><button class="btn">Add offering</button></form></div>
-<div class="card"><h2>Ideal customer profiles</h2>{% for icp in icps %}<p><strong>{{ icp.name }}</strong> · {{ icp.code }}</p>{% else %}<p>Add a profile to enable manual and CSV lead intake.</p>{% endfor %}
-<form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="icps"><label>Code<input name="code" pattern="[A-Z0-9_]+" required placeholder="TARGET_CUSTOMER"></label><label>Name<input name="name" required></label><label>Description<textarea name="description"></textarea></label><label>Qualification rules (JSON)<textarea name="qualification_rules">{}</textarea></label><button class="btn">Add profile</button></form></div>
-<div class="card"><h2>Automation credentials</h2><p>Credentials can manage this workspace's lead pipeline. Human approval decisions require a reviewer or administrator account.</p>
-{% for credential in credentials %}<form method="post" action="/workspaces/manage" class="workspace-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="credential_id" value="{{ credential.id }}"><strong>{{ credential.name }}</strong><span>{{ 'Active' if credential.active else 'Revoked' }}</span>{% if credential.active %}<button class="btn btn-danger">Revoke</button>{% endif %}</form>{% endfor %}
-<form method="post" action="/workspaces/manage" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="credential"><label>Credential name<input name="name" required maxlength="120"></label><button class="btn">Create credential</button></form></div>
+{% for member in members %}
+<form method="post" action="/workspaces/manage" class="workspace-inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_id" value="{{ member.user_id }}"><strong>{{ member.email }}</strong>
+<select name="role" aria-label="Role for {{ member.email }}">{% for role in ['ADMIN','OPERATOR','REVIEWER','VIEWER'] %}<option {% if member.role == role %}selected{% endif %}>{{ role }}</option>{% endfor %}
+</select>
+<button class="btn" name="action" value="role">Update role
+</button>
+<button class="btn btn-danger" name="action" value="remove">Remove access
+</button>
+</form>{% endfor %}
+<h3>Invite a team member</h3>
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="invite">
+<label>Email
+<input type="email" name="email" required>
+</label>
+<label>Role
+<select name="role">{% for role in ['OPERATOR','REVIEWER','VIEWER','ADMIN'] %}<option>{{ role }}</option>{% endfor %}
+</select>
+</label>
+<button class="btn btn-primary">Create invitation link
+</button>
+</form>
+</div>
+<div class="card"><h2>Recent access changes</h2>
+<div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead><tbody>{% for event in audit %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor }}</td><td>{{ event.action }}</td></tr>{% else %}<tr><td colspan="3">No access changes recorded.</td></tr>{% endfor %}</tbody></table>
+</div>
+</div>
+{% elif section == 'integrations' %}
+<div class="card"><h2>Platform connections</h2><p>These controls are for administrators maintaining existing integrations. Product teams use the product setup form.</p>
+<a href="/system">View service status →
+</a>
+</div><details class="card stage-history"><summary>Advanced settings for existing integrations</summary>
+<div class="card"><h2>{{ current_workspace.name }} settings</h2>
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="settings">
+<label>Product description<textarea name="description" maxlength="5000">{{ current_workspace.settings.get('description', '') }}</textarea>
+</label>
+<label>Brand voice<textarea name="brand_voice" maxlength="5000">{{ current_workspace.settings.get('brand_voice', '') }}</textarea>
+</label>
+<label>Monthly budget (USD)
+<input type="number" min="0" step="0.01" name="monthly_budget_usd" value="{{ current_workspace.settings.get('monthly_budget_usd', 50) }}">
+</label>
+<button class="btn">Save settings
+</button>
+</form>
+</div>
+<div class="card"><h2>Lead discovery</h2><p>Connect this product’s discovery workflow to the Find Leads button. Use a workflow bound to this workspace’s automation credential and discovery memory.</p>
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="discovery">
+<label>n8n discovery webhook
+<input type="url" name="webhook_url" value="{{ discovery_config.webhook_url or '' }}" placeholder="https://n8n-dev.obsidian.cam/webhook/..." required>
+</label>
+<label>Default search
+<input name="default_query" value="{{ discovery_config.default_query or '' }}" minlength="3" maxlength="300" required placeholder="Customer type and location">
+</label>
+<label>
+<input type="checkbox" name="enabled" {% if discovery_config.enabled %}checked{% endif %}> Enable Find Leads
+</label>
+<button class="btn">Save discovery connection
+</button>
+</form>
+</div>
 </details>
-<div class="card"><h2>Recent access changes</h2><div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead><tbody>{% for event in audit %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor }}</td><td>{{ event.action }}</td></tr>{% else %}<tr><td colspan="3">No access changes recorded.</td></tr>{% endfor %}</tbody></table></div></div>
-{% endif %}
-<div class="card"><h2>Change your password</h2><form method="post" action="/account/password" class="workspace-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label><label>New password<input type="password" name="new_password" minlength="12" maxlength="256" autocomplete="new-password" required></label><button class="btn">Change password and sign out</button></form></div>
-{% endblock %}
+<details class="card stage-history"><summary>Advanced catalog and integration access</summary>
+{% if current_user.platform_admin %}
+<div class="card"><h2>Platform automation connection</h2><p>Platform operations connects the shared worker once. Product teams do not need workflow templates or API keys. Store this credential in n8n Header Auth as <strong>X-API-Key</strong>, then use the shared workflows for every product.</p>
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="shared-worker">
+<label>Worker name
+<input name="name" minlength="3" maxlength="100" required placeholder="DEV shared product worker">
+</label>
+<button class="button secondary">Create shared worker credential
+</button>
+</form>
+</div>{% endif %}
+<div class="card"><h2>Product catalog</h2>{% for product in products %}<p><strong>{{ product.name }}</strong> · {{ product.code }}</p>{% else %}<p>Add this workspace's offerings before matching leads.</p>{% endfor %}
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="products">
+<label>Code
+<input name="code" pattern="[A-Z0-9_]+" required placeholder="PRODUCT_CODE">
+</label>
+<label>Name
+<input name="name" required>
+</label>
+<label>Description<textarea name="description"></textarea>
+</label>
+<button class="btn">Add offering
+</button>
+</form>
+</div>
+<div class="card"><h2>Ideal customer profiles</h2>{% for icp in icps %}<p><strong>{{ icp.name }}</strong> · {{ icp.code }}</p>{% else %}<p>Add a profile to enable manual and CSV lead intake.</p>{% endfor %}
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="icps">
+<label>Code
+<input name="code" pattern="[A-Z0-9_]+" required placeholder="TARGET_CUSTOMER">
+</label>
+<label>Name
+<input name="name" required>
+</label>
+<label>Description<textarea name="description"></textarea>
+</label>
+<label>Qualification rules (JSON)<textarea name="qualification_rules">{}</textarea>
+</label>
+<button class="btn">Add profile
+</button>
+</form>
+</div>
+<div class="card"><h2>Automation credentials</h2><p>Credentials can manage this workspace's lead pipeline. Human approval decisions require a reviewer or administrator account.</p>
+{% for credential in credentials %}
+<form method="post" action="/workspaces/manage" class="workspace-inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="revoke">
+<input type="hidden" name="credential_id" value="{{ credential.id }}"><strong>{{ credential.name }}</strong><span>{{ 'Active' if credential.active else 'Revoked' }}</span>{% if credential.active %}
+<button class="btn btn-danger">Revoke
+</button>{% endif %}
+</form>{% endfor %}
+<form method="post" action="/workspaces/manage" class="workspace-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="credential">
+<label>Credential name
+<input name="name" required maxlength="120">
+</label>
+<button class="btn">Create credential
+</button>
+</form>
+</div>
+</details>
+{% endif %}{% else %}
+<div class="card empty"><strong>Administrator access required</strong><span>Your administrator manages product setup and team access.</span>
+</div>{% endif %}{% endblock %}

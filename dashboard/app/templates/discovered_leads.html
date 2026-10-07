@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Discovered Leads · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
-<h1>Discovered Leads</h1>
+<h1>Discovery</h1>
 <p>{% if discovery_config.managed %}Suitable sourced companies become leads automatically and progress to outreach approval.{% else %}Review companies found by AI web discovery before they become official Leads.{% endif %}</p>
 {% endblock %}
 {% block content %}
@@ -47,7 +47,7 @@
 
   <form class="filters" method="get" action="/discovered-leads">
     <input type="hidden" name="status" value="{{ selected_status }}">
-    <input type="search" name="q" value="{{ query }}" placeholder="Search company, domain, location…">
+    <input type="search" aria-label="Search discovered companies" name="q" value="{{ query }}" placeholder="Search company, domain, location…">
     <button class="button secondary" type="submit">Search</button>
   </form>
 </div>
@@ -93,7 +93,7 @@
 {% else %}
 <div class="card empty">
   <strong>No discovered leads in this view.</strong>
-  <span>New web-discovery candidates will appear here for human review.</span>
+  <span>{% if discovery_config.managed %}Suitable sourced companies appear here and continue automatically in Leads.{% else %}Discovered companies appear here for your review before acceptance.{% endif %}</span>
 </div>
 {% endif %}
 {% endblock %}

@@ -187,3 +187,7 @@ exists even if `full_name` is blank. This requires Marketing API migration `007`
 and corresponding Contact model/schema support for nullable `full_name`.
 
 Do not deploy this V2.1 build before migration `007` is applied successfully.
+
+## Dashboard UX
+
+See [Dashboard UX redesign](../docs/dashboard-ux.md) for navigation, theme/interaction behavior, local browser validation and release boundaries.

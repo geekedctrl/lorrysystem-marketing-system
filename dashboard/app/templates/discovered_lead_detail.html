@@ -12,7 +12,7 @@
   </div>
 </div>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/discovered-leads">← Back to discovery</a></div>
 {% if request.query_params.get('updated') %}
 <div class="alert success">Candidate details updated.</div>
 {% endif %}
