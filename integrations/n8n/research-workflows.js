@@ -58,6 +58,7 @@ const EXTRACTION_INSTRUCTIONS=`Research public company information for the suppl
 Schema: {industry_classification:null|{label:string (3..120 chars),confidence:integer,evidence_quote:string (8..500 chars),source_urls:[url]}, company_summary:string (20..2000 chars), company_identity_verified:boolean, confidence:integer, summary_sources:[url], facts:[{category:COMPANY|SERVICES|FLEET|TECHNOLOGY|LOCATION|SIGNAL|PAIN_POINT, title:string (3..80 chars), fact:string (8..600 chars), evidence_status:OBSERVED|INFERRED, evidence_quote:string (8..500 chars), source_urls:[url], confidence:integer}], people:[{name:string,job_title:string,role_classification:EXECUTIVE|DECISION_MAKER|INFLUENCER|OPERATIONAL_CONTACT,business_email:string|null,business_phone:string|null,linkedin_url:string|null,source_urls:[url],evidence_quote:string,confidence:integer}], missing_information:[string]}.
 Write an executive company brief in neutral, professional language. The summary should be 2–3 short sentences describing the business and the most useful supported operating context. Use plain text without Markdown, headings, bullets or HTML inside string fields; the dashboard handles presentation. Each fact is one focused finding with a short descriptive title and a concise sentence, preferably under 240 characters. Split unrelated findings, avoid repeating the same claim in multiple categories, and prefer the 15 most useful facts. TECHNOLOGY is software, tracking systems or technical tools; physical repair workshops, yards and warehouses belong under services, fleet support or locations. Confidence reflects evidence support and identity match; a public webpage alone does not justify a maximum score.
 Each person's evidence_quote must contain their name and job title. If attributing an email or phone to that person, include it in the same exact quote; otherwise set it to null and save a general company contact as a COMPANY fact.
+An OBSERVED PAIN_POINT requires an explicitly reported unmet problem or gap; using a system or delivering a service is not a pain point. An OBSERVED SIGNAL requires explicit procurement intention or a relevant reported change; routine services and capabilities are not buying signals. Inferred pain points are hypotheses and earn no opportunity points.
 Determine a concise industry label from documented core services, such as Logistics & freight forwarding or Accounting services. Cite an exact quote from an official company source with confidence at least 75; otherwise return industry_classification:null. Do not substitute the workspace product or ICP name for industry. At most 25 facts and 5 people. Only PAIN_POINT may be INFERRED and must describe a hypothesis supported by observed evidence. No named person is required for successful company research. Identity is verified only if official company evidence supports it. Include services, fleet clues and technology when explicitly supported. Public general company email and telephone may be COMPANY facts; do not attribute them to a named person unless the evidence does so. Give unknown fleet/technology/contact details in missing_information.`;
 
 function researchChild(binding) {
@@ -77,16 +78,26 @@ return [{json:researchSeed($json,guard,guard.workspace_context)}];`),
     code('Select Research Pages',`${runtime}\nconst seed=$('Validate Research Seed').first().json;
 const searches=researchSearchSources($input.all().map(item=>item.json),$('Company Search Queries').all().map(item=>item.json));
 const config=$('Workspace Configuration').first().json.config.research;
-const urls=selectResearchUrls(seed,searches,config.max_pages);
+const urls=selectResearchUrls(seed,searches,Math.max(1,config.max_pages-2));
 return (urls.length?urls:[{no_fetch:true}]).map(json=>({json:{...json,searches}}));`),
     gate('Has Research Page?','={{ !$json.no_fetch }}'),
     apiNode(binding,'Fetch Guarded Research Page','/api/research/fetch-public',{method:'POST',body:'={{ JSON.stringify({url:$json.url}) }}',full:true,soft:true,timeout:65000}),
     code('Clean Research Pages',`${runtime}\nconst requests=$('Select Research Pages').all();
 const seed=$('Validate Research Seed').first().json;
 return $input.all().map((item,i)=>({json:cleanResearchPage(item.json,requests[i].json,seed),pairedItem:{item:i}}));`),
+    code('Select Official Contact Pages',`${runtime}\nconst pages=$input.all().map(item=>item.json);
+const requested=$('Select Research Pages').all().map(item=>item.json);
+const urls=followResearchUrls(pages,requested,$('Workspace Configuration').first().json.config.research.max_pages);
+return (urls.length?urls:[{no_follow:true}]).map(json=>({json}));`),
+    gate('Has Official Contact Page?','={{ !$json.no_follow }}'),
+    apiNode(binding,'Fetch Official Contact Page','/api/research/fetch-public',{method:'POST',body:'={{ JSON.stringify({url:$json.url}) }}',full:true,soft:true,timeout:65000}),
+    code('Clean Official Contact Pages',`${runtime}\nconst requests=$('Select Official Contact Pages').all();
+const seed=$('Validate Research Seed').first().json;
+return $input.all().map((item,i)=>({json:cleanResearchPage(item.json,requests[i].json,seed),pairedItem:{item:i}}));`),
     code('Assemble Research Evidence',`${runtime}\nconst seed=$('Validate Research Seed').first().json;
 const selected=$('Select Research Pages').first().json;
-const pages=$input.all().map(item=>item.json).filter(item=>!item.no_fetch);
+let initial=[];try {initial=$('Clean Research Pages').all().map(item=>item.json);} catch (_) {}
+const pages=[...initial,...$input.all().map(item=>item.json).filter(item=>!item.no_fetch&&!item.no_follow)];
 return [{json:assembleResearchEvidence(seed,selected.searches,pages,$('Workspace Configuration').first().json.config.research)}];`),
     gate('Has Useful Research Evidence?','={{ $json.sources.length > 0 }}'),
     code('No Research Evidence',"const seed=$('Validate Research Seed').first().json; return [{json:{research_id:seed.research_id,lead_id:seed.lead_id,research_outcome:'FAILED',failure_reason:'NO_PUBLIC_RESEARCH_EVIDENCE'}}];"),
@@ -124,7 +135,10 @@ return (value.sources.length?value.sources:[null]).map(source=>({json:{research_
   );
   chain('Research Job Input','Workspace Configuration','Load Workspace Context','Workspace Guard','Load Research Context','Validate Research Seed','Company Search Queries','Search Research Evidence','Select Research Pages','Has Research Page?');
   connections['Has Research Page?']={main:[[edge('Fetch Guarded Research Page')],[edge('Assemble Research Evidence')]]};
-  chain('Fetch Guarded Research Page','Clean Research Pages','Assemble Research Evidence','Has Useful Research Evidence?');
+  chain('Fetch Guarded Research Page','Clean Research Pages','Select Official Contact Pages','Has Official Contact Page?');
+  connections['Has Official Contact Page?']={main:[[edge('Fetch Official Contact Page')],[edge('Assemble Research Evidence')]]};
+  chain('Fetch Official Contact Page','Clean Official Contact Pages','Assemble Research Evidence');
+  chain('Assemble Research Evidence','Has Useful Research Evidence?');
   connections['Has Useful Research Evidence?']={main:[[edge('Prepare Research Sources')],[edge('No Research Evidence')]]};
   chain('Prepare Research Sources','Save Research Source','Prepare Research Model','xKiro Research Extraction','Validate Research Findings','Research Findings Valid?');
   connections['Research Findings Valid?']={main:[[edge('People Search Queries')],[edge('Research Failure Result')]]};

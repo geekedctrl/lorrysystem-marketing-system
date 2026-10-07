@@ -12,6 +12,7 @@
 <div class="alert error">{{ request.query_params.get('error') }}</div>
 {% endif %}
 
+{% if review_context and not review_context.current %}<div class="alert error" role="alert">{{ review_context.reason }}{% if lead %} <a href="/leads/{{ lead.id }}">Review current preparation</a>{% endif %}</div>{% endif %}
 <div class="approval-layout">
   <div class="card">
     <div class="record-top">
@@ -46,7 +47,7 @@
       <form method="post" action="/approvals/{{ approval.id }}/approve">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <label>Optional notes<textarea name="reviewer_notes" rows="3"></textarea></label>
-        <button class="button success full" type="submit">Approve</button>
+        <button class="button success full" type="submit" {{ 'disabled' if review_context and not review_context.current else '' }}>Approve</button>
       </form>
 
       <hr>
@@ -72,7 +73,7 @@
   </div>
 </div>
 {% if delivery %}<section class="card section-card"><h2>Email handoff</h2><p><strong>{{ delivery.status|replace('_',' ')|title }}</strong> · {{ delivery.recipient }}</p>{% if delivery.status == 'ACCEPTED' %}<p>The SMTP server accepted this message. Inbox delivery and replies are not yet confirmed.</p>{% elif delivery.status in ['UNCERTAIN','SENDING'] %}<p>The handoff is unresolved. Do not resend: the server may already have accepted it. Ask your administrator to check the message ID.</p>{% else %}<p>The handoff failed before acceptance. Check the sender connection before an explicit retry.</p>{% endif %}<p class="stage-muted">Message ID: {{ delivery.message_id }}</p></section>{% endif %}
-{% if approval.status == 'APPROVED' and action and action.status == 'APPROVED' and action.channel == 'EMAIL' and current_workspace.role in ['ADMIN','OPERATOR'] and (not delivery or delivery.status == 'FAILED') %}
+{% if approval.status == 'APPROVED' and action and action.status == 'APPROVED' and action.channel == 'EMAIL' and current_workspace.role in ['ADMIN','OPERATOR'] and (not delivery or delivery.status == 'FAILED') and (not review_context or review_context.current) %}
 <section class="card section-card"><h2>Send approved email</h2><p>Sending is a separate action. This sends the approved text to the saved contact email using the selected product's sender account.</p>
 {% set available_senders = senders|selectattr('enabled')|selectattr('verified_at')|list %}
 {% if available_senders %}<form method="post" action="/approvals/{{ approval.id }}/send" class="form-stack"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="idempotency_key" value="{{ send_request_id }}"><label>Sender account<select name="sender_id" required>{% for sender in available_senders %}<option value="{{ sender.id }}">{{ sender.name }} · {{ sender.from_email }}</option>{% endfor %}</select></label><label><input type="checkbox" name="confirmed" value="yes" required> I want to send this approved email now.</label><button class="button">{{ 'Retry approved email' if delivery else 'Send approved email' }}</button></form>

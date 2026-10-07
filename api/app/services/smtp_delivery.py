@@ -255,6 +255,10 @@ def send_approved(db, action_id, sender_id, idempotency_key, transport=None):
             409, "This send request identifier belongs to another action"
         )
     password = decrypt_password(sender)
+    from app.services.preparation_review import review_context
+    readiness = review_context(db, action)
+    if not readiness["current"]:
+        raise HTTPException(409, readiness["reason"])
     from types import SimpleNamespace
 
     connection = SimpleNamespace(

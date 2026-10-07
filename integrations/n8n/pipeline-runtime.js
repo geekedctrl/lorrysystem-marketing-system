@@ -85,6 +85,18 @@ function validatePipelineOutput(response,job,context,completion) {
           ||!text(c.rationale,8,800)) return fail('INVALID_SCORE_COMPONENT');
       const problem=evidenceError(c.evidence,c.points>0);
       if (problem) return fail('INVALID_SCORE_'+problem);
+      const category={operational_need:'PAIN_POINT',buying_signals:'SIGNAL'}[c.criterion];
+      if(category&&c.points>0) {
+        const facts=Array.isArray(context.research.company_facts?.facts)?context.research.company_facts.facts:[];
+        const supported=facts.some(f=>object(f)&&f.category===category&&f.evidence_status==='OBSERVED'
+          &&text(f.evidence_quote,8,500)&&Array.isArray(f.source_urls)&&c.evidence.some(citation=>f.source_urls.includes(citation.source_url)
+            &&normalize(citation.evidence_quote).includes(normalize(f.evidence_quote))));
+        if(!supported) {
+          c.points=0;c.evidence=[];
+          c.rationale='No cited observed unmet need or buying signal is supported by saved research. Existing capabilities and inferred hypotheses earn no points.';
+          output.rationale='Score calculated from saved research evidence. Unsupported unmet-need or buying-signal points were removed; capability relevance does not establish purchase intent.';
+        }
+      }
     }
   } else if (job.stage==='MATCHING') {
     const products=new Set(context.products.map(p=>p.code));

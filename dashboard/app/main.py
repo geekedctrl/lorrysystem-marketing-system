@@ -1038,6 +1038,35 @@ async def review_lead_contact(
         )
 
 
+@app.post("/leads/{lead_id}/resolve-contact")
+async def resolve_contact(request: Request, lead_id: str):
+    form = await request.form()
+    if not verify_csrf(request, str(form.get("csrf", ""))):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    if form.get("confirmed") != "yes":
+        return RedirectResponse(f"/leads/{lead_id}?error=Confirm+the+contact+and+source", status_code=303)
+    payload = {"confirmed": True, "manual": {
+        key: str(form.get(key, "")).strip() or None
+        for key in ("full_name", "job_title", "email", "linkedin_url", "source_url")
+    }}
+    try:
+        await api.post(f"/api/leads/{lead_id}/contact-review", json=payload)
+        return RedirectResponse(f"/leads/{lead_id}#contact-review", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/continue-preparation")
+async def continue_preparation(request: Request, lead_id: str, csrf: str = Form(...)):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f"/leads/{lead_id}?error=csrf", status_code=303)
+    try:
+        await api.post(f"/api/leads/{lead_id}/continue-preparation", json={})
+        return RedirectResponse(f"/leads/{lead_id}#contact-review", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(f"/leads/{lead_id}?error={quote(exc.message)}", status_code=303)
+
+
 @app.post("/leads/{lead_id}/pipeline")
 async def queue_lead_stage(
     request: Request,
@@ -1594,10 +1623,11 @@ async def approval_detail(
         snapshot = approval.get("content_snapshot") or {}
         from uuid import uuid4
         action_id = approval["marketing_action_id"]
-        action, delivery, senders = await asyncio.gather(
+        action, delivery, senders, review_context = await asyncio.gather(
             safe_get(f"/api/actions/{action_id}", None),
             safe_get(f"/api/actions/{action_id}/delivery", None),
             safe_get("/api/senders", []),
+            safe_get(f"/api/actions/{action_id}/review-context", {"current": True, "reason": None}),
         )
 
         lead = None
@@ -1622,6 +1652,7 @@ async def approval_detail(
                 "lead": lead,
                 "company": company,
                 "action": action,
+                "review_context": review_context,
                 "delivery": delivery,
                 "senders": senders,
                 "send_request_id": str(uuid4()),

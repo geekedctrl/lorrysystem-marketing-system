@@ -25,15 +25,16 @@ function peopleContains(text, value) {
   return phrase.length>=3 && (` ${peopleText(text)} `).includes(` ${phrase} `);
 }
 function peopleCompany(value) {
-  return peopleText(value).replace(/\b(sdn|bhd|berhad|limited|ltd|inc|llc|corp|corporation)\b/g,'').replace(/\s+/g,' ').trim();
+  return peopleText(value).replace(/\b(sdn|bhd|berhad|limited|ltd|inc|llc|llp|plt|plc|pte|corp|corporation)\b/g,'').replace(/\s+/g,' ').trim();
 }
 
 function peopleQueries(result, seed, country) {
   const people=result.research_payload.company_facts.people.slice(0,5);
   const clean=value=>String(value).replace(/["\r\n]/g,' ').trim().slice(0,100);
+  const company=peopleCompany(seed.company.name)||clean(seed.company.name);
   return people.flatMap((person,index)=>[
-    {person_index:index,query:`"${clean(person.name)}" "${clean(seed.company.name)}" site:linkedin.com/in/`,purpose:'LINKEDIN'},
-    {person_index:index,query:`"${clean(person.name)}" "${clean(seed.company.name)}" (site:x.com OR site:twitter.com OR site:instagram.com OR site:github.com)`,purpose:'PROFESSIONAL_SOCIAL'},
+    {person_index:index,query:`"${clean(person.name)}" "${company}" site:linkedin.com/in/`,purpose:'LINKEDIN'},
+    {person_index:index,query:`"${clean(person.name)}" "${company}" (site:x.com OR site:twitter.com OR site:instagram.com OR site:github.com)`,purpose:'PROFESSIONAL_SOCIAL'},
   ]).map(item=>({...item,country:/^[A-Z]{2}$/.test(seed.company.country_code||'')?seed.company.country_code:country}));
 }
 

@@ -10,6 +10,18 @@ const binding={workspace_id:'00000000-0000-0000-0000-000000000001',api_base_url:
   llm:{base_url:'https://api.xkiro.com/v1',provider:'xkiro',model:'mistralai/mistral-large-2512',max_tokens:4000,credential:{id:'xkiro',name:'xKiro model API'}}};
 const url='https://acme.com/services';
 const text='Acme Logistics provides road haulage and freight forwarding. Jane Tan is Operations Manager at Acme Logistics. Public business email: jane@acme.com. Our company operates 40 trucks across Malaysia.';
+test('official leadership/contact follow-up stays inside company and total fetch budget',()=>{
+  const html=`<header>Repeated navigation text</header><main>${text}<a href="/management-team/">Management Team</a><a href="/contact/">Contact us</a><a href="https://other.com/team">Management</a><a href="//127.0.0.1/team">Team</a><a href="javascript:alert(1)">Directors</a></main>`;
+  const page=R.cleanResearchPage({fetch_status:'SUCCESS',final_url:url,body:html},{url},{company:{domain:'acme.com'}});
+  assert.ok(!page.evidence.includes('Repeated navigation'));
+  assert.equal(page.company_links.length,2);
+  const requested=[{url}, {url:'https://acme.com/about'}];
+  const follow=R.followResearchUrls([page],requested,3);
+  assert.deepEqual(follow.map(p=>p.url),['https://acme.com/management-team/']);
+  assert.equal(R.followResearchUrls([page],requested,2).length,0);
+  assert.equal(R.followResearchUrls([{...page,company_links:[{url:'https://other.com/team',people:true}]}],requested,6).length,0);
+  assert.equal(R.followResearchUrls([page],[...requested,...follow],4).length,1);
+});
 const evidence={workspace_id:binding.workspace_id,research_id:'research',lead_id:'lead',company:{name:'Acme Logistics',domain:'acme.com',website_url:url},sources:[{url,evidence:text,confidence:90,source_type:'WEBSITE',official:true,origin:'FETCHED_PAGE'}],coverage:{official_pages_read:1,pages_fetched:1}};
 const extraction=()=>({company_summary:'Acme Logistics provides road haulage and freight forwarding in Malaysia.',company_identity_verified:true,confidence:85,summary_sources:[url],
   facts:[{category:'SERVICES',fact:'Offers road haulage and freight forwarding.',evidence_status:'OBSERVED',evidence_quote:'provides road haulage and freight forwarding',source_urls:[url],confidence:90}],
