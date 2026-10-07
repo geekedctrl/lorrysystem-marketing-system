@@ -445,6 +445,13 @@ async def manage(request: Request):
             if not result["verified"]: raise MarketingAPIError(422,"SMTP verification failed. Check host, security and credentials. No email was sent.")
         elif action == "suppress-email":
             await api.post("/api/email-suppressions", json={"email":str(form.get("email", "")),"reason":str(form.get("reason", "OPT_OUT"))})
+        elif action == "catalog-import":
+            import json
+            try:
+                payload = json.loads(str(form.get("catalog_json", "")))
+            except ValueError:
+                return HTMLResponse("Catalog import must be valid JSON.", status_code=422)
+            await api.post("/api/automation/catalog-import", json=payload)
         elif action in ("products", "icps"):
             import json
 

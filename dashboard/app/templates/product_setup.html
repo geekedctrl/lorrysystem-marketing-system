@@ -139,3 +139,7 @@ setInterval(async () => {
   } catch (_) {}
 }, 15000);
 </script>{% endif %}
+
+<details class="card stage-history"><summary>Import reviewed catalog and customer profiles</summary>
+<p>For administrators applying a reviewed product reference. The import replaces the active catalog and ICPs, retaining older records in history. Finish running jobs first. Product automation keeps its current enabled or paused setting.</p>
+<form method="post" action="/workspaces/manage" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="catalog-import"><label>Reviewed catalog JSON<textarea name="catalog_json" rows="8" required></textarea></label><button class="button secondary">Import catalog and ICPs</button></form></details>

@@ -496,3 +496,68 @@ for lead_id, c in companies.items():
 print(
     "PASS six synthetic companies across fleet/accounting: documented need reaches pending approval; existing-system/no-need stops below threshold; missing contact stops for review; unsupported promises and cross-product access rejected. No live providers or sends."
 )
+
+# Reviewed catalog import preserves IDs/history and workspace isolation, including seven ICPs.
+headers = products[0]["headers"]
+other_headers = products[1]["headers"]
+original = call("GET", "/api/products", headers=headers)
+foreign = call("GET", "/api/products", headers=other_headers)
+ref = {
+    "source": "Reviewed acceptance document",
+    "product_type": "Reviewed product catalog",
+    "description": "Reviewed capabilities and scoped implementations from the reference document.",
+    "target_customers": "Seven proposed customer segments, with fleet size used only for segmentation.",
+    "discovery_query": "Malaysia reviewed product customers",
+    "products": [
+        {
+            "code": f"REVIEWED_{i}",
+            "name": f"Reviewed offering {i}",
+            "description": "Confirmed capability description; custom implementation subject to scope.",
+        }
+        for i in range(9)
+    ],
+    "icps": [
+        {
+            "code": f"REVIEWED_ICP_{i}",
+            "name": f"Reviewed customer segment {i}",
+            "description": "A proposed relevant operating segment; document actual unmet needs.",
+            "qualification_rules": {
+                "fleet_size_rule": "Segmentation only, never an eligibility threshold"
+            },
+        }
+        for i in range(7)
+    ],
+}
+ref["products"][0]["id"] = original[0]["id"]
+with ControlSession() as role_db:
+    actor = role_db.scalar(select(User).where(User.email == email))
+    actor_id = actor.id
+    member = role_db.get(Membership, (UUID(headers["X-Workspace-ID"]), actor_id))
+    member.role = "VIEWER"
+    role_db.commit()
+call("POST", "/api/automation/catalog-import", ref, headers, 403)
+with ControlSession() as role_db:
+    role_db.get(Membership, (UUID(headers["X-Workspace-ID"]), actor_id)).role = "ADMIN"
+    role_db.commit()
+
+invalid = {
+    **ref,
+    "products": [{**ref["products"][0], "id": foreign[0]["id"]}, *ref["products"][1:]],
+}
+call("POST", "/api/automation/catalog-import", invalid, headers, 404)
+assert original == call("GET", "/api/products", headers=headers)
+invalid = {**ref, "icps": [ref["icps"][0], ref["icps"][0]]}
+call("POST", "/api/automation/catalog-import", invalid, headers, 422)
+call("POST", "/api/automation/pause", headers=headers)
+result = call("POST", "/api/automation/catalog-import", ref, headers)
+assert result["products"] == 9 and result["icps"] == 7 and result["enabled"] is False
+updated = call("GET", "/api/products", headers=headers)
+assert len(updated) == 9 and any(p["id"] == original[0]["id"] for p in updated)
+assert len(call("GET", "/api/icp-profiles", headers=headers)) == 7
+before_ids = {p["id"] for p in updated}
+call("POST", "/api/automation/catalog-import", ref, headers)
+assert before_ids == {p["id"] for p in call("GET", "/api/products", headers=headers)}
+assert foreign == call("GET", "/api/products", headers=other_headers)
+print(
+    "PASS reviewed catalog import: nine offerings/seven ICPs, retained IDs, repeat import, paused state and workspace isolation"
+)
