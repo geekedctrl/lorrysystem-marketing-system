@@ -7,6 +7,7 @@ const {preflightNodes}=require('./bind-workflow');
 const {modelSettings}=require('./adapt-discovery');
 const read=name=>fs.readFileSync(path.join(__dirname,name),'utf8');
 const runtime=read('shared-runtime.js'),research=read('research-runtime.js'),models=read('model-runtime.js');
+const usage=read('usage-runtime.js');
 const placeholder='00000000-0000-0000-0000-000000000001';
 const edge=node=>({node,type:'main',index:0});
 const code=(name,jsCode)=>({id:name,name,type:'n8n-nodes-base.code',typeVersion:2,position:[0,0],parameters:{jsCode}});
@@ -81,7 +82,15 @@ function discoveryChild(input){
   ],{'Has New Page?':[['Fetch New Company Page'],['Empty Discovery Result']],'Has Fetched Evidence?':[['xKiro Discovery Extraction'],['Empty Discovery Result']],'Has Suitable Company?':[['Accept Sourced Company'],['Discovery Validation Result']]});
   return dynamic(result,b,'Shared Job Input');
 }
-function sharedChildren(input){const b=binding(input);return {setup:setupChild(input),discovery:discoveryChild(input),research:dynamic({...researchChild(b),name:'Shared Company and People Research'},b,'Research Job Input'),pipeline:dynamic({...pipelineChild(b),name:'Shared Qualification and Outreach Preparation'},b,'Stage Job Input')};}
+function sharedChildren(input){
+  const b=binding(input);
+  const children={setup:setupChild(input),discovery:discoveryChild(input),research:dynamic({...researchChild(b),name:'Shared Company and People Research'},b,'Research Job Input'),pipeline:dynamic({...pipelineChild(b),name:'Shared Qualification and Outreach Preparation'},b,'Stage Job Input')};
+  const results={setup:['Product Targeting Result'],discovery:['Discovery Batch Result','Empty Discovery Result','Discovery Validation Result'],research:['Research Result','Research Failure Result','No Research Evidence'],pipeline:['Stage Result','Stage Validation Failed']};
+  for(const [key,workflow] of Object.entries(children))for(const node of workflow.nodes)if(results[key].includes(node.name)) {
+    node.parameters.jsCode=`${usage}\nconst result=(function(){${node.parameters.jsCode}\n})();return result.map(item=>({...item,json:{...item.json,usage:workflowUsage($)}}));`;
+  }
+  return children;
+}
 function sharedWorker(input,ids){
   const b=binding(input);for(const key of ['setup','discovery','research','pipeline'])if(!/^[a-zA-Z0-9_-]+$/.test(ids[key]||''))throw new Error('Set all four fixed shared child IDs');
   const control=(name,endpoint,options={})=>http(b,name,endpoint,{...options,url:b.api_base_url.replace(/\/$/,'')+endpoint});
@@ -93,6 +102,8 @@ function sharedWorker(input,ids){
   for(const key of Object.keys(ids))nodes.push({id:'run-'+key,name:'Run Shared '+key,type:'n8n-nodes-base.executeWorkflow',typeVersion:1.3,position:[0,0],parameters:{source:'database',workflowId:{__rl:true,mode:'id',value:ids[key]},options:{waitForSubWorkflow:true}},onError:'continueRegularOutput',alwaysOutputData:true});
   nodes.push(code('Finish Shared Job Input',`const job=$('Validate Claimed Job').first().json;const results=$input.all().map(i=>i.json);const result=results.find(r=>r.shared_outcome || (r.research_id===job.input.research_id && r.lead_id===job.input.lead_id && ['COMPLETED','PARTIAL','FAILED'].includes(r.research_outcome)) || (r.id===job.input.id && r.lead_id===job.input.lead_id && ['COMPLETED','FAILED'].includes(r.pipeline_outcome)));const outcome=result?.shared_outcome||result?.research_outcome||result?.pipeline_outcome;const failed=!['COMPLETED','PARTIAL'].includes(outcome);return [{json:{job_id:job.job_id,lease_token:job.lease_token,output:result?.output||{},...(failed?{failure_reason:/^[A-Z0-9_]{1,80}$/.test(result?.failure_reason||'')?result.failure_reason:'SHARED_WORKFLOW_FAILED'}:{})}}];`),
     control('Finish Shared Job','/api/automation/worker/finish',{method:'POST',body:'={{ JSON.stringify($json) }}',timeout:60000}));
+  const finisher=nodes.find(node=>node.name==='Finish Shared Job Input');
+  finisher.parameters.jsCode=finisher.parameters.jsCode.replace('output:result?.output||{},',"output:result?.output||{},...($('Shared API Health').first().json.body?.automation_metrics_version===1 && result?.usage ? {usage:result.usage}:{}),");
   return graph('Shared Product Automation Queue',nodes,[['Shared Worker Schedule','Shared API Health','Shared API Ready?'],['Claim Shared Job','Shared Job Claimed?'],['Validate Claimed Job','Is Product Setup?'],...Object.keys(ids).map(key=>['Run Shared '+key,'Finish Shared Job Input','Finish Shared Job'])],
     {'Shared API Ready?':[['Claim Shared Job'],['Shared Worker Waiting']],'Shared Job Claimed?':[['Validate Claimed Job'],[]],'Is Product Setup?':[['Run Shared setup'],['Is Discovery?']],'Is Discovery?':[['Run Shared discovery'],['Is Research?']],'Is Research?':[['Run Shared research'],['Run Shared pipeline']]});
 }

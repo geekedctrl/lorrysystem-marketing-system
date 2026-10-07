@@ -104,6 +104,11 @@ class MarketingAPI:
             return "This operation conflicts with an existing record or current state."
         if status_code == 422:
             return "Please check the submitted fields and try again."
+        if status_code == 503 and detail in (
+            "Platform SMTP credential encryption is not configured",
+            "Sender credentials are unavailable; reconnect the account",
+        ):
+            return detail
         if status_code >= 500:
             return "The Marketing API encountered an error."
         if isinstance(detail, str):

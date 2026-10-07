@@ -640,6 +640,57 @@ print(
     "PASS missing contact/manual continuation, native failures/stale score protection, worker ownership/revocation and admin-only activation",
     flush=True,
 )
+# Older interrupted research stays in history but cannot warn or schedule duplicate work.
+with ControlSession() as db:
+    original = db.get(LeadResearch, UUID(review_job["input"]["research_id"]))
+    old = LeadResearch(workspace_id=original.workspace_id, lead_id=original.lead_id,
+        research_status="FAILED", created_at=original.created_at - timedelta(days=1))
+    db.add(old)
+    db.flush()
+    historical = AutomationJob(workspace_id=original.workspace_id, kind="RESEARCH", related_id=old.id,
+        status="NEEDS_REVIEW", failure_reason="SUPPORTED_CONTACT_REQUIRED", created_at=old.created_at)
+    db.add(historical)
+    db.flush()
+    historical_id = str(historical.id)
+    history_lead = str(original.lead_id)
+    db.commit()
+state = call("GET", f"/api/leads/{history_lead}/pipeline-state", headers=f["headers"])
+past = next(j for j in state["automation_jobs"] if j["id"] == historical_id)
+assert past["current"] is False and past["needs_attention"] is False
+assert "general mailbox" in past["failure_help"]
+call("POST", "/api/automation/jobs/" + historical_id + "/retry", {}, f["headers"], 409)
+
+# Usage is bounded, workspace-isolated, idempotent and independent from raw provider text.
+fresh_worker = {"X-API-Key": call("POST", "/api/automation/workers", {"name":"Metrics " + suffix}, human, 201)["token"]}
+assert call("GET", "/api/automation/worker/health", headers=fresh_worker)["automation_metrics_version"] == 1
+proof = secrets.token_urlsafe(48)
+from app.auth import token_hash
+from app.models.automation import AutomationWorker
+with ControlSession() as db:
+    identity = db.scalar(select(AutomationWorker).where(AutomationWorker.token_hash == token_hash(fresh_worker["X-API-Key"])))
+    assert identity.last_seen_at is not None
+    measured = AutomationJob(workspace_id=UUID(f["wid"]),kind="DISCOVERY",status="RUNNING",worker_id=identity.id,
+        lease_hash=token_hash(proof),started_at=datetime.now(timezone.utc)-timedelta(minutes=16),
+        lease_expires_at=datetime.now(timezone.utc)+timedelta(minutes=14))
+    db.add(measured);db.flush();measured_id=str(measured.id);db.commit()
+plan = call("GET", "/api/automation/plan", headers=f["headers"])
+assert plan["operations"]["worker_state"] == "ONLINE"
+assert any(j["id"] == measured_id for j in plan["operations"]["stalled_jobs"])
+usage = {"search_requests":2,"fetch_requests":3,"model_requests":1,"input_tokens":100,"output_tokens":20,"search_status":"OK","model_status":"OK"}
+payload = {"job_id":measured_id,"lease_token":proof,"output":{},"usage":usage}
+call("POST", "/api/automation/worker/finish", {**payload,"usage":{**usage,"input_tokens":True}}, fresh_worker, 422)
+call("POST", "/api/automation/worker/finish", payload, fresh_worker)
+call("POST", "/api/automation/worker/finish", {**payload,"usage":{**usage,"search_requests":99}}, fresh_worker)
+plan = call("GET", "/api/automation/plan", headers=f["headers"])
+assert plan["operations"]["usage"]["search_requests"] == 2
+assert plan["operations"]["usage"]["input_tokens"] == 100
+assert plan["operations"]["estimated_cost_usd"] is None
+assert plan["operations"]["providers"]["search"]["status"] == "OK"
+assert not plan["operations"]["stalled_jobs"]
+other = next(x for x in fixtures if x["wid"] != f["wid"])
+assert call("GET", "/api/automation/plan", headers=other["headers"])["operations"]["usage"]["search_requests"] == 0
+print("PASS superseded warning/history/retry isolation, worker heartbeat, slow-job alerts and bounded idempotent workspace usage", flush=True)
+
 if os.getenv("EXPORT_TEST_LOGIN") == "true":
     from pathlib import Path
 

@@ -172,6 +172,7 @@
 
 </div>
       <p>{{ score.rationale or '' }}</p>
+      <p class="research-notice">Preparation score measures documented fit, not purchase likelihood. {% if score.score_breakdown.get('opportunity',{}).get('status') == 'SIGNAL_REQUIRES_REVIEW' %}A buying signal needs human review.{% else %}Buying opportunity remains unconfirmed.{% endif %} Existing systems do not imply a replacement need.</p>
       {% if score.view_components %}
 <div class="score-criteria">{% for component in score.view_components %}<article class="score-criterion">
 <div><h3>{{ component.title }}</h3><strong>{{ component.points }}/{{ component.max_points }}</strong>

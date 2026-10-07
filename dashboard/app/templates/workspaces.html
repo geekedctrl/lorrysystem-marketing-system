@@ -1,13 +1,15 @@
 {% extends 'base.html' %}{% set section = request.query_params.get('section','product' if current_workspace and current_workspace.role == 'ADMIN' else 'account') %}{% block title %}Settings · Marketing{% endblock %}
-{% block page_heading %}<h1>{{ {'product':'Product setup','team':'Team','integrations':'Connections','account':'Account & workspaces'}.get(section,'Settings') }}</h1><p>Manage this product and your access.</p>{% endblock %}
+{% block page_heading %}<h1>{{ {'product':'Product setup','team':'Team','integrations':'Connections','operations':'Automation','account':'Account & workspaces'}.get(section,'Settings') }}</h1><p>Manage this product and your access.</p>{% endblock %}
 {% block content %}{% if message %}
 <div class="alert" role="status">{{ message }}
 </div>{% endif %}
-<nav class="section-tabs" aria-label="Settings sections">{% for key,label in [('product','Product setup'),('team','Team'),('integrations','Connections'),('account','Account & workspaces')] %}{% if key == 'account' or (current_workspace and current_workspace.role == 'ADMIN') %}
+<nav class="section-tabs" aria-label="Settings sections">{% for key,label in [('product','Product setup'),('operations','Automation'),('team','Team'),('integrations','Connections'),('account','Account & workspaces')] %}{% if key in ['account','operations'] or (current_workspace and current_workspace.role == 'ADMIN') %}
 <a href="/workspaces?section={{ key }}" {{ 'aria-current=page' if section == key else '' }}>{{ label }}
 </a>{% endif %}{% endfor %}
 </nav>
-{% if section == 'account' %}
+{% if section == 'operations' %}{% include 'automation_operations.html' %}{% include 'email_suppressions.html' %}
+<details class="card stage-history"><summary>Automation history</summary>{% for job in automation_plan.jobs %}<div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}{{ ' · Earlier attempt' if not job.current|default(true) else '' }}</span></div>{% if job.failure_reason %}<p class="stage-muted">{{ job.failure_help or job.failure_reason|replace('_',' ')|capitalize }}</p>{% endif %}{% else %}<p>No jobs for this product yet.</p>{% endfor %}</details>
+{% elif section == 'account' %}
 <div class="card"><h2>Your workspaces</h2><p>Each workspace keeps its leads, research and approvals private to its team.</p>
 {% for workspace in current_user.workspaces %}
 <form method="post" action="/workspaces/switch" class="workspace-inline">
@@ -62,6 +64,7 @@
 </div>
 </div>
 {% elif section == 'integrations' %}
+{% include 'smtp_connections.html' %}
 <div class="card"><h2>Platform connections</h2><p>These controls are for administrators maintaining existing integrations. Product teams use the product setup form.</p>
 <a href="/system">View service status →
 </a>

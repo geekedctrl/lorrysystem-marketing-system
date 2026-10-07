@@ -1,4 +1,5 @@
 {% set profile = automation_plan.profile %}
+{% include 'automation_operations.html' %}
 <section class="card product-setup" aria-labelledby="product-setup-heading">
 
 <div class="card-head">
@@ -100,7 +101,7 @@
   {% if automation_plan.configuration %}<details class="stage-history"><summary>Prepared targeting</summary><p>{{ automation_plan.configuration.discovery_query }}</p>{% for icp in automation_plan.configuration.icps %}<article><h3>{{ icp.name }}</h3><p>{{ icp.description }}</p></article>{% endfor %}</details>{% endif %}
   {% if automation_plan.jobs %}<details class="stage-history"><summary>Automation activity</summary>{% for job in automation_plan.jobs %}
 <div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}</span><time>{{ job.created_at[:16]|replace('T',' ') }}</time>
-</div>{% if job.failure_reason %}<p class="stage-muted">{{ job.failure_reason|replace('_',' ')|capitalize }}</p>{% endif %}{% if job.status in ['FAILED','NEEDS_REVIEW'] %}
+</div>{% if not job.current|default(true) %}<p class="stage-muted">Earlier attempt. Current preparation has superseded this job.</p>{% elif job.failure_reason %}<p class="stage-muted">{{ job.failure_help or job.failure_reason|replace('_',' ')|capitalize }}</p>{% endif %}{% if job.current|default(true) and job.status in ['FAILED','NEEDS_REVIEW'] %}
 <form method="post" action="/workspaces/manage">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <input type="hidden" name="action" value="retry-automation">
@@ -126,8 +127,9 @@
 {% if automation_plan.configured %}
 <script>
 const productStatus = {{ {'state':automation_plan.state,'enabled':automation_plan.enabled,'jobs':automation_plan.jobs|map(attribute='id')|list}|tojson }};
-productStatus.jobs = {{ automation_plan.jobs|tojson }}.map(job => ({id:job.id,status:job.status}));
-const productStatusKey = value => JSON.stringify([value.state,value.enabled,value.jobs.map(job => [job.id,job.status])]);
+productStatus.jobs = {{ automation_plan.jobs|tojson }}.map(job => ({id:job.id,status:job.status,stalled:job.stalled || false}));
+productStatus.worker_state = {{ (automation_plan.operations.worker_state if automation_plan.operations else none)|tojson }};
+const productStatusKey = value => JSON.stringify([value.state,value.enabled,value.worker_state,value.jobs.map(job => [job.id,job.status,job.stalled || false])]);
 let editingProduct = false;
 document.querySelector('.product-setup').addEventListener('input', () => { editingProduct = true; });
 setInterval(async () => {

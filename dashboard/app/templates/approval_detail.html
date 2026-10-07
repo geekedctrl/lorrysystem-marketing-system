@@ -23,6 +23,7 @@
 
     <div class="snapshot-meta">
       <div><span>Channel</span><strong>{{ snapshot.get('channel', '—') }}</strong></div>
+      {% if snapshot.get('recipient_email') %}<div><span>Recipient</span><strong>{{ snapshot.recipient_email }}</strong></div>{% endif %}
       <div><span>Action type</span><strong>{{ snapshot.get('action_type', '—') }}</strong></div>
       <div><span>Created by</span><strong>{{ snapshot.get('created_by') or '—' }}</strong></div>
       <div><span>Scheduled</span><strong>{{ snapshot.get('scheduled_at')|iso_date if snapshot.get('scheduled_at') else '—' }}</strong></div>
@@ -70,4 +71,11 @@
     {% endif %}
   </div>
 </div>
+{% if delivery %}<section class="card section-card"><h2>Email handoff</h2><p><strong>{{ delivery.status|replace('_',' ')|title }}</strong> · {{ delivery.recipient }}</p>{% if delivery.status == 'ACCEPTED' %}<p>The SMTP server accepted this message. Inbox delivery and replies are not yet confirmed.</p>{% elif delivery.status in ['UNCERTAIN','SENDING'] %}<p>The handoff is unresolved. Do not resend: the server may already have accepted it. Ask your administrator to check the message ID.</p>{% else %}<p>The handoff failed before acceptance. Check the sender connection before an explicit retry.</p>{% endif %}<p class="stage-muted">Message ID: {{ delivery.message_id }}</p></section>{% endif %}
+{% if approval.status == 'APPROVED' and action and action.status == 'APPROVED' and action.channel == 'EMAIL' and current_workspace.role in ['ADMIN','OPERATOR'] and (not delivery or delivery.status == 'FAILED') %}
+<section class="card section-card"><h2>Send approved email</h2><p>Sending is a separate action. This sends the approved text to the saved contact email using the selected product's sender account.</p>
+{% set available_senders = senders|selectattr('enabled')|selectattr('verified_at')|list %}
+{% if available_senders %}<form method="post" action="/approvals/{{ approval.id }}/send" class="form-stack"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="idempotency_key" value="{{ send_request_id }}"><label>Sender account<select name="sender_id" required>{% for sender in available_senders %}<option value="{{ sender.id }}">{{ sender.name }} · {{ sender.from_email }}</option>{% endfor %}</select></label><label><input type="checkbox" name="confirmed" value="yes" required> I want to send this approved email now.</label><button class="button">{{ 'Retry approved email' if delivery else 'Send approved email' }}</button></form>
+{% else %}<p>Ask an administrator to connect and verify an SMTP sender in <a href="/workspaces?section=integrations">Connections</a>.</p>{% endif %}</section>
+{% endif %}
 {% endblock %}

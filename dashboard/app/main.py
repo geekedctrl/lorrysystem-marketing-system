@@ -1592,6 +1592,13 @@ async def approval_detail(
             f"/api/approvals/{approval_id}"
         )
         snapshot = approval.get("content_snapshot") or {}
+        from uuid import uuid4
+        action_id = approval["marketing_action_id"]
+        action, delivery, senders = await asyncio.gather(
+            safe_get(f"/api/actions/{action_id}", None),
+            safe_get(f"/api/actions/{action_id}/delivery", None),
+            safe_get("/api/senders", []),
+        )
 
         lead = None
         company = None
@@ -1614,6 +1621,10 @@ async def approval_detail(
                 "snapshot": snapshot,
                 "lead": lead,
                 "company": company,
+                "action": action,
+                "delivery": delivery,
+                "senders": senders,
+                "send_request_id": str(uuid4()),
                 "error": None,
             },
         )
@@ -1627,6 +1638,21 @@ async def approval_detail(
             },
             status_code=exc.status_code,
         )
+
+
+@app.post("/approvals/{approval_id}/send")
+async def send_approved_email(request: Request, approval_id: str, csrf: str = Form(...),
+                              sender_id: str = Form(...), idempotency_key: str = Form(...), confirmed: str = Form("")):
+    if not verify_csrf(request, csrf) or confirmed != "yes":
+        return RedirectResponse(f"/approvals/{approval_id}?error=Confirm+the+separate+send+action",status_code=303)
+    try:
+        approval = await api.get(f"/api/approvals/{approval_id}")
+        if approval["status"] != "APPROVED": raise MarketingAPIError(409,"Approve this email before sending.")
+        result = await api.post(f"/api/actions/{approval['marketing_action_id']}/send",
+            json={"sender_id":sender_id,"idempotency_key":idempotency_key,"confirmed":True})
+        return RedirectResponse(f"/approvals/{approval_id}?delivery={result['status']}",status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(f"/approvals/{approval_id}?error={quote(exc.message)}",status_code=303)
 
 
 @app.post("/approvals/{approval_id}/approve")

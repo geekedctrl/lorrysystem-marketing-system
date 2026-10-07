@@ -2,6 +2,7 @@ from app.models.workspaces import Workspace, User, Membership, LoginSession, Inv
 from app.models.discovery_runs import DiscoveryAutomation, DiscoveryRun
 from app.models.pipeline import PipelineRun
 from app.models.automation import AutomationWorker, ProductAutomationPlan, AutomationJob
+from app.models.sending import SenderAccount, DeliveryAttempt, EmailSuppression
 from app.models.catalog import ICPProfile, Product
 from app.models.companies import Company, Contact
 from app.models.discovery import (
@@ -23,6 +24,7 @@ from app.models.marketing import (
 
 
 __all__ = [
+    "SenderAccount", "DeliveryAttempt", "EmailSuppression",
     "Product",
     "ICPProfile",
     "Company",

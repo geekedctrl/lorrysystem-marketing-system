@@ -214,6 +214,17 @@ async def workspace_page(
     members, credentials, audit, products, icps = [], [], [], [], []
     discovery_config = {}
     automation_plan = {"configured": False, "profile": {}, "jobs": []}
+    senders, suppressions = [], []
+    if selected:
+        try:
+            automation_plan = await request.app.state.api.get("/api/automation/plan")
+        except MarketingAPIError:
+            pass
+        try:
+            senders = await request.app.state.api.get("/api/senders")
+            suppressions = await request.app.state.api.get("/api/email-suppressions")
+        except MarketingAPIError:
+            pass
     if selected and selected["role"] == "ADMIN":
         api = request.app.state.api
         prefix = "/api/workspaces/" + selected["id"]
@@ -223,10 +234,6 @@ async def workspace_page(
         products = await api.get("/api/products")
         icps = await api.get("/api/icp-profiles")
         discovery_config = await api.get("/api/discovery/config")
-        try:
-            automation_plan = await api.get("/api/automation/plan")
-        except MarketingAPIError:
-            pass
     if submitted:
         automation_plan["profile"] = submitted["profile"]
         products = submitted["products"]
@@ -241,6 +248,8 @@ async def workspace_page(
         message=message,
         discovery_config=discovery_config,
         automation_plan=automation_plan,
+        senders=senders,
+        suppressions=suppressions,
     )
 
 
@@ -252,8 +261,9 @@ async def automation_status(request: Request):
             {
                 "state": result["state"],
                 "enabled": result["enabled"],
+                "worker_state": result.get("operations", {}).get("worker_state"),
                 "jobs": [
-                    {"id": j["id"], "status": j["status"]} for j in result["jobs"]
+                    {"id": j["id"], "status": j["status"], "stalled": j.get("stalled", False)} for j in result["jobs"]
                 ],
             }
         )
@@ -288,6 +298,7 @@ async def manage(request: Request):
         "pause-product": "product",
         "resume-product": "product",
         "retry-automation": "product",
+        "suppress-email": "operations",
     }.get(str(action), "integrations")
     selected = request.state.workspace
     prefix = "/api/workspaces/" + selected["id"] if selected else ""
@@ -419,6 +430,21 @@ async def manage(request: Request):
             await api.post(
                 "/api/automation/jobs/" + str(form.get("job_id")) + "/retry", json={}
             )
+        elif action == "smtp-sender":
+            body = {key: str(form.get(key, "")) for key in ("name","from_email","from_name","host","username")}
+            try: body["port"] = int(str(form.get("port", "587")))
+            except ValueError: raise MarketingAPIError(422,"SMTP port must be 465 or 587.")
+            body["security"] = str(form.get("security", "STARTTLS"))
+            body["enabled"] = form.get("enabled") == "on"
+            if form.get("password"): body["password"] = str(form.get("password"))
+            if form.get("sender_id"):
+                await api.request("PUT", "/api/senders/"+str(form.get("sender_id")), json=body)
+            else: await api.post("/api/senders", json=body)
+        elif action == "verify-smtp":
+            result = await api.post("/api/senders/"+str(form.get("sender_id"))+"/verify", json={})
+            if not result["verified"]: raise MarketingAPIError(422,"SMTP verification failed. Check host, security and credentials. No email was sent.")
+        elif action == "suppress-email":
+            await api.post("/api/email-suppressions", json={"email":str(form.get("email", "")),"reason":str(form.get("reason", "OPT_OUT"))})
         elif action in ("products", "icps"):
             import json
 
