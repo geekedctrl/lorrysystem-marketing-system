@@ -18,7 +18,7 @@ function setupResult(response,completionContent) {
   const envelope=completionContent(response);
   if(envelope.error)return {shared_outcome:'FAILED',failure_reason:envelope.error};
   try {
-    const output=JSON.parse(envelope.content);
+    const output=JSON.parse(envelope.content.trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
     if(!output || Object.keys(output).some(k=>!['discovery_query','icps'].includes(k)) || typeof output.discovery_query!=='string' || output.discovery_query.length<3 || output.discovery_query.length>300
         || !Array.isArray(output.icps) || output.icps.length<1 || output.icps.length>5 || output.icps.some(i=>!i || Object.keys(i).some(k=>!['name','description'].includes(k)) || typeof i.name!=='string' || i.name.length<3 || i.name.length>120 || typeof i.description!=='string' || i.description.length<15 || i.description.length>2000))throw new Error();
     return {shared_outcome:'COMPLETED',output};
@@ -46,7 +46,7 @@ function discoveryResults(response,pages,workspace,job,completionContent) {
   const envelope=completionContent(response);
   if(envelope.error)return [{no_candidate:true,shared_outcome:'FAILED',failure_reason:envelope.error}];
   let candidates;
-  try {const data=JSON.parse(envelope.content);if(!data || !Array.isArray(data.candidates) || data.candidates.length>10)throw new Error();candidates=data.candidates;}
+  try {const data=JSON.parse(envelope.content.trim().replace(/^```(?:json)?\s*|\s*```$/g,''));if(!data || !Array.isArray(data.candidates) || data.candidates.length>10)throw new Error();candidates=data.candidates;}
   catch{return [{no_candidate:true,shared_outcome:'FAILED',failure_reason:'INVALID_DISCOVERY_OUTPUT'}];}
   const normalize=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase(),seen=new Set(),result=[];
   for(const value of candidates) {

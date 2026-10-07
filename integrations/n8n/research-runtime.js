@@ -51,7 +51,7 @@ function researchQueries(seed, country) {
   const name=seed.company.name.replace(/["\r\n]/g,' ').trim();
   return [
     {query:seed.company.domain?`site:${seed.company.domain} "${name}" about services contact team operations`:`"${name}" company services`,purpose:'COMPANY'},
-    {query:`"${name}" managing director operations manager leadership`,purpose:'PEOPLE'},
+    {query:`${seed.company.domain?`site:${seed.company.domain} `:''}"${name}" leadership executives directors management team`,purpose:'PEOPLE'},
     ...(seed.known_contact?[{query:`"${String(seed.known_contact.name).replace(/["\r\n]/g,' ')}" "${name}" role company`,purpose:'KNOWN_PERSON'}]:[]),
   ].map(value=>({...value,country:/^[A-Z]{2}$/.test(seed.company.country_code||'')?seed.company.country_code:country}));
 }
@@ -66,14 +66,16 @@ function researchSearchSources(responses, requests=[]) {
       const evidence=[result.title,result.description].filter(value=>typeof value==='string').join(' — ').replace(/<[^>]*>/g,' ').trim().slice(0,1500);
       if (!url || evidence.length < 40) continue;
       values.push({url:url.url,source_type:'SEARCH',title:String(result.title||url.host).slice(0,250),
-        evidence,confidence:['PEOPLE','KNOWN_PERSON'].includes(requests[index]?.purpose)?55:50,observed_at:new Date().toISOString(),origin:'SEARCH_SNIPPET'});
+        evidence,confidence:['PEOPLE','KNOWN_PERSON'].includes(requests[index]?.purpose)?55:50,search_purpose:requests[index]?.purpose,observed_at:new Date().toISOString(),origin:'SEARCH_SNIPPET'});
     }
   }
   return values;
 }
 
 function selectResearchUrls(seed, searches, limit) {
-  const values=[seed.company.website_url,...seed.sources.map(source=>source.url),...searches.map(source=>source.url)];
+  const people=source=>['PEOPLE','KNOWN_PERSON'].includes(source.search_purpose);
+  const values=[seed.company.website_url,...seed.sources.map(source=>source.url),
+    ...searches.filter(people).map(source=>source.url),...searches.filter(source=>!people(source)).map(source=>source.url)];
   const unique=new Map();
   for (const value of values) {
     const url=publicResearchUrl(value);

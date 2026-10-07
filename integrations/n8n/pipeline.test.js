@@ -20,10 +20,36 @@ test('scores use exact rubric weights and require literal saved evidence for pos
   for(const changes of [{points:101},{max_points:90},{criterion:'invented'},{evidence:[]},{evidence:[{...citation,evidence_quote:'Invented public fleet information.'}]},{evidence:[{...citation,source_url:'https://foreign.com/'}]}])assert.equal(validate({...scoring,components:[{...scoring.components[0],...changes}]}).pipeline_outcome,'FAILED');
   assert.equal(validate({...scoring,components:[{...scoring.components[0],points:0,evidence:[]}]}).pipeline_outcome,'VALID');
 });
+test('score failures identify validation problems without retaining model text',()=>{
+  for(const [changes,reason] of [
+    [{max_points:90},'INVALID_SCORE_COMPONENT'],
+    [{evidence:[]},'INVALID_SCORE_CITATIONS_REQUIRED'],
+    [{evidence:null},'INVALID_SCORE_CITATIONS_TYPE'],
+    [{evidence:Array.from({length:6},()=>citation)},'INVALID_SCORE_CITATIONS_LIMIT'],
+    [{evidence:[{...citation,source_url:'https://foreign.com/'}]},'INVALID_SCORE_SOURCE_URL'],
+    [{evidence:[{...citation,evidence_quote:'short'}]},'INVALID_SCORE_QUOTE_LENGTH'],
+    [{evidence:[{...citation,evidence_quote:'Unsupported provider response text.'}]},'INVALID_SCORE_QUOTE_MISMATCH'],
+  ]) {
+    const value=validate({...scoring,components:[{...scoring.components[0],...changes}]});
+    assert.equal(value.failure_reason,reason);
+    assert.ok(!JSON.stringify(value).includes('Unsupported provider response text'));
+    assert.equal(value.output,undefined);
+  }
+  assert.equal(validate({...scoring,gaps:'invalid'}).failure_reason,'INVALID_SCORE_SCHEMA');
+});
 test('matching rejects invented and duplicate catalog codes and unsupported fit',()=>{
   const match={product_code:'MAIN',fit_score:80,rationale:'Fleet operations align with the catalog.',evidence:[citation]};
   assert.equal(validate({matches:[match]},'MATCHING').pipeline_outcome,'VALID');
   for(const matches of [[{...match,product_code:'OTHER'}],[match,match],[{...match,evidence:[]}]])assert.equal(validate({matches},'MATCHING').pipeline_outcome,'FAILED');
+});
+test('matching and drafting report safe citation diagnostics and require contiguous excerpts',()=>{
+  const match={product_code:'MAIN',fit_score:80,rationale:'Fleet operations align with the catalog.',evidence:[{...citation,evidence_quote:'Acme operates ... across Malaysia.'}]};
+  assert.equal(validate({matches:[match]},'MATCHING').failure_reason,'INVALID_PRODUCT_QUOTE_MISMATCH');
+  const draft={subject:'Fleet operations',content:'Your public fleet operations may benefit from a review of our operations software.',evidence:[{...citation,source_url:'https://acme.com/other'}]};
+  assert.equal(validate(draft,'DRAFTING').failure_reason,'INVALID_DRAFT_SOURCE_URL');
+  assert.equal(validate({...draft,evidence:[{...citation,evidence_quote:'x'.repeat(501)}]},'DRAFTING').failure_reason,'INVALID_DRAFT_QUOTE_LENGTH');
+  const request=R.preparePipelineModel(context,workspace,binding.llm,()=> 'Professional').request;
+  assert.match(request.messages[0].content,/short contiguous quote verbatim/);
 });
 test('drafts require bounded professional content with supporting sources; provider errors are sanitized',()=>{
   const draft={subject:'Fleet operations',content:'Your public fleet operations may benefit from a review of our operations software.',evidence:[citation]};

@@ -70,7 +70,7 @@ function enrichPeopleProfiles(result, seed, responses, requests, evidence) {
         const profile=professionalProfile(item.url);
         if (!profile) continue;
         const quote=[item.title,item.description].filter(x=>typeof x==='string').join(' — ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,1800);
-        if (!peopleContains(quote,person.name) || !peopleContains(quote,peopleCompany(seed.company.name))) continue;
+        if (!peopleContains(item.title,person.name) || !peopleContains(quote,peopleCompany(seed.company.name))) continue;
         // A social handle also needs the researched business role, not just the same name.
         if (profile.platform!=='LinkedIn' && (!person.job_title || !peopleContains(quote,person.job_title))) continue;
         const source={url:item.url,source_type:'SEARCH',title:String(item.title||profile.platform).slice(0,250),
