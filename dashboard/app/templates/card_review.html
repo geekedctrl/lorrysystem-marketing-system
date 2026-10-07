@@ -4,7 +4,7 @@
 <h1>Review Business Card</h1>
 <p>OCR results are suggestions only. Correct anything that is wrong before creating the lead.</p>
 {% endblock %}
-{% block content %}
+{% block content %}<div class="breadcrumbs"><a href="/leads/new">← Back to intake options</a></div>
 {% if warning %}<div class="alert warning">{{ warning }}</div>{% endif %}
 {% if match_type == 'AMBIGUOUS' %}
 <div class="alert warning">A possible existing company was found. Review the company choice before continuing.</div>

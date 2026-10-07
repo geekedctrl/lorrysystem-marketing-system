@@ -10,12 +10,5 @@
   <div class="metric-card"><span>Database</span><strong class="small-strong">{{ db_status }}</strong></div>
   <div class="metric-card"><span>Dashboard</span><strong class="small-strong">Online</strong></div>
 </div>
-<div class="card">
-  <h2>Architecture boundary</h2>
-  <pre class="architecture">Browser → Dashboard/BFF → Marketing API → PostgreSQL
-
-Dashboard → PostgreSQL  ✕
-Browser   → API secret  ✕
-Dashboard → Marketing API ✓</pre>
-</div>
+<div class="card"><h2>Service availability</h2><p>If a service is unavailable, saved leads and drafts remain intact. Ask your platform administrator to check the connection before retrying.</p><a href="/workspaces?section=integrations">Back to connections →</a></div>
 {% endblock %}

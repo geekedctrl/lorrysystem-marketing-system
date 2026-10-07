@@ -3,31 +3,39 @@
 {% block title %}{{ company.name }} · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
 <div class="heading-row">
-  <div>
+
+<div>
     <h1>{{ company.name }}</h1>
     <p>{{ company.domain or company.website_url or 'Lead details' }}</p>
-  </div>
-  <div class="heading-badges">
+
+</div>
+
+<div class="heading-badges">
     <span class="badge status">{{ lead.status }}</span>
     <span class="badge priority">{{ lead.priority }}</span>
 
     {% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
-    <button
+
+<button
       class="button secondary"
       type="button"
       onclick="document.getElementById('close-lead-dialog').showModal()"
     >
       Close Lead
-    </button>
+
+</button>
     {% endif %}
-  </div>
+
+</div>
 </div>
 {% endblock %}
 {% block content %}
 {% set pipeline_active = pipeline_runs|selectattr('status','equalto','RUNNING')|list + pipeline_runs|selectattr('status','equalto','PENDING')|list %}
 
 <div class="breadcrumbs">
-  <a href="/leads">Leads</a>
+
+<a href="/leads" data-parent="leads">← Back to leads
+</a>
   <span>›</span>
   <strong>{{ company.name }}</strong>
 </div>
@@ -51,75 +59,158 @@
 {% endif %}
 
 <div class="metric-grid detail-metrics">
-  <div class="metric-card"><span>Current Score</span><strong>{{ lead.current_score if lead.current_score is not none else '—' }}</strong></div>
-  <div class="metric-card"><span>Priority</span><strong class="small-strong">{{ lead.priority }}</strong></div>
-  <div class="metric-card"><span>Created</span><strong class="small-strong">{{ lead.created_at|iso_date }}</strong></div>
-  <div class="metric-card"><span>Last Updated</span><strong class="small-strong">{{ lead.updated_at|iso_date }}</strong></div>
+
+<div class="metric-card"><span>Current Score</span><strong>{{ lead.current_score if lead.current_score is not none else '—' }}</strong>
 </div>
 
-{% include "lead_stage_overview.html" %}
-<div class="two-column">
-  <div class="card">
-    <div class="card-head"><h2>Company</h2></div>
-    <dl class="details">
-      <div><dt>Industry</dt><dd>{{ company.industry or 'Not determined yet' }}</dd></div>
-      <div><dt>Location</dt><dd>{{ company.city or '' }}{% if company.city and company.state %}, {% endif %}{{ company.state or '—' }}</dd></div>
-      <div><dt>Fleet estimate</dt><dd>{{ company.fleet_size_estimate if company.fleet_size_estimate is not none else '—' }}</dd></div>
-      <div><dt>Website</dt><dd>{% if company.website_url %}<a href="{{ company.website_url }}" target="_blank" rel="noopener">{{ company.website_url }}</a>{% else %}—{% endif %}</dd></div>
-    </dl>
-  </div>
+<div class="metric-card"><span>Priority</span><strong class="small-strong">{{ lead.priority }}</strong>
+</div>
 
-  <div class="card">
-    <div class="card-head"><h2>Primary Contact</h2></div>
+<div class="metric-card"><span>Created</span><strong class="small-strong">{{ lead.created_at|iso_date }}</strong>
+</div>
+
+<div class="metric-card"><span>Last Updated</span><strong class="small-strong">{{ lead.updated_at|iso_date }}</strong>
+</div>
+</div>
+
+
+<div class="two-column">
+
+<div class="card">
+
+<div class="card-head"><h2>Company</h2>
+</div>
+    <dl class="details">
+
+<div><dt>Industry</dt><dd>{{ company.industry or 'Not determined yet' }}</dd>
+</div>
+
+<div><dt>Location</dt><dd>{{ company.city or '' }}{% if company.city and company.state %}, {% endif %}{{ company.state or '—' }}</dd>
+</div>
+
+<div><dt>Fleet estimate</dt><dd>{{ company.fleet_size_estimate if company.fleet_size_estimate is not none else '—' }}</dd>
+</div>
+
+<div><dt>Website</dt><dd>{% if company.website_url %}
+<a href="{{ company.website_url }}" target="_blank" rel="noopener">{{ company.website_url }}
+</a>{% else %}—{% endif %}</dd>
+</div>
+    </dl>
+
+</div>
+
+
+<div class="card">
+
+<div class="card-head"><h2>Primary Contact</h2>
+</div>
     {% if contact %}
     <dl class="details">
-      <div><dt>Name</dt><dd>{{ contact.full_name or 'Name not identified' }}</dd></div>
-      <div><dt>Role</dt><dd>{{ contact.job_title or '—' }}</dd></div>
-      <div><dt>Email</dt><dd>{{ contact.email or '—' }}</dd></div>
-      <div><dt>Phone</dt><dd>{{ contact.phone or '—' }}</dd></div>
-    </dl>
-    {% else %}
-    <div class="empty"><span>No primary contact selected.</span></div>
-    {% endif %}
-  </div>
+
+<div><dt>Name</dt><dd>{{ contact.full_name or 'Name not identified' }}</dd>
 </div>
 
-{% include "research_brief.html" %}
-{% include "lead_stage_controls.html" %}
+<div><dt>Role</dt><dd>{{ contact.job_title or '—' }}</dd>
+</div>
 
-{% if research_active or pipeline_active %}<script>document.addEventListener('input', event => { if(event.target.form) event.target.form.dataset.editing='true'; }); setInterval(() => { if (!document.querySelector('dialog[open]') && !document.hidden && !document.querySelector('form[data-editing="true"]')) window.location.reload(); }, 15000);</script>{% endif %}
+<div><dt>Email</dt><dd>{{ contact.email or '—' }}</dd>
+</div>
 
+<div><dt>Phone</dt><dd>{{ contact.phone or '—' }}</dd>
+</div>
+    </dl>
+    {% else %}
+
+<div class="empty"><span>No primary contact selected.</span>
+</div>
+    {% endif %}
+
+</div>
+</div>
+
+<div class="section-tabs" role="tablist" aria-label="Lead details" data-tabs="lead">
+<button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="false">Overview
+</button>
+<button type="button" role="tab" id="tab-research" aria-controls="panel-research" aria-selected="false">Research
+</button>
+<button type="button" role="tab" id="tab-people" aria-controls="panel-people" aria-selected="false">People
+</button>
+<button type="button" role="tab" id="tab-qualification" aria-controls="panel-qualification" aria-selected="false">Qualification
+</button>
+<button type="button" role="tab" id="tab-outreach" aria-controls="panel-outreach" aria-selected="false">Outreach
+</button>
+<button type="button" role="tab" id="tab-activity" aria-controls="panel-activity" aria-selected="false">Activity
+</button>
+</div>
+<section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-tab-panel="lead">{% include 'lead_stage_overview.html' %}
+<div class='card'><h2>Preparation status</h2><p>{% if pipeline_state.managed %}This product prepares leads automatically. Review any missing evidence or contact details before continuing.{% else %}Research this company, confirm its contact and assess the fit before preparing outreach.{% endif %}</p>
+<a class='button secondary' href='#contact-review'>Review contact and preparation
+</a>
+<a class='button secondary' href='#lead-actions'>View outreach
+</a>
+</div>
+</section>
+<section role="tabpanel" id="panel-research" aria-labelledby="tab-research" data-tab-panel="lead">{% include 'research_brief.html' %}
+</section>
+<section role="tabpanel" id="panel-people" aria-labelledby="tab-people" data-tab-panel="lead">{% include 'people_profiles.html' %}
+</section>
+<section role="tabpanel" id="panel-qualification" aria-labelledby="tab-qualification" data-tab-panel="lead">{% include 'lead_stage_controls.html' %}
 <div class="card section-card" id="lead-scoring">
-  <div class="card-head"><h2>Scoring</h2></div>
+
+<div class="card-head"><h2>Scoring</h2>
+</div>
   {% if scores %}
     {% for score in scores %}
-    <div class="record-block">
-      <div class="record-top">
+
+<div class="record-block">
+
+<div class="record-top">
         <strong class="big-score">{{ score.total_score }}/100</strong>
         {% if score.is_current %}<span class="badge {{ 'success' if pipeline_state.scored else 'warning' }}">{{ 'CURRENT' if pipeline_state.scored else 'NEEDS REFRESH' }}</span>{% endif %}
         <span>{{ score.scoring_version }}</span>
         <span>{{ score.created_at|iso_date }}</span>
-      </div>
+
+</div>
       <p>{{ score.rationale or '' }}</p>
-      {% if score.view_components %}<div class="score-criteria">{% for component in score.view_components %}<article class="score-criterion"><div><h3>{{ component.title }}</h3><strong>{{ component.points }}/{{ component.max_points }}</strong></div><p>{{ component.rationale }}</p>{% if component.evidence %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary>{% for item in component.evidence %}<blockquote>{{ item.quote }}</blockquote><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a>{% endfor %}</details>{% endif %}</article>{% endfor %}</div>{% if score.view_gaps %}<div class="research-gaps"><h3>Details to confirm</h3><ul>{% for gap in score.view_gaps %}<li>{{ gap }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if score.view_components %}
+<div class="score-criteria">{% for component in score.view_components %}<article class="score-criterion">
+<div><h3>{{ component.title }}</h3><strong>{{ component.points }}/{{ component.max_points }}</strong>
+</div><p>{{ component.rationale }}</p>{% if component.evidence %}<details class="research-proof"><summary>View evidence <span aria-hidden="true">+</span></summary>{% for item in component.evidence %}<blockquote>{{ item.quote }}</blockquote>
+<a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Open source ↗
+</a>{% endfor %}</details>{% endif %}</article>{% endfor %}
+</div>{% if score.view_gaps %}
+<div class="research-gaps"><h3>Details to confirm</h3><ul>{% for gap in score.view_gaps %}
+<li>{{ gap }}
+</li>{% endfor %}</ul>
+</div>{% endif %}
       {% elif score.score_breakdown %}
-      <div class="key-values">
+
+<div class="key-values">
         {% for key, value in score.score_breakdown.items() %}
-        <div><span>{{ key.replace('_', ' ')|title }}</span><strong>{{ value }}</strong></div>
+
+<div><span>{{ key.replace('_', ' ')|title }}</span><strong>{{ value }}</strong>
+</div>
         {% endfor %}
-      </div>
+
+</div>
       {% endif %}
-    </div>
+
+</div>
     {% endfor %}
   {% else %}
-    <div class="empty"><span>No score available yet.</span></div>
+
+<div class="empty"><span>No score available yet.</span>
+</div>
   {% endif %}
 </div>
 
 <div class="card section-card" id="lead-matches">
-  <div class="card-head"><h2>Product Matches</h2></div>
+
+<div class="card-head"><h2>Product Matches</h2>
+</div>
   {% if matches %}
-  <div class="table-wrap">
+
+<div class="table-wrap">
     <table>
       <thead><tr><th>Product</th><th>Fit Score</th><th>Rationale</th></tr></thead>
       <tbody>
@@ -132,140 +223,228 @@
       {% endfor %}
       </tbody>
     </table>
-  </div>
-  {% if pipeline_state.matching_current and not pipeline_active and current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['QUALIFIED','READY_FOR_OUTREACH'] %}<div class="stage-draft-control"><h3>Prepare outreach</h3><p>Select a matched product and a channel supported by the reviewed contact. The generated message will enter human approval.</p><form class="stage-draft-form" method="post" action="/leads/{{ lead.id }}/pipeline"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="stage" value="DRAFTING"><label>Product<select name="product_id" required><option value="">Choose a supported product</option>{% for match in matches %}{% if match.product_id in pipeline_state.draft_product_ids %}<option value="{{ match.product_id }}">{{ (match.product or {}).get('name',match.product_id) }} · {{ match.fit_score }}/100</option>{% endif %}{% endfor %}</select></label><label>Channel<select name="channel" required>{% if contact and contact.email %}<option value="EMAIL">Email</option>{% endif %}{% if contact and contact.linkedin_url %}<option value="LINKEDIN">LinkedIn message draft</option>{% endif %}</select></label><button type="submit" class="button" {{ 'disabled' if not contact or not (contact.email or contact.linkedin_url) else '' }}>Prepare draft for approval</button></form>{% if not contact or not (contact.email or contact.linkedin_url) %}<p class="stage-muted">This contact needs a confirmed business email or individual LinkedIn profile before drafting.</p>{% endif %}</div>{% endif %}
+
+</div>
+  {% if pipeline_state.matching_current and not pipeline_active and current_workspace.role in ['ADMIN','OPERATOR'] and lead.status in ['QUALIFIED','READY_FOR_OUTREACH'] %}
+<div class="stage-draft-control"><h3>Prepare outreach</h3><p>Select a matched product and a channel supported by the reviewed contact. The generated message will enter human approval.</p>
+<form class="stage-draft-form" method="post" action="/leads/{{ lead.id }}/pipeline">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<input type="hidden" name="stage" value="DRAFTING">
+<label>Product
+<select name="product_id" required><option value="">Choose a supported product</option>{% for match in matches %}{% if match.product_id in pipeline_state.draft_product_ids %}<option value="{{ match.product_id }}">{{ (match.product or {}).get('name',match.product_id) }} · {{ match.fit_score }}/100</option>{% endif %}{% endfor %}
+</select>
+</label>
+<label>Channel
+<select name="channel" required>{% if contact and contact.email %}<option value="EMAIL">Email</option>{% endif %}{% if contact and contact.linkedin_url %}<option value="LINKEDIN">LinkedIn message draft</option>{% endif %}
+</select>
+</label>
+<button type="submit" class="button" {{ 'disabled' if not contact or not (contact.email or contact.linkedin_url) else '' }}>Prepare draft for approval
+</button>
+</form>{% if not contact or not (contact.email or contact.linkedin_url) %}<p class="stage-muted">This contact needs a confirmed business email or individual LinkedIn profile before drafting.</p>{% endif %}
+</div>{% endif %}
   {% else %}
-    <div class="empty"><span>No product matches available yet.</span></div>
+
+<div class="empty"><span>No product matches available yet.</span>
+</div>
   {% endif %}
 </div>
 
+</section>
+<section role="tabpanel" id="panel-outreach" aria-labelledby="tab-outreach" data-tab-panel="lead">
 <div class="card section-card" id="lead-actions">
-  <div class="card-head"><h2>Marketing Actions</h2></div>
+
+<div class="card-head"><h2>Outreach</h2>
+</div>
   {% if actions %}
     {% for action in actions %}
-    <div class="action-card">
-      <div class="record-top">
+
+<div class="action-card">
+
+<div class="record-top">
         <strong>{{ action.channel }} · {{ action.action_type }}</strong>
         <span class="badge status">{{ action.status }}</span>
         <span>{{ action.created_at|iso_date }}</span>
-      </div>
+
+</div>
       {% if action.subject %}<h3>{{ action.subject }}</h3>{% endif %}
       <p class="content-preview">{{ action.content }}</p>
-      {% if action.status == 'DRAFT' and current_workspace.role in ['ADMIN','OPERATOR'] %}<details class="stage-history"><summary>Edit draft</summary><form class="form-stack" method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/edit"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Subject<textarea name="subject" maxlength="150" rows="2">{{ action.subject or '' }}</textarea></label><label>Message<textarea name="content" minlength="30" maxlength="5000" rows="8" required>{{ action.content }}</textarea></label><button class="button secondary" type="submit">Save draft</button></form></details><form method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/submit"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="button" type="submit">Request approval</button></form>{% endif %}
+      {% if action.status == 'DRAFT' and current_workspace.role in ['ADMIN','OPERATOR'] %}<details class="stage-history"><summary>Edit draft</summary>
+<form class="form-stack" method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/edit">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Subject<textarea name="subject" maxlength="150" rows="2">{{ action.subject or '' }}</textarea>
+</label>
+<label>Message<textarea name="content" minlength="30" maxlength="5000" rows="8" required>{{ action.content }}</textarea>
+</label>
+<button class="button secondary" type="submit">Save draft
+</button>
+</form></details>
+<form method="post" action="/leads/{{ lead.id }}/actions/{{ action.id }}/submit">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<button class="button" type="submit">Request approval
+</button>
+</form>{% endif %}
       {% set histories = approvals_by_action.get(action.id, []) %}
       {% if histories %}
-        <div class="approval-history">
+
+<div class="approval-history">
           {% for approval in histories %}
-          <a href="/approvals/{{ approval.id }}">{{ approval.status }} · {{ approval.requested_at|iso_date }}</a>
+
+<a href="/approvals/{{ approval.id }}">{{ approval.status }} · {{ approval.requested_at|iso_date }}
+</a>
           {% endfor %}
-        </div>
+
+</div>
       {% endif %}
-    </div>
+
+</div>
     {% endfor %}
   {% else %}
-    <div class="empty"><span>No marketing actions available yet.</span></div>
+
+<div class="empty"><span>No marketing actions available yet.</span>
+</div>
   {% endif %}
 </div>
 
-{% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
+</section>
+<section role="tabpanel" id="panel-activity" aria-labelledby="tab-activity" data-tab-panel="lead">
+<div class='card'><h2>Preparation history</h2>{% for run in pipeline_runs %}
+<div class='list-row'><strong>{{ run.stage|title }}</strong><span class='badge status'>{{ run.status|replace('_',' ')|title }}</span><time>{{ run.created_at|iso_date }}</time>
+</div>{% else %}
+<div class='empty'>No preparation runs recorded yet.
+</div>{% endfor %}
+</div>
+</section>{% if lead.status not in ['CONVERTED', 'DISQUALIFIED', 'LOST'] and current_workspace.role in ['ADMIN','OPERATOR'] %}
 <dialog id="close-lead-dialog" class="close-lead-dialog">
-  <form
+
+<form
     method="post"
     action="/leads/{{ lead.id }}/close"
     class="form-stack"
   >
-    <input
+
+<input
       type="hidden"
       name="csrf"
       value="{{ csrf_token }}"
     >
 
-    <div>
+
+<div>
       <h2>Close Lead</h2>
       <p>
         Close this Lead without deleting its history.
       </p>
-    </div>
 
-    <div class="close-reasons">
-      <label>
-        <input
+</div>
+
+
+<div class="close-reasons">
+
+<label>
+
+<input
           type="radio"
           name="reason"
           value="NO_RESPONSE"
           required
         >
         No response
-      </label>
 
-      <label>
-        <input
+</label>
+
+
+<label>
+
+<input
           type="radio"
           name="reason"
           value="NOT_INTERESTED"
           required
         >
         Not interested
-      </label>
 
-      <label>
-        <input
+</label>
+
+
+<label>
+
+<input
           type="radio"
           name="reason"
           value="WRONG_FIT"
           required
         >
         Wrong fit
-      </label>
 
-      <label>
-        <input
+</label>
+
+
+<label>
+
+<input
           type="radio"
           name="reason"
           value="DUPLICATE"
           required
         >
         Duplicate
-      </label>
 
-      <label>
-        <input
+</label>
+
+
+<label>
+
+<input
           type="radio"
           name="reason"
           value="OTHER"
           required
         >
         Other
-      </label>
-    </div>
 
-    <label>
+</label>
+
+</div>
+
+
+<label>
       Optional note
       <textarea
         name="note"
         rows="4"
         placeholder="Add context for why this Lead is being closed."
       ></textarea>
-    </label>
 
-    <div class="form-actions">
-      <button
+</label>
+
+
+<div class="form-actions">
+
+<button
         type="button"
         class="button secondary"
         onclick="document.getElementById('close-lead-dialog').close()"
       >
         Cancel
-      </button>
 
-      <button
+</button>
+
+
+<button
         type="submit"
         class="button danger"
       >
         Close Lead
-      </button>
-    </div>
-  </form>
+
+</button>
+
+</div>
+
+</form>
 </dialog>
 {% endif %}
 
+{% if research_active or pipeline_active %}
+<script>setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]') && !document.querySelector('form[data-dirty="true"]')) {sessionStorage.setItem('marketing-lead-scroll',String(window.scrollY));window.location.reload();}},15000);window.addEventListener('load',()=>{const y=sessionStorage.getItem('marketing-lead-scroll');if(y){window.scrollTo(0,Number(y));sessionStorage.removeItem('marketing-lead-scroll');}});
+</script>{% endif %}
 {% endblock %}

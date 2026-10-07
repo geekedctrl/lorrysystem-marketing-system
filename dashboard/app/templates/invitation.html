@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Join workspace</title><link rel="stylesheet" href="/static/app.css"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Join workspace</title><link rel="stylesheet" href="/static/app.css"><script src="/static/theme.js?v=ux1"></script><link rel="stylesheet" href="/static/design-system.css?v=ux1"></head>
 <body class="auth-page"><main class="auth-card"><h1>Join your workspace</h1><p>Create a password with at least 12 characters. If you already have an account, enter its current password.</p>
 {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
 <form method="post" action="/invitation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="token" value="{{ token }}">

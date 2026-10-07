@@ -1,28 +1,130 @@
 {% set profile = automation_plan.profile %}
 <section class="card product-setup" aria-labelledby="product-setup-heading">
-  <div class="card-head"><div><h2 id="product-setup-heading">Set up your product</h2><p>Describe what you sell. We’ll prepare targeting and run lead preparation up to outreach approval.</p></div>{% if automation_plan.configured %}<span class="badge {{ 'success' if automation_plan.enabled else 'warning' }}">{{ automation_plan.state|replace('_',' ')|title if automation_plan.enabled else 'Paused' }}</span>{% endif %}</div>
-  <form method="post" action="/workspaces/manage" class="form-stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="activate-product">
-    <div class="product-setup-grid">
-      <label>What kind of product is it?<input name="product_type" maxlength="120" minlength="3" required value="{{ profile.get('product_type','') }}" placeholder="For example, fleet management software"></label>
-      <label>What does it do and what problems does it solve?<textarea name="description" minlength="20" maxlength="5000" rows="4" required>{{ profile.get('description',current_workspace.settings.get('description','')) }}</textarea></label>
-      <label>Who would you like to sell to? <span class="stage-muted">Optional</span><textarea name="target_customers" maxlength="2000" rows="3" placeholder="Describe your ideal customers, or let us suggest them.">{{ profile.get('target_customers','') }}</textarea></label>
-      <div class="product-setup-grid"><label>Target country<select name="country_code" required>{% for code,name in [('MY','Malaysia'),('SG','Singapore'),('ID','Indonesia'),('TH','Thailand'),('PH','Philippines'),('VN','Vietnam'),('AU','Australia'),('GB','United Kingdom'),('US','United States')] %}<option value="{{ code }}" {{ 'selected' if profile.get('country_code','MY') == code else '' }}>{{ name }}</option>{% endfor %}</select></label><label>Message language<input name="language" maxlength="60" value="{{ profile.get('language','English') }}" required></label></div>
-    </div>
-    <h3>Product catalog</h3><p class="stage-muted">Add the offerings and capabilities you actually sell. The system will not invent catalog features.</p>
-    <div id="product-offerings">{% for product in products %}<div class="product-offering"><input type="hidden" name="offering_id" value="{{ product.id }}"><label>Offering name<input name="offering_name" maxlength="120" required value="{{ product.name }}"></label><label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required>{{ product.description or '' }}</textarea></label><button type="button" class="button secondary" onclick="this.closest('.product-offering').remove()">Remove offering</button></div>{% else %}<div class="product-offering"><input type="hidden" name="offering_id" value=""><label>Offering name<input name="offering_name" maxlength="120" required></label><label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required></textarea></label></div>{% endfor %}</div>
-    <button type="button" class="button secondary" id="add-offering">Add another offering</button>
-    <details class="stage-history"><summary>Preferences</summary><div class="product-setup-grid"><label>Brand voice<textarea name="brand_voice" maxlength="2000" rows="3">{{ profile.get('brand_voice','Clear, professional and helpful') }}</textarea></label><label>New companies per daily discovery batch<input name="daily_new_companies" type="number" min="1" max="10" value="{{ profile.get('daily_new_companies',5) }}" required></label></div></details>
+
+<div class="card-head">
+<div><h2 id="product-setup-heading">Set up your product</h2><p>Describe what you sell. We’ll prepare targeting and run lead preparation up to outreach approval.</p>
+</div>{% if automation_plan.configured %}<span class="badge {{ 'success' if automation_plan.enabled else 'warning' }}">{{ automation_plan.state|replace('_',' ')|title if automation_plan.enabled else 'Paused' }}</span>{% endif %}
+</div>
+
+<form method="post" action="/workspaces/manage" class="form-stack" data-wizard>
+
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="activate-product">
+<ol class="setup-steps" aria-label="Product setup steps">
+<li class="setup-step">1. Product details
+</li>
+<li class="setup-step">2. Catalog
+</li>
+<li class="setup-step">3. Review & activate
+</li>
+</ol>
+<div data-step>
+<div class="product-setup-grid">
+
+<label>What kind of product is it?
+<input name="product_type" maxlength="120" minlength="3" required value="{{ profile.get('product_type','') }}" placeholder="For example, fleet management software">
+</label>
+
+<label>What does it do and what problems does it solve?<textarea name="description" minlength="20" maxlength="5000" rows="4" required>{{ profile.get('description',current_workspace.settings.get('description','')) }}</textarea>
+</label>
+
+<label>Who would you like to sell to? <span class="stage-muted">Optional</span><textarea name="target_customers" maxlength="2000" rows="3" placeholder="Describe your ideal customers, or let us suggest them.">{{ profile.get('target_customers','') }}</textarea>
+</label>
+
+<div class="product-setup-grid">
+<label>Target country
+<select name="country_code" required>{% for code,name in [('MY','Malaysia'),('SG','Singapore'),('ID','Indonesia'),('TH','Thailand'),('PH','Philippines'),('VN','Vietnam'),('AU','Australia'),('GB','United Kingdom'),('US','United States')] %}<option value="{{ code }}" {{ 'selected' if profile.get('country_code','MY') == code else '' }}>{{ name }}</option>{% endfor %}
+</select>
+</label>
+<label>Message language
+<input name="language" maxlength="60" value="{{ profile.get('language','English') }}" required>
+</label>
+</div>
+
+</div>
+</div>
+<div data-step>    <h3>Product catalog</h3><p class="stage-muted">Add the offerings and capabilities you actually sell. The system will not invent catalog features.</p>
+
+<div id="product-offerings">{% for product in products %}
+<div class="product-offering">
+<input type="hidden" name="offering_id" value="{{ product.id }}">
+<label>Offering name
+<input name="offering_name" maxlength="120" required value="{{ product.name }}">
+</label>
+<label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required>{{ product.description or '' }}</textarea>
+</label>
+<button type="button" class="button secondary" onclick="this.closest('.product-offering').remove()">Remove offering
+</button>
+</div>{% else %}
+<div class="product-offering">
+<input type="hidden" name="offering_id" value="">
+<label>Offering name
+<input name="offering_name" maxlength="120" required>
+</label>
+<label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required></textarea>
+</label>
+</div>{% endfor %}
+</div>
+
+<button type="button" class="button secondary" id="add-offering">Add another offering
+</button>
+</div>
+<div data-step><h3>Review your product</h3>
+<div data-setup-review>
+</div>    <details class="stage-history"><summary>Preferences</summary>
+<div class="product-setup-grid">
+<label>Brand voice<textarea name="brand_voice" maxlength="2000" rows="3">{{ profile.get('brand_voice','Clear, professional and helpful') }}</textarea>
+</label>
+<label>New companies per daily discovery batch
+<input name="daily_new_companies" type="number" min="1" max="10" value="{{ profile.get('daily_new_companies',5) }}" required>
+</label>
+</div></details>
     <p class="product-setup-policy">Activation authorizes automatic discovery, evidence-based acceptance, research, supported contact selection, scoring, qualification, matching and draft preparation. Automatic acceptance requires at least 75% supported customer fit. Qualification and matching need supported fit of at least 60/100. Missing evidence is flagged for attention. Every outreach draft stops for human approval. No messages are sent.</p>
-    <button class="button primary" type="submit">{{ 'Update and activate product' if automation_plan.configured else 'Activate product' }}</button>
-  </form>
-  {% if automation_plan.configured %}<form method="post" action="/workspaces/manage" class="product-pause-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="{{ 'pause-product' if automation_plan.enabled else 'resume-product' }}"><button class="button secondary" type="submit">{{ 'Pause automation' if automation_plan.enabled else 'Resume automation' }}</button></form>{% endif %}
+</div>
+<div class="wizard-actions"><span data-step-count></span>
+<button class="button secondary" type="button" data-previous>Back
+</button>
+<button class="button primary" type="button" data-next>Continue
+</button>
+<button class="button primary" type="submit" data-activate>{{ 'Update and activate product' if automation_plan.configured else 'Activate product' }}
+</button>
+</div>
+</form>
+  {% if automation_plan.configured %}
+<form method="post" action="/workspaces/manage" class="product-pause-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="{{ 'pause-product' if automation_plan.enabled else 'resume-product' }}">
+<button class="button secondary" type="submit">{{ 'Pause automation' if automation_plan.enabled else 'Resume automation' }}
+</button>
+</form>{% endif %}
   {% if automation_plan.configuration %}<details class="stage-history"><summary>Prepared targeting</summary><p>{{ automation_plan.configuration.discovery_query }}</p>{% for icp in automation_plan.configuration.icps %}<article><h3>{{ icp.name }}</h3><p>{{ icp.description }}</p></article>{% endfor %}</details>{% endif %}
-  {% if automation_plan.jobs %}<details class="stage-history"><summary>Automation activity</summary>{% for job in automation_plan.jobs %}<div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}</span><time>{{ job.created_at[:16]|replace('T',' ') }}</time></div>{% if job.failure_reason %}<p class="stage-muted">{{ job.failure_reason|replace('_',' ')|capitalize }}</p>{% endif %}{% if job.status in ['FAILED','NEEDS_REVIEW'] %}<form method="post" action="/workspaces/manage"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="retry-automation"><input type="hidden" name="job_id" value="{{ job.id }}"><button class="button secondary" {{ 'disabled' if not automation_plan.enabled else '' }}>Retry or continue {{ job.kind|lower }}</button></form>{% endif %}{% endfor %}</details>{% endif %}
+  {% if automation_plan.jobs %}<details class="stage-history"><summary>Automation activity</summary>{% for job in automation_plan.jobs %}
+<div><strong>{{ job.kind|title }}</strong><span>{{ job.status|replace('_',' ')|title }}</span><time>{{ job.created_at[:16]|replace('T',' ') }}</time>
+</div>{% if job.failure_reason %}<p class="stage-muted">{{ job.failure_reason|replace('_',' ')|capitalize }}</p>{% endif %}{% if job.status in ['FAILED','NEEDS_REVIEW'] %}
+<form method="post" action="/workspaces/manage">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="action" value="retry-automation">
+<input type="hidden" name="job_id" value="{{ job.id }}">
+<button class="button secondary" {{ 'disabled' if not automation_plan.enabled else '' }}>Retry or continue {{ job.kind|lower }}
+</button>
+</form>{% endif %}{% endfor %}</details>{% endif %}
 </section>
-<template id="product-offering-template"><div class="product-offering"><input type="hidden" name="offering_id" value=""><label>Offering name<input name="offering_name" maxlength="120" required></label><label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required></textarea></label><button type="button" class="button secondary" onclick="this.closest('.product-offering').remove()">Remove offering</button></div></template>
-<script>document.getElementById('add-offering').addEventListener('click',()=>{if(document.querySelectorAll('#product-offerings .product-offering').length<30)document.getElementById('product-offerings').append(document.getElementById('product-offering-template').content.cloneNode(true));});</script>
-{% if automation_plan.configured %}<script>
+<template id="product-offering-template">
+<div class="product-offering">
+<input type="hidden" name="offering_id" value="">
+<label>Offering name
+<input name="offering_name" maxlength="120" required>
+</label>
+<label>Capabilities and intended use<textarea name="offering_description" minlength="10" maxlength="5000" rows="3" required></textarea>
+</label>
+<button type="button" class="button secondary" onclick="this.closest('.product-offering').remove()">Remove offering
+</button>
+</div>
+</template>
+<script>document.getElementById('add-offering').addEventListener('click',()=>{if(document.querySelectorAll('#product-offerings .product-offering').length<30)document.getElementById('product-offerings').append(document.getElementById('product-offering-template').content.cloneNode(true));});
+</script>
+{% if automation_plan.configured %}
+<script>
 const productStatus = {{ {'state':automation_plan.state,'enabled':automation_plan.enabled,'jobs':automation_plan.jobs|map(attribute='id')|list}|tojson }};
 productStatus.jobs = {{ automation_plan.jobs|tojson }}.map(job => ({id:job.id,status:job.status}));
 const productStatusKey = value => JSON.stringify([value.state,value.enabled,value.jobs.map(job => [job.id,job.status])]);

@@ -7,16 +7,13 @@
 {% block content %}
 {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 
-<div class="hero-actions">
-  <a class="button primary" href="/leads/new">+ Add Lead</a>
-  <a class="button secondary" href="/approvals">Review Approvals</a>
-</div>
-
+<div class="attention-banner"><div><span class="research-eyebrow">Your next action</span><h2>{{ 'Review pending outreach' if metrics.pending_approvals else 'Your approval queue is clear' }}</h2><p>Preparation runs up to human approval. Approved outreach is not sent automatically.</p></div><a class="button primary" href="/approvals">Open approval queue</a></div>
+{% if automation_plan %}<div class="card"><div class="card-head"><h2>Product automation</h2><span class="badge {{ 'success' if automation_plan.enabled else 'warning' }}">{{ automation_plan.state|replace('_',' ')|title if automation_plan.enabled else ('Paused' if automation_plan.configured else 'Not configured') }}</span></div>{% set attention = automation_plan.jobs|selectattr('status','in',['FAILED','NEEDS_REVIEW'])|list %}<p>{{ attention|length }} preparation jobs need attention. {% if current_workspace.role == 'ADMIN' %}<a href="/workspaces?section=product">Manage automation →</a>{% endif %}</p>{% for job in attention[:3] %}<div class="list-row"><strong>{{ job.kind|title }}</strong><span>{{ (job.failure_reason or job.status)|replace('_',' ')|capitalize }}</span></div>{% endfor %}</div>{% endif %}
 <div class="metric-grid">
-  <div class="metric-card"><span>Active Leads</span><strong>{{ metrics.active_leads }}</strong></div>
+  <div class="metric-card"><span>Recent active leads</span><strong>{{ metrics.active_leads }}</strong></div>
   <div class="metric-card"><span>Pending Approvals</span><strong>{{ metrics.pending_approvals }}</strong></div>
-  <div class="metric-card"><span>Draft Actions</span><strong>{{ metrics.draft_actions }}</strong></div>
-  <div class="metric-card"><span>Approved Actions</span><strong>{{ metrics.approved_actions }}</strong></div>
+  <div class="metric-card"><span>Recent drafts</span><strong>{{ metrics.draft_actions }}</strong></div>
+  <div class="metric-card"><span>Recently approved</span><strong>{{ metrics.approved_actions }}</strong></div>
 </div>
 
 <div class="two-column">
@@ -63,7 +60,7 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>Recent Marketing Actions</h2><a href="/actions">View all</a></div>
+  <div class="card-head"><h2>Recent outreach</h2><a href="/actions">View all</a></div>
   {% if recent_actions %}
   <div class="table-wrap">
     <table>

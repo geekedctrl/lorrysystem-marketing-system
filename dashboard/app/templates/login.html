@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · Marketing</title><link rel="stylesheet" href="/static/app.css"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · Marketing</title><link rel="stylesheet" href="/static/app.css"><script src="/static/theme.js?v=ux1"></script><link rel="stylesheet" href="/static/design-system.css?v=ux1"></head>
 <body class="auth-page"><main class="auth-card"><h1>Marketing workspace</h1><p>Sign in to access your team's products and leads.</p>
 {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
 <form method="post" action="/login"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
