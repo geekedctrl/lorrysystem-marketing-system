@@ -542,6 +542,12 @@ def apply_decision(
         approval.status
     )
 
+    if approval_status == "APPROVED":
+        from app.services.preparation_review import review_context
+        readiness = review_context(db, action)
+        if not readiness["current"]:
+            raise ApprovalNotAllowedError(readiness["reason"])
+
     previous_action_status = (
         action.status
     )

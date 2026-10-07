@@ -48,10 +48,11 @@ function researchSeed(value, input, context) {
 }
 
 function researchQueries(seed, country) {
-  const name=seed.company.name.replace(/["\r\n]/g,' ').trim();
+  const fullName=seed.company.name.replace(/["\r\n]/g,' ').trim();
+  const name=fullName.replace(/\b(sdn|bhd|berhad|limited|ltd|inc|llc|llp|plt|plc|pte|corp|corporation)\b/gi,'').replace(/\s+/g,' ').trim()||fullName;
   return [
     {query:seed.company.domain?`site:${seed.company.domain} "${name}" about services contact team operations`:`"${name}" company services`,purpose:'COMPANY'},
-    {query:`${seed.company.domain?`site:${seed.company.domain} `:''}"${name}" leadership executives directors management team`,purpose:'PEOPLE'},
+    {query:`${seed.company.domain?`site:${seed.company.domain} `:''}"${name}" leadership founders partners directors management team`,purpose:'PEOPLE'},
     ...(seed.known_contact?[{query:`"${String(seed.known_contact.name).replace(/["\r\n]/g,' ')}" "${name}" role company`,purpose:'KNOWN_PERSON'}]:[]),
   ].map(value=>({...value,country:/^[A-Z]{2}$/.test(seed.company.country_code||'')?seed.company.country_code:country}));
 }
@@ -95,6 +96,18 @@ function decodeResearchText(value) {
     });
 }
 
+function followResearchUrls(pages, requested, limit) {
+  const seen=new Set(requested.map(request=>publicResearchUrl(request.url)?.key).filter(Boolean));
+  const remaining=Math.max(0,limit-requested.filter(request=>!request.no_fetch).length),result=[];
+  const links=pages.flatMap(page=>(page.company_links||[]).map(link=>({...link,host:publicResearchUrl(page.url)?.host}))).sort((a,b)=>Number(b.people)-Number(a.people));
+  for(const link of links) {
+    const url=publicResearchUrl(link.url);
+    if(!url||url.host!==link.host||seen.has(url.key)||result.length>=remaining)continue;
+    seen.add(url.key);result.push({url:url.url,official:true});
+  }
+  return result;
+}
+
 function cleanResearchPage(response, request, seed) {
   const body=response.body&&typeof response.body==='object'?response.body:response;
   const final=publicResearchUrl(body.final_url||request.url);
@@ -104,9 +117,17 @@ function cleanResearchPage(response, request, seed) {
   const html=String(body.body||'').slice(0,262144)
     .replace(/<(script|style|noscript|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi,' ')
     .replace(/<!--[\s\S]*?-->/g,' ');
-  let text=decodeResearchText(html.replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim();
-  const contacts=[], professional_links=[];
+  let text=decodeResearchText(html.replace(/<(header|nav|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim();
+  const contacts=[], professional_links=[],company_links=[];
   if (final.host===seed.company.domain) {
+    for(const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      const href=decodeResearchText(match[1]),label=decodeResearchText(match[2].replace(/<[^>]*>/g,' '));
+      if(!/(management|leadership|board|directors?|executive|founders?|partners?|our.people|our.team|contact|enquir)/i.test(href+' '+label))continue;
+      const origin=final.url.match(/^https?:\/\/[^/]+/)[0];
+      const absolute=/^https?:\/\//i.test(href)?href:href.startsWith('/')&&!href.startsWith('//')?origin+href:!/^([a-z]+:|#|\/\/)/i.test(href)?final.url.replace(/[^/]*$/,'')+href:null;
+      const link=absolute&&publicResearchUrl(absolute);
+      if(link&&link.host===final.host&&company_links.length<20&&!/\.(pdf|zip|png|jpg|jpeg|svg)(?:$|\?)/i.test(link.url))company_links.push({url:link.url,people:/(management|leadership|board|directors?|executive|founders?|partners?|our.people|our.team)/i.test(href+' '+label)});
+    }
     for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
       const link=publicResearchUrl(decodeResearchText(match[1]));
       const label=decodeResearchText(match[2].replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,150);
@@ -124,7 +145,7 @@ function cleanResearchPage(response, request, seed) {
   if (text.length<100) return {url:request.url,failed:true,failure_reason:'INSUFFICIENT_PAGE_TEXT'};
   return {url:final.url,source_type:'WEBSITE',title:decodeResearchText((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||final.host).trim().slice(0,250),
     evidence:text,confidence:final.host===seed.company.domain?90:65,observed_at:new Date().toISOString(),
-    origin:'FETCHED_PAGE',official:final.host===seed.company.domain,professional_links};
+    origin:'FETCHED_PAGE',official:final.host===seed.company.domain,professional_links,company_links};
 }
 
 function assembleResearchEvidence(seed, searches, pages, settings) {
@@ -219,4 +240,4 @@ function validateResearchExtraction(response, evidence, llm, completion) {
 }
 
 if (typeof module !== 'undefined') module.exports={publicResearchUrl,researchSeed,researchQueries,researchSearchSources,
-  selectResearchUrls,cleanResearchPage,assembleResearchEvidence,validateResearchExtraction};
+  selectResearchUrls,followResearchUrls,cleanResearchPage,assembleResearchEvidence,validateResearchExtraction};

@@ -10,6 +10,14 @@ const seed={company:{name:'Acme Logistics Sdn Bhd',domain:'acme.com',country_cod
 const person={name:'Jane Tan',job_title:'Operations Manager',source_urls:['https://acme.com/team'],linkedin_url:null};
 const result=()=>({research_id:'r',lead_id:'l',research_outcome:'COMPLETED',research_payload:{company_facts:{people:[{...person}]}}});
 const queries=()=>P.peopleQueries(result(),seed,'MY');
+test('profile queries use company brand without legal suffix while retaining name and company checks',()=>{
+  assert.match(queries()[0].query,/"acme logistics"/);
+  assert.ok(!queries()[0].query.includes('Sdn Bhd'));
+  const accounting=P.peopleQueries(result(),{company:{name:'3E Accounting PLT',country_code:'MY'}},'MY');
+  assert.match(accounting[0].query,/"3e accounting"/);
+  const matched=P.enrichPeopleProfiles(result(),{company:{name:'3E Accounting PLT'}},[{statusCode:200,body:{web:{results:[{url:'https://www.linkedin.com/in/jane-tan',title:'Jane Tan - Operations Manager - 3E Accounting'}]}}}],accounting,{sources:[]});
+  assert.equal(matched.result.research_payload.company_facts.people[0].linkedin_url,'https://www.linkedin.com/in/jane-tan');
+});
 const profile=(url='https://www.linkedin.com/in/jane-tan',title='Jane Tan - Operations Manager - Acme Logistics')=>({url,title,description:'Professional experience and business profile.'});
 const response=(...results)=>({statusCode:200,body:{web:{results}}});
 const enrich=(responses,evidence={sources:[]})=>P.enrichPeopleProfiles(result(),seed,responses,queries(),evidence);

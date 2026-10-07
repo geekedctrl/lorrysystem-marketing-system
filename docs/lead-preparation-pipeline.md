@@ -183,3 +183,10 @@ score and current pipeline matches before using the new drafting control. Small
 bounded catalogs (one to thirty active products) are supported; missing or
 oversized catalogs stop preparation. Score quality depends on evidence and the
 workspace ICP/product descriptions, so teams should calibrate it on real leads.
+
+
+## MVP1 calibration and approval freshness
+
+Positive operational-need points must cite a saved OBSERVED PAIN_POINT; buying-signal points must cite a saved OBSERVED SIGNAL. Existing-system/service citations and inferred hypotheses do not establish unmet need or buying intent. The shared n8n validator and API completion path remove unsupported points and explain the adjustment instead of failing valid company-fit research. Research prompts distinguish reported gaps and procurement/change signals from ordinary capabilities. Human review remains necessary for semantic quality.
+
+Generated drafts remain tied to their research, current score, reviewed contact and ICP/catalog context. Changed preparation makes a prior generated draft stale: approval is blocked, the review page explains why, and request-changes/rejection remain available. Historical drafts are retained; manual drafts continue through existing human review. The same check protects an already-approved generated email before a future handoff. SMTP acceptance testing is currently deferred at the user request.

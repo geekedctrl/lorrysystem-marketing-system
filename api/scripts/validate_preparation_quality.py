@@ -254,7 +254,22 @@ for _ in companies:
                         "source_urls": [c["url"]],
                         "confidence": 90,
                     }
-                ],
+                ]
+                + (
+                    [
+                        {
+                            "category": category,
+                            "fact": "Manual workflow causes recurring delays; operational software is being evaluated.",
+                            "evidence_status": "OBSERVED",
+                            "evidence_quote": "Our manual workflow causes recurring delays; we are evaluating operational software.",
+                            "source_urls": [c["url"]],
+                            "confidence": 90,
+                        }
+                        for category in ("PAIN_POINT", "SIGNAL")
+                    ]
+                    if c["scenario"] == "documented_need"
+                    else []
+                ),
             },
         },
         lease(job),
@@ -280,6 +295,11 @@ for stage, count in [("SCORING", 4), ("MATCHING", 2), ("DRAFTING", 2)]:
                             r["max_points"]
                             if c["scenario"] == "documented_need"
                             or r["criterion"] in ("icp_fit", "evidence_quality")
+                            or (
+                                c["scenario"] == "existing_system"
+                                and r["criterion"]
+                                in ("operational_need", "buying_signals")
+                            )
                             else 0
                         ),
                         "rationale": (
@@ -291,6 +311,11 @@ for stage, count in [("SCORING", 4), ("MATCHING", 2), ("DRAFTING", 2)]:
                             evidence
                             if c["scenario"] == "documented_need"
                             or r["criterion"] in ("icp_fit", "evidence_quality")
+                            or (
+                                c["scenario"] == "existing_system"
+                                and r["criterion"]
+                                in ("operational_need", "buying_signals")
+                            )
                             else []
                         ),
                     }
@@ -350,6 +375,64 @@ for lead_id, c in companies.items():
     assert all(a["status"] == "PENDING_APPROVAL" for a in actions)
     other = next(p for p in products if p is not c["product"])
     call("GET", f"/api/leads/{lead_id}", headers=other["headers"], expected=404)
+    if c["scenario"] == "documented_need":
+        aid = c["draft"]
+        headers = c["product"]["headers"]
+        assert call("GET", f"/api/actions/{aid}/review-context", headers=headers)[
+            "current"
+        ]
+        call(
+            "GET",
+            f"/api/actions/{aid}/review-context",
+            headers=other["headers"],
+            expected=404,
+        )
+        call(
+            "POST",
+            f"/api/leads/{lead_id}/scores",
+            {
+                "total_score": 0,
+                "score_breakdown": {},
+                "scoring_version": "mvp1-stale-test",
+                "rationale": "New evidence requires a fresh preparation review.",
+            },
+            headers,
+            201,
+        )
+        assert not call("GET", f"/api/actions/{aid}/review-context", headers=headers)[
+            "current"
+        ]
+        approval = call("GET", f"/api/actions/{aid}/approvals", headers=headers)[0]
+        call(
+            "PATCH",
+            f"/api/approvals/{approval['id']}/approve",
+            {"decided_by": "MVP1 test"},
+            headers,
+            409,
+        )
+        if c["product"] is products[0]:
+            call(
+                "PATCH",
+                f"/api/approvals/{approval['id']}/request-changes",
+                {
+                    "decided_by": "MVP1 test",
+                    "reviewer_notes": "Prepare a new draft from the current score.",
+                },
+                headers,
+            )
+        elif os.getenv("EXPORT_QUALITY_REVIEW") == "true":
+            from pathlib import Path
+
+            Path("/tmp/mvp1-quality-review.json").write_text(
+                json.dumps(
+                    {
+                        "email": email,
+                        "password": password,
+                        "workspace_id": c["product"]["wid"],
+                        "approval_id": approval["id"],
+                    }
+                )
+            )
 print(
     "PASS six synthetic companies across fleet/accounting: documented need reaches pending approval; existing-system/no-need stops below threshold; missing contact stops for review; unsupported promises and cross-product access rejected. No live providers or sends."
 )

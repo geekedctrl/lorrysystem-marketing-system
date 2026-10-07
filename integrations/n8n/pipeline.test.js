@@ -19,6 +19,15 @@ test('existing systems are not buying intent and drafts reject unsupported impro
   assert.equal(validate(draft,'DRAFTING').failure_reason,'UNSUPPORTED_DRAFT_CLAIM');
   assert.equal(validate({...draft,content:'Your public fleet operations caught our attention. Would you be open to discussing how you currently coordinate them?'},'DRAFTING').pipeline_outcome,'VALID');
 });
+test('opportunity points require observed research facts rather than existing-system citations',()=>{
+  const ctx={...context,rubric:[{criterion:'operational_need',max_points:30},{criterion:'buying_signals',max_points:10}]};
+  const proposal={components:ctx.rubric.map(r=>({...r,points:r.max_points,rationale:'Existing system supports this criterion.',evidence:[citation]})),rationale:'Company has a related system already in use.',gaps:[]};
+  const run=research=>R.validatePipelineOutput(response(proposal),job,{...ctx,research},completionContent);
+  assert.deepEqual(run(ctx.research).output.components.map(c=>c.points),[0,0]);
+  const facts=['PAIN_POINT','SIGNAL'].map(category=>({category,evidence_status:'OBSERVED',evidence_quote:quote,source_urls:[url]}));
+  assert.deepEqual(run({...ctx.research,company_facts:{facts}}).output.components.map(c=>c.points),[30,10]);
+  assert.deepEqual(run({...ctx.research,company_facts:{facts:facts.map(f=>({...f,evidence_status:'INFERRED'}))}}).output.components.map(c=>c.points),[0,0]);
+});
 test('context rejects foreign workspaces, contacts, catalogs and stale research before model work',()=>{
   assert.equal(R.validatePipelineContext(context,job,workspace),context);
   for(const modified of [{...context,run:{...context.run,workspace_id:'foreign'}},{...context,contact:{id:'foreign'}},{...context,products:[{id:'foreign',code:'MAIN'}]},{...context,research:{...context.research,research_status:'RUNNING'}}])assert.throws(()=>R.validatePipelineContext(modified,job,workspace),/context/);

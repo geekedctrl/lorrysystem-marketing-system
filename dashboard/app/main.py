@@ -1594,10 +1594,11 @@ async def approval_detail(
         snapshot = approval.get("content_snapshot") or {}
         from uuid import uuid4
         action_id = approval["marketing_action_id"]
-        action, delivery, senders = await asyncio.gather(
+        action, delivery, senders, review_context = await asyncio.gather(
             safe_get(f"/api/actions/{action_id}", None),
             safe_get(f"/api/actions/{action_id}/delivery", None),
             safe_get("/api/senders", []),
+            safe_get(f"/api/actions/{action_id}/review-context", {"current": True, "reason": None}),
         )
 
         lead = None
@@ -1622,6 +1623,7 @@ async def approval_detail(
                 "lead": lead,
                 "company": company,
                 "action": action,
+                "review_context": review_context,
                 "delivery": delivery,
                 "senders": senders,
                 "send_request_id": str(uuid4()),

@@ -9,6 +9,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.marketing import MarketingAction
 from app.schemas.marketing_action import (
     MarketingActionCreate,
     MarketingActionRead,
@@ -32,6 +33,15 @@ from app.services.marketing_action_service import (
 router = APIRouter(
     tags=["Marketing Actions"],
 )
+
+
+@router.get("/api/actions/{action_id}/review-context")
+def action_review_context(action_id: UUID, db: Session = Depends(get_db)):
+    action = db.get(MarketingAction, action_id)
+    if not action:
+        raise HTTPException(404, "Marketing action not found")
+    from app.services.preparation_review import review_context
+    return review_context(db, action)
 
 
 @router.post(

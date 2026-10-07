@@ -4,7 +4,7 @@
 function workflowUsage(node) {
   const items=name=>{try{return node(name).all().map(item=>item.json);}catch{return [];}};
   const searches=['Search New Companies','Search Research Evidence','Search Professional Profiles'].flatMap(items);
-  const pages=['Fetch New Company Page','Fetch Guarded Research Page'].flatMap(items);
+  const pages=['Fetch New Company Page','Fetch Guarded Research Page','Fetch Official Contact Page'].flatMap(items);
   const models=['xKiro Product Targeting','xKiro Discovery Extraction','xKiro Research Extraction','xKiro Stage Extraction'].flatMap(items);
   const ok=value=>!value.error&&(!value.statusCode||value.statusCode===200)&&!(value.body??value).error;
   const usage=models.map(value=>(value.body??value).usage);

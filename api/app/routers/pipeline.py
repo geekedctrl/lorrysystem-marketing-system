@@ -47,7 +47,7 @@ DEFAULT_RUBRIC = [
         "criterion": "operational_need",
         "label": "Operational need",
         "max_points": 30,
-        "description": "Observed operations and supported needs relevant to this workspace",
+        "description": "Explicit unmet problem or gap, cited from an OBSERVED PAIN_POINT; existing systems and inferred hypotheses earn zero",
     },
     {
         "criterion": "scale",
@@ -59,7 +59,7 @@ DEFAULT_RUBRIC = [
         "criterion": "buying_signals",
         "label": "Buying signals",
         "max_points": 10,
-        "description": "Observed changes or activity; do not treat research hypotheses as confirmed intent",
+        "description": "Explicit procurement intention or relevant change cited from an OBSERVED SIGNAL; routine capabilities and hypotheses earn zero",
     },
     {
         "criterion": "evidence_quality",
@@ -990,6 +990,26 @@ def complete(run_id: UUID, data: Complete, db=Depends(get_db)):
                         "Positive score points require evidence and cannot exceed their weight",
                     )
                 verify_evidence(component.evidence, sources)
+                category = {"operational_need": "PAIN_POINT", "buying_signals": "SIGNAL"}.get(component.criterion)
+                if category and component.points > 0:
+                    facts = research.company_facts.get("facts", [])
+                    if not isinstance(facts, list):
+                        facts = []
+                    supported = any(
+                        isinstance(fact, dict) and fact.get("category") == category
+                        and fact.get("evidence_status") == "OBSERVED"
+                        and isinstance(fact.get("evidence_quote"), str)
+                        and len(normalized(fact["evidence_quote"])) >= 8
+                        and isinstance(fact.get("source_urls"), list)
+                        and citation.source_url in fact["source_urls"]
+                        and normalized(fact["evidence_quote"]) in normalized(citation.evidence_quote)
+                        for fact in facts for citation in component.evidence
+                    )
+                    if not supported:
+                        component.points = 0
+                        component.evidence = []
+                        component.rationale = "No cited observed unmet need or buying signal is supported by saved research. Existing capabilities and inferred hypotheses earn no points."
+                        output.rationale = "Score calculated from saved research evidence. Unsupported unmet-need or buying-signal points were removed; capability relevance does not establish purchase intent."
             total = sum(c.points for c in output.components)
             saved = create_score(
                 db,

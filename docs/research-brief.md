@@ -31,3 +31,8 @@ Validation includes 34 n8n tests, five presentation regressions and the disposab
 research API/dashboard suite. Browser verification at desktop and mobile widths
 checks evidence expansion, citation targets, history selection, queued-report
 fallback and horizontal overflow.
+
+
+## Official contact-page coverage
+
+Research reserves up to two slots inside its existing page-fetch limit for links found on official company pages. Management, leadership, board and director pages are prioritized ahead of contact/enquiry pages. Follow-up URLs must remain on the fetched company host, pass the guarded public-fetch path, and be deduplicated against initial requests. No recursive crawl is performed. Both passes count toward the same fetch budget and usage metrics. Repeated header/navigation/footer text is removed from page evidence while published mail/tel links remain available. Contact selection still requires a named company-linked person with supported individual profile or business email; missing contacts stop for human review.
