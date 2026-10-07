@@ -67,3 +67,20 @@ test('guarded redirects use the fetched company domain for acceptance and discov
   const result=vm.runInNewContext('(function(){'+node.parameters.jsCode+'})()',{$input:{all:()=>[input]},$:()=>({all:()=>[{json:{url:'https://oldcompany.com/',domain:'oldcompany.com'}}]})});
   assert.equal(result[0].json.domain,'newcompany.com');assert.equal(result[0].json.url,'https://newcompany.com/');
 });
+
+test('setup and discovery accept fenced JSON while rejecting prose and invalid schemas',()=>{
+  const response=content=>({choices:[{finish_reason:'stop',message:{content}}]});
+  const output={discovery_query:'Logistics fleets Malaysia',icps:[{name:'Transport operators',description:'Commercial vehicle operators needing supported fleet solutions'}]};
+  assert.equal(setupResult(response('  ```json\n'+JSON.stringify(output)+'\n```  '),completionContent).shared_outcome,'COMPLETED');
+  assert.equal(setupResult(response('Here is the answer: '+JSON.stringify(output)),completionContent).shared_outcome,'FAILED');
+  assert.equal(setupResult(response('```json\n'+JSON.stringify({...output,sending:true})+'\n```'),completionContent).shared_outcome,'FAILED');
+  const result=discoveryResults(response('```json\n{"candidates":[]}\n```'),[],{},job(),completionContent);
+  assert.equal(result[0].shared_outcome,'COMPLETED');
+});
+
+test('shared discovery declares the Accept header required by Brave Search',()=>{
+ const search=sharedChildren(binding).discovery.nodes.find(n=>n.name==='Search New Companies');
+ assert.equal(search.parameters.sendHeaders,true);
+ assert.ok(search.parameters.headerParameters.parameters.some(h=>h.name==='Accept' && h.value==='application/json'));
+ assert.deepEqual(search.credentials.httpHeaderAuth,binding.brave_credential);
+});

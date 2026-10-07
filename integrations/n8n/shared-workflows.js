@@ -59,7 +59,7 @@ function setupChild(input){
 function discoveryChild(input){
   const b=binding(input),nodes=head(b,false);
   nodes.push(http(b,'Load Discovery Memory','/api/automation/memory'),
-    http(b,'Search New Companies','',{url:'https://api.search.brave.com/res/v1/web/search',credential:b.brave_credential,soft:true,query:[
+    http(b,'Search New Companies','',{url:'https://api.search.brave.com/res/v1/web/search',credential:b.brave_credential,soft:true,headers:[{name:'Accept',value:'application/json'}],query:[
       {name:'q',value:"={{ $('Workspace Guard').first().json.query }}"},{name:'country',value:"={{ $('Workspace Guard').first().json.workspace_context.settings.country_code || 'MY' }}"},{name:'count',value:'20'}]}),
     code('Select New Company Pages',`${runtime}\n${research}\nconst job=$('Shared Job Input').first().json;return discoveryPages($json,$('Load Discovery Memory').first().json,job,publicResearchUrl).map(json=>({json}));`),
     gate('Has New Page?','={{ !$json.no_fetch }}'),

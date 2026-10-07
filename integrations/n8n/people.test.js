@@ -45,6 +45,14 @@ test('professional social handle requires name, company and researched role',()=
   const p=value.result.research_payload.company_facts.people[0];
   assert.equal(p.professional_profiles[0].platform,'X');assert.equal(p.professional_profiles[0].handle,'jane');
 });
+test('related-person mentions in another profile snippet do not create identity matches',()=>{
+  const unrelated=profile('https://linkedin.com/in/sarah','Sarah Shaari - Quanterm Logistics');
+  unrelated.description='Jane Tan is Operations Manager at Acme Logistics, mentioned in a post.';
+  const p=enrich([response(profile(),unrelated),response()]).result.research_payload.company_facts.people[0];
+  assert.equal(p.profile_search_status,'MATCHED');
+  assert.equal(p.professional_profiles.length,1);
+  assert.equal(p.linkedin_url,'https://www.linkedin.com/in/jane-tan');
+});
 test('conflicting matches are retained for review without selecting a LinkedIn identity',()=>{
   const value=enrich([response(profile(),profile('https://linkedin.com/in/jane-other')),response()]);
   const p=value.result.research_payload.company_facts.people[0];
@@ -66,10 +74,19 @@ test('search outages retain company research and never save raw provider errors'
 test('known primary contacts get an affiliation query and people snippets retain title evidence',()=>{
   const q=R.researchQueries({...seed,known_contact:{name:'Jane Tan'}},'MY');
   assert.equal(q.length,3);assert.ok(q[2].query.includes('Jane Tan'));
+  assert.ok(q[1].query.startsWith('site:acme.com '),'people research prioritizes the official leadership page');
   const sources=R.researchSearchSources([response(profile())],[{purpose:'KNOWN_PERSON'}]);
   assert.ok(sources[0].evidence.includes('Jane Tan'));assert.equal(sources[0].confidence,55);
+  assert.equal(sources[0].search_purpose,'KNOWN_PERSON');
   const long=P.peopleQueries(result(),{company:{name:'c'.repeat(200)}},'MY');
   assert.ok(long.every(value=>value.query.length<400));
+});
+test('bounded page selection reserves official people evidence ahead of general search pages',()=>{
+  const searches=Array.from({length:10},(_,i)=>({url:`https://acme.com/service-${i}`,search_purpose:'COMPANY'}));
+  searches.push({url:'https://acme.com/leadership',search_purpose:'PEOPLE'});
+  const pages=R.selectResearchUrls({...seed,company:{...seed.company,website_url:'https://acme.com/'},sources:[]},searches,6);
+  assert.equal(pages.length,6);
+  assert.ok(pages.some(page=>page.url==='https://acme.com/leadership'));
 });
 test('HTML profiles are retained only from official visible named links within evidence budget',()=>{
   const url='https://acme.com/team';
@@ -88,6 +105,9 @@ test('n8n sandbox has no Node dependency and new graph uses existing Brave and s
   const binding=JSON.parse(fs.readFileSync(require.resolve('./research-binding.example.json'),'utf8'));
   const graph=researchChild(binding);
   assert.deepEqual(graph.nodes.find(n=>n.name==='Search Professional Profiles').credentials.httpHeaderAuth,binding.brave_credential);
+  for(const name of ['Search Research Evidence','Search Professional Profiles']) {
+    assert.deepEqual(graph.nodes.find(n=>n.name===name).parameters.options.batching,{batch:{batchSize:1,batchInterval:1500}});
+  }
   assert.equal(graph.connections['Research Findings Valid?'].main[0][0].node,'People Search Queries');
   assert.equal(graph.connections['Save Profile Source'].main[0][0].node,'Prepare Enriched Research');
 });

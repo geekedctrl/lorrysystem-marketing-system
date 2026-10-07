@@ -30,7 +30,7 @@ function http(name,url,auth,{method='GET',body,full=false,soft=false,timeout=150
       sendHeaders:true,headerParameters:{parameters:headers},
       ...(query?{sendQuery:true,queryParameters:{parameters:query}}:{}),
       ...(body?{sendBody:true,specifyBody:'json',jsonBody:body}:{}),
-      options:{timeout,redirect:{redirect:{followRedirects:false}},response:{response:{responseFormat:'json',fullResponse:full,neverError:soft}}}},
+      options:{timeout,...(url==='https://api.search.brave.com/res/v1/web/search'?{batching:{batch:{batchSize:1,batchInterval:1500}}}:{}),redirect:{redirect:{followRedirects:false}},response:{response:{responseFormat:'json',fullResponse:full,neverError:soft}}}},
     credentials:{httpHeaderAuth:auth},...(soft?{onError:'continueRegularOutput'}:{})};
 }
 function gate(name,expression) {
