@@ -58,6 +58,25 @@ class SetupOutput(Strict):
     icps: list[ICPProposal] = Field(min_length=1, max_length=5)
 
 
+class CatalogOffering(Offering):
+    code: str = Field(pattern=r"^[A-Z0-9_]+$", max_length=80)
+
+
+class CatalogICP(ICPProposal):
+    code: str = Field(pattern=r"^[A-Z0-9_]+$", max_length=80)
+    qualification_rules: dict = Field(default_factory=dict)
+
+
+class CatalogImport(Strict):
+    source: str = Field(min_length=3, max_length=300)
+    product_type: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=20, max_length=5000)
+    target_customers: str = Field(max_length=2000)
+    discovery_query: str = Field(min_length=3, max_length=300)
+    products: list[CatalogOffering] = Field(min_length=1, max_length=30)
+    icps: list[CatalogICP] = Field(min_length=1, max_length=30)
+
+
 class WorkerCreate(Strict):
     name: str = Field(min_length=3, max_length=100)
 
@@ -244,6 +263,70 @@ def activate(data: ProductSetup, db=Depends(get_db)):
     )
     db.commit()
     return plan(db)
+
+
+@router.post("/catalog-import")
+def import_catalog(data: CatalogImport, db=Depends(get_db)):
+    principal = admin()
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('shared-automation-claim',0))"))
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+               {"key": f"onboarding:{principal.workspace_id}"})
+    from app.models.pipeline import PipelineRun
+    if (db.scalar(select(AutomationJob.id).where(AutomationJob.status.in_(("PENDING", "RUNNING"))).limit(1))
+        or db.scalar(select(PipelineRun.id).where(PipelineRun.status.in_(("PENDING", "RUNNING"))).limit(1))
+        or db.scalar(select(LeadResearch.id).where(LeadResearch.research_status.in_(("PENDING", "RUNNING"))).limit(1))):
+        raise HTTPException(409, "Finish current product jobs before importing catalog context")
+    row = db.scalar(select(ProductAutomationPlan).with_for_update())
+    if not row:
+        raise HTTPException(409, "Set up this product before importing its catalog")
+    for entries in (data.products, data.icps):
+        if len({e.code for e in entries}) != len(entries) or len({e.name.casefold() for e in entries}) != len(entries):
+            raise HTTPException(422, "Catalog codes and names must be distinct")
+    from app.routers.pipeline import scoring_rubric
+    for proposal in data.icps:
+        scoring_rubric(ICPProfile(qualification_rules=proposal.qualification_rules))
+    selected_products = []
+    selected_icps = []
+    for model, entries, selected in ((Product, data.products, selected_products), (ICPProfile, data.icps, selected_icps)):
+        existing = list(db.scalars(select(model)))
+        for entry in entries:
+            item = next((i for i in existing if i.code == entry.code), None)
+            if model is Product and entry.id:
+                item = db.get(Product, entry.id)
+                if not item:
+                    raise HTTPException(404, "Workspace catalog item not found")
+                if any(i.code == entry.code and i.id != item.id for i in existing):
+                    raise HTTPException(409, "Catalog code belongs to another offering")
+            if not item:
+                item = model(code=entry.code, name=entry.name)
+                db.add(item)
+            if item in selected:
+                raise HTTPException(422, "An offering cannot be imported twice")
+            item.code, item.name, item.description, item.active = entry.code, entry.name, entry.description, True
+            if model is ICPProfile:
+                item.qualification_rules = entry.qualification_rules
+            selected.append(item)
+        for item in existing:
+            if item not in selected:
+                item.active = False
+    db.flush()
+    row.profile = {**row.profile, "product_type": data.product_type, "description": data.description,
+                   "target_customers": data.target_customers,
+                   "products": [{"id": str(p.id), "name": p.name, "description": p.description} for p in selected_products]}
+    row.configuration = {"discovery_query": data.discovery_query,
+                         "icps": [{"name": i.name, "description": i.description} for i in selected_icps],
+                         "catalog_source": data.source}
+    row.state = "ACTIVE"
+    db.add(Event(event_type="product_catalog_imported", entity_type="WORKSPACE", entity_id=principal.workspace_id,
+                 actor_type="USER", actor_id=principal.actor,
+                 metadata_json={"source": data.source, "products": len(selected_products), "icps": len(selected_icps)}))
+    db.commit()
+    with ControlSession() as settings_db:
+        workspace = settings_db.get(Workspace, principal.workspace_id)
+        workspace.settings = {**workspace.settings, "description": data.description}
+        settings_db.commit()
+    db.commit()
+    return {"source": data.source, "products": len(selected_products), "icps": len(selected_icps), "enabled": row.enabled}
 
 
 @router.post("/pause")

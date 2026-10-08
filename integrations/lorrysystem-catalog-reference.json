@@ -1,0 +1,420 @@
+{
+  "source": "Lorry_System_Solutions_and_ICPs.docx — 6 October 2026",
+  "product_type": "Fleet safety, transport management and logistics workflow digitalisation",
+  "description": "Lorry System provides AI dashcams and driver safety monitoring, GPS fleet telematics and Transport Management System workflows. Additional offerings include configured live vehicle/cargo cameras, consolidation and multi-drop delivery, and scoped fleet administration. Plant/weighbridge, waste transport and integration solutions are custom implementations subject to requirements. Fuel sensors, TPMS and alcohol detectors are not promoted until availability and supported configurations are confirmed. No guaranteed improvements, savings or deployment coverage are promised.",
+  "target_customers": "Proposed Malaysian segments: transport/haulage; 3PL; manufacturers, distributors and retailers; premix/quarry/concrete/construction materials; waste/environmental services; bus/passenger operators; high-value/sensitive cargo transport. Segment by operational need and verified buying authority. Fleet size is not an eligibility threshold. Subcontract-only operators can fit TMS; camera/telematics installation requires owned, leased or authorised vehicles. Record existing systems and their documented gaps; do not infer demand from existing GPS use.",
+  "discovery_query": "Malaysia transport haulage logistics 3PL distribution bus quarry concrete waste collection company",
+  "products": [
+    {
+      "code": "AI_DASHCAM",
+      "name": "AI dashcams and driver safety monitoring",
+      "description": "ADAS road safety alerts; DMS fatigue and distraction monitoring; two-channel and four-channel camera configurations; incident photos and videos. Intended problems: Unsafe driving, limited incident evidence, disputed accident claims, and difficulty monitoring driver behaviour. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "GPS",
+      "name": "GPS tracking and fleet telematics",
+      "description": "Vehicle location, journey history, overspeed alerts, driving event monitoring, and fleet visibility through web and mobile platforms. Intended problems: Limited visibility of vehicle movements, unauthorised use, and difficulty supervising distributed fleets. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "MDVR",
+      "name": "Live vehicle and cargo monitoring",
+      "description": "Live streaming, playback, intercom, and additional cameras for side, rear, or cargo visibility, depending on configuration. Intended problems: Cargo security concerns, delivery disputes, and difficulty verifying events during transit. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "TMS",
+      "name": "Transport Management System (TMS)",
+      "description": "Quotation, order management, trip assignment, driver and operator apps, electronic proof of delivery, invoicing, dashboards, and master data. Intended problems: Disconnected transport processes, manual dispatching, missing delivery documents, and delayed billing. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "CONSOLIDATION",
+      "name": "Consolidation and multi-drop delivery management",
+      "description": "Collection-to-warehouse workflows, consolidation planning, regional delivery assignment, multi-drop jobs, and end-to-end booking traceability. Intended problems: Difficulty tracking shipments across collection, warehouse handling, and final delivery. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "FLEET_ADMIN",
+      "name": "Fleet and driver administration",
+      "description": "Vehicle checklists, attendance, incident records, maintenance tracking, permit and inspection records, driver incentives, and trip expenses, according to project scope. Intended problems: Fragmented records, missed renewals, inconsistent inspections, and poor visibility of operating costs. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "PLANT_LOGISTICS",
+      "name": "Plant and weighbridge logistics digitalisation",
+      "description": "Custom workflows covering orders, truck arrival, queues, loading, weighing, dockets, delivery status, and customer notifications. Intended problems: Heavy reliance on WhatsApp, repeated data entry, loading errors, and limited visibility across plant operations. Custom implementation, subject to project requirements and scope; not a confirmed standard deployment-ready product. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "WASTE_TRANSPORT",
+      "name": "Waste collection and transport workflow systems",
+      "description": "Custom customer portals, orders, credit-check workflows, manifests, fleet records, driver incentives, expenses, and dashboards. Intended problems: Disconnected collection records, manual manifest handling, and limited coordination between customers and operations. Custom implementation, subject to project requirements and scope; not a confirmed standard deployment-ready product. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    },
+    {
+      "code": "CUSTOM_INTEGRATION",
+      "name": "Custom logistics workflow automation and integration",
+      "description": "Customer portals, operational dashboards, automated notifications, and interfaces with existing systems, subject to requirements. Intended problems: Repetitive communication, duplicate data entry, and operational information spread across multiple systems. Custom implementation, subject to project requirements and scope; not a confirmed standard deployment-ready product. Do not promise guaranteed safety, savings or improvements; establish the existing system and specific unmet gap first."
+    }
+  ],
+  "icps": [
+    {
+      "code": "TRANSPORT_HAULAGE",
+      "name": "Transport and haulage operators",
+      "description": "Malaysian companies operating trucks, prime movers, trailers, or delivery fleets; owners and managers actively involved in operations. Relevant needs to investigate (not assumed): Accident exposure, driver behaviour, disputed claims, fleet visibility, and manual dispatching. Best-fit solutions: AI dashcams, telematics, TMS, fleet administration. Buying roles: Owner, Managing Director, Operations Manager, Fleet Manager, Safety Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Malaysian companies operating trucks, prime movers, trailers, or delivery fleets; owners and managers actively involved in operations",
+        "pain_points_to_verify": "Accident exposure, driver behaviour, disputed claims, fleet visibility, and manual dispatching",
+        "best_fit_solutions": "AI dashcams, telematics, TMS, fleet administration",
+        "buying_roles": "Owner, Managing Director, Operations Manager, Fleet Manager, Safety Manager"
+      }
+    },
+    {
+      "code": "THIRD_PARTY_LOGISTICS",
+      "name": "Third-party logistics providers (3PLs)",
+      "description": "Companies coordinating transport, warehousing, subcontractors, consolidation, and multiple customers. Relevant needs to investigate (not assumed): Shipment traceability, subcontractor coordination, delivery updates, e-POD, and billing accuracy. Best-fit solutions: TMS, consolidation management, customer portals, telematics. Buying roles: Managing Director, COO, Head of Transport, Logistics Manager, IT Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Companies coordinating transport, warehousing, subcontractors, consolidation, and multiple customers",
+        "pain_points_to_verify": "Shipment traceability, subcontractor coordination, delivery updates, e-POD, and billing accuracy",
+        "best_fit_solutions": "TMS, consolidation management, customer portals, telematics",
+        "buying_roles": "Managing Director, COO, Head of Transport, Logistics Manager, IT Manager"
+      }
+    },
+    {
+      "code": "MANUFACTURING_DISTRIBUTION_RETAIL",
+      "name": "Manufacturers, distributors, and retailers",
+      "description": "Businesses moving goods through their own vehicles, contracted transporters, or a mixed fleet. Relevant needs to investigate (not assumed): Delivery visibility, transporter accountability, customer complaints, and missing delivery evidence. Best-fit solutions: TMS, customer portals, e-POD, telematics and cameras for owned or authorised vehicles. Buying roles: Supply Chain Director, Logistics Manager, Distribution Manager, Operations Director.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Businesses moving goods through their own vehicles, contracted transporters, or a mixed fleet",
+        "pain_points_to_verify": "Delivery visibility, transporter accountability, customer complaints, and missing delivery evidence",
+        "best_fit_solutions": "TMS, customer portals, e-POD, telematics and cameras for owned or authorised vehicles",
+        "buying_roles": "Supply Chain Director, Logistics Manager, Distribution Manager, Operations Director"
+      }
+    },
+    {
+      "code": "PLANT_MATERIALS",
+      "name": "Premix, quarry, concrete, and construction-material operators",
+      "description": "Plants managing frequent truck movements, weighing, loading, and site deliveries. Relevant needs to investigate (not assumed): Truck queues, order changes, wrong loads, weighbridge coordination, and WhatsApp-based communication. Best-fit solutions: Plant logistics systems, weighbridge integration, scheduling, dashboards, notifications. Buying roles: Owner, General Manager, Plant Manager, Planning Manager, Logistics Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Plants managing frequent truck movements, weighing, loading, and site deliveries",
+        "pain_points_to_verify": "Truck queues, order changes, wrong loads, weighbridge coordination, and WhatsApp-based communication",
+        "best_fit_solutions": "Plant logistics systems, weighbridge integration, scheduling, dashboards, notifications",
+        "buying_roles": "Owner, General Manager, Plant Manager, Planning Manager, Logistics Manager"
+      }
+    },
+    {
+      "code": "WASTE_ENVIRONMENTAL",
+      "name": "Waste collection and environmental-service companies",
+      "description": "Operators managing customer collections, transport fleets, manifests, and recurring service jobs. Relevant needs to investigate (not assumed): Collection scheduling, manifest traceability, fleet availability, expenses, and customer reporting. Best-fit solutions: Waste transport workflow systems, fleet administration, portals, telematics. Buying roles: Managing Director, Operations Manager, Fleet Manager, Compliance Manager, Finance Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Operators managing customer collections, transport fleets, manifests, and recurring service jobs",
+        "pain_points_to_verify": "Collection scheduling, manifest traceability, fleet availability, expenses, and customer reporting",
+        "best_fit_solutions": "Waste transport workflow systems, fleet administration, portals, telematics",
+        "buying_roles": "Managing Director, Operations Manager, Fleet Manager, Compliance Manager, Finance Manager"
+      }
+    },
+    {
+      "code": "BUS_PASSENGER",
+      "name": "Bus and passenger transport operators",
+      "description": "Operators of public, charter, school, employee, or tourist buses. Relevant needs to investigate (not assumed): Driver fatigue, passenger safety, incident investigation, and fleet supervision. Best-fit solutions: AI driver monitoring, multi-camera MDVR, GPS tracking. Buying roles: Owner, Operations Director, Fleet Manager, Safety Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Operators of public, charter, school, employee, or tourist buses",
+        "pain_points_to_verify": "Driver fatigue, passenger safety, incident investigation, and fleet supervision",
+        "best_fit_solutions": "AI driver monitoring, multi-camera MDVR, GPS tracking",
+        "buying_roles": "Owner, Operations Director, Fleet Manager, Safety Manager"
+      }
+    },
+    {
+      "code": "HIGH_VALUE_CARGO",
+      "name": "High-value or sensitive cargo transporters",
+      "description": "Fleets carrying electronics, valuable goods, or cargo requiring close supervision. Relevant needs to investigate (not assumed): Cargo loss, tampering, disputed handovers, and customer assurance. Best-fit solutions: Cargo cameras, live monitoring, GPS, e-POD. Buying roles: Managing Director, Transport Manager, Security Manager, Logistics Manager.",
+      "qualification_rules": {
+        "geography": "Malaysia within confirmed installation and support coverage; coverage must be confirmed, not assumed nationwide.",
+        "fleet_ownership_categories": [
+          "owned",
+          "leased",
+          "subcontracted",
+          "mixed",
+          "unknown"
+        ],
+        "fleet_size_bands": [
+          "1–9",
+          "10–49",
+          "50–100"
+        ],
+        "fleet_size_rule": "Proposed campaign segmentation only, not an eligibility threshold; record larger fleets without exclusion.",
+        "ownership_rule": "Subcontract-only businesses can fit TMS. Cameras and telematics require owned, leased or authorised vehicles.",
+        "operational_complexity": [
+          "multiple customers",
+          "plants",
+          "branches",
+          "drops",
+          "subcontractors",
+          "warehouse transfers"
+        ],
+        "current_working_methods": [
+          "WhatsApp",
+          "Excel",
+          "paper documents",
+          "telephone updates",
+          "disconnected systems"
+        ],
+        "buying_triggers": [
+          "recent incident",
+          "customer complaint",
+          "new contract",
+          "fleet expansion",
+          "system replacement",
+          "management-led digitalisation"
+        ],
+        "existing_solution_rule": "Record GPS, dashcam, TMS or ERP and the specific documented gap. Existing capability is not evidence of unmet need or buying intent.",
+        "readiness": "Unknown unless evidence supports willingness to demonstrate, trial or discuss a defined implementation.",
+        "profile_status": "Proposed marketing profiles for refinement, as stated in the reference document.",
+        "fit_description": "Fleets carrying electronics, valuable goods, or cargo requiring close supervision",
+        "pain_points_to_verify": "Cargo loss, tampering, disputed handovers, and customer assurance",
+        "best_fit_solutions": "Cargo cameras, live monitoring, GPS, e-POD",
+        "buying_roles": "Managing Director, Transport Manager, Security Manager, Logistics Manager"
+      }
+    }
+  ]
+}
