@@ -745,3 +745,7 @@ develop
 ```
 
 All active development should be performed through feature branches created from `develop`.
+
+## Campaign Strategist
+
+Mock-first campaign proposals, evidence, channel suggestions and human strategy review are documented in [Campaign Strategist](docs/campaign-strategist.md). Live creative generation and external delivery remain separate milestones. Engineering continuity starts at [AI handoff](docs/ai/HANDOFF.md).

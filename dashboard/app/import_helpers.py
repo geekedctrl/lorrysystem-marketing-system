@@ -7,6 +7,7 @@ import json
 import re
 import secrets
 import time
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,7 @@ EMAIL_FIND_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 URL_FIND_RE = re.compile(r"(?:https?://)?(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s]*)?", re.I)
 PHONE_FIND_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 
-IMPORT_DIR = Path("/tmp/lorrysystem-dashboard-imports")
+IMPORT_DIR = Path(tempfile.gettempdir()) / "lorrysystem-dashboard-imports"
 IMPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 

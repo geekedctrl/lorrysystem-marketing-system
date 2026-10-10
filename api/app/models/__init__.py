@@ -4,6 +4,7 @@ from app.models.pipeline import PipelineRun
 from app.models.automation import AutomationWorker, ProductAutomationPlan, AutomationJob
 from app.models.sending import SenderAccount, DeliveryAttempt, EmailSuppression
 from app.models.catalog import ICPProfile, Product
+from app.models.campaigns import CampaignProposal
 from app.models.companies import Company, Contact
 from app.models.discovery import (
     LeadCandidate,
@@ -24,6 +25,7 @@ from app.models.marketing import (
 
 
 __all__ = [
+    "CampaignProposal",
     "SenderAccount", "DeliveryAttempt", "EmailSuppression",
     "Product",
     "ICPProfile",

@@ -96,6 +96,15 @@ def check_business_permission(principal: Principal, request: Request):
     decision = request.url.path.startswith('/api/approvals/') and request.url.path.rsplit('/', 1)[-1] in (
         'approve', 'reject', 'request-changes')
     candidate_decision = request.url.path.startswith('/api/candidates/') and request.url.path.rsplit('/', 1)[-1] in ('accept', 'reject')
+    campaign_review = request.url.path.startswith('/api/campaign-proposals/') and request.url.path.endswith('/review')
+    if campaign_review:
+        if not principal.user_id or principal.role not in {'ADMIN', 'REVIEWER'}:
+            raise HTTPException(403, 'Strategy review requires a signed-in reviewer')
+        return
+    if '/campaign-proposals' in request.url.path:
+        if not principal.user_id or principal.role not in {'ADMIN', 'OPERATOR', 'REVIEWER'}:
+            raise HTTPException(403, 'Campaign proposals require a signed-in workspace editor')
+        return
     allowed = {'ADMIN', 'REVIEWER'} if decision else {'ADMIN', 'OPERATOR'} if candidate_decision else {'ADMIN', 'OPERATOR', 'SERVICE'}
     if principal.role not in allowed:
         raise HTTPException(403, 'Your workspace role does not allow this action')

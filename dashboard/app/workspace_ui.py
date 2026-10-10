@@ -68,7 +68,9 @@ class WorkspaceDashboardMiddleware(BaseHTTPMiddleware):
             ):
                 allowed = (
                     ("ADMIN", "REVIEWER")
-                    if path.startswith("/approvals/")
+                    if path.startswith("/approvals/") or (path.startswith("/campaign-proposals/") and path.endswith("/review"))
+                    else ("ADMIN", "OPERATOR", "REVIEWER")
+                    if path.startswith("/campaign-proposals/") or path.endswith("/campaign-proposals")
                     else ("ADMIN", "OPERATOR")
                 )
                 if selected["role"] not in allowed:
