@@ -14,8 +14,7 @@ Executed:
 - api/scripts/validate_product_automation.py — passed with PYTHONIOENCODING=utf-8; initial run failed only printing arrow under cp1252 after successful assertions.
 - api/scripts/validate_workspace_research.py — passed, including dashboard and worker lifecycle.
 - api/scripts/validate_lead_pipeline.py — passed, including dashboard, stale context and approvals.
-- api/scripts/validate_workspaces.py —183 checks passed after extending expected RLS table count22→23 for new campaign table. Earlier attempts lacked test root key, then hit stale count assertion; both corrected.
+- api/scripts/validate_workspaces.py —183 checks passed after extending expected RLS table count22→23 for new campaign table. Earlier attempts lacked synthetic test root key, then hit stale count assertion; both corrected.
 - compileall api/app dashboard/app database/migrations, CI YAML parse, git diff --check — passed.
 
-api/scripts/validate_campaign_http.py —62 checks passed against running API/dashboard in final lead rerun. CI executes the new suites; remote CI pending PR. No live model/search/SMTP calls. No viewport/browser visual check yet. Runtime AI quality, provider terms/pricing and production deployment remain unverified.
-
+api/scripts/validate_campaign_http.py —62 checks passed against running API/dashboard in final lead rerun. CI executes the new suites; remote CI https://github.com/geekedctrl/lorrysystem-marketing-system/actions/runs/38016958482 passed all stages on implementation commit 56e07de, including guarded migration rollback, SMTP mock regressions and all new campaign suites. No live model/search/SMTP calls. No viewport/browser visual check yet. Runtime AI quality, provider terms/pricing and production deployment remain unverified.
