@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Campaign Proposal · {{ current_workspace.name }}{% endblock %}
+{% block page_heading %}<h1>Campaign proposal</h1><p>Review the evidence, strategy and channel copy.</p>{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="/leads/{{ proposal.lead_id }}">← Back to lead</a></div>
+{% if request.query_params.get('saved') %}<div class="alert success">Proposal changes saved.</div>{% endif %}
+{% if request.query_params.get('error') %}<div class="alert error" role="alert">{{ request.query_params.get('error') }}</div>{% endif %}
+<div class="alert">Mock preview · Suggested channel copy is unverified and needs human review. This proposal has not sent or published anything. Strategy review does not approve an outbound message or authorize delivery.</div>
+{% set strategy = proposal.strategy %}
+<section class="card section-card">
+  <div class="card-head"><h2>Strategy</h2><span class="badge">{{ proposal.status }} · Version {{ proposal.version }}</span></div>
+  <dl class="details"><div><dt>Objective</dt><dd>{{ strategy.objective }}</dd></div><div><dt>Positioning</dt><dd>{{ strategy.positioning }}</dd></div><div><dt>Provider</dt><dd>{{ proposal.provider }}</dd></div><div><dt>Estimated / actual cost</dt><dd>USD {{ proposal.estimated_cost_usd }} / {{ proposal.actual_cost_usd }}</dd></div></dl>
+  <h3>Evidence-backed claims</h3>
+  {% for claim in strategy.claims %}<div class="review-note"><p>{{ claim.text }}</p><p class="stage-muted">Sources: {% for source_id in claim.source_ids %}<a href="#source-{{ source_id }}">{{ source_id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>{% else %}<p>No evidence-backed claims.</p>{% endfor %}
+  <h3>Hypotheses to verify</h3><ul>{% for hypothesis in strategy.hypotheses %}<li>{{ hypothesis }}</li>{% else %}<li>No hypotheses recorded.</li>{% endfor %}</ul>
+  {% for warning in strategy.warnings %}<p class="alert warning">{{ warning }}</p>{% endfor %}
+</section>
+{% for channel in strategy.channels %}
+<section class="card section-card"><h2>{{ channel.channel }} draft</h2><p><strong>Rationale:</strong> {{ channel.rationale }}</p>{% if channel.subject %}<h3>{{ channel.subject }}</h3>{% endif %}<div class="message-content">{{ channel.body }}</div></section>
+{% else %}<section class="card section-card"><h2>Channel recommendations</h2><p>No channel is supported by the saved evidence yet. Review the contact and research evidence before preparing outreach.</p></section>
+{% endfor %}
+<section class="card section-card"><h2>Optional asset recommendations</h2><p class="stage-muted">Recommendations only. No provider orders or generated assets.</p>{% for asset in strategy.assets %}<p><strong>{{ asset.type }}</strong> · {{ asset.rationale }} · {% if asset.estimated_cost_usd is none %}Not priced{% else %}Estimate USD {{ asset.estimated_cost_usd }}{% endif %}</p>{% if asset.cost_rationale %}<p class="stage-muted">{{ asset.cost_rationale }}</p>{% endif %}{% else %}<p>No assets recommended.</p>{% endfor %}</section>
+<section class="card section-card"><h2>Research evidence</h2><p><a href="/leads/{{ proposal.lead_id }}?research_run={{ proposal.research_id }}">View full research brief</a></p>{% for source in research.sources %}<div id="source-{{ source.id }}" class="review-note"><strong>{{ source.title or 'Research source' }}</strong>{% set url = source.url|research_url %}{% if url %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ url }}</a></p>{% endif %}<p>{{ source.evidence or 'No evidence excerpt saved.' }}</p></div>{% else %}<p>No research sources available.</p>{% endfor %}</section>
+<section class="card section-card"><h2>Strategy review</h2><p>Record whether this strategy is suitable. Outbound action approval remains a separate workflow.</p>{% if proposal.reviewed_at %}<p>Reviewed {{ proposal.reviewed_at|iso_date }}</p><p>{{ proposal.review_notes or 'No review notes.' }}</p>{% endif %}
+{% if current_workspace.role in ['ADMIN','REVIEWER'] and proposal.status == 'DRAFT' %}
+<form method="post" action="/campaign-proposals/{{ proposal.id }}/review" class="form-stack"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="expected_version" value="{{ proposal.version }}"><label>Review notes<textarea name="notes" rows="3" maxlength="2000"></textarea></label><div class="button-row"><button class="button" name="decision" value="REVIEWED">Mark strategy reviewed</button><button class="button danger" name="decision" value="REJECTED">Reject proposal</button></div></form>
+{% endif %}</section>
+{% if current_workspace.role in ['ADMIN','OPERATOR','REVIEWER'] %}
+<section class="card section-card"><h2>Edit proposal</h2><p>Saving edits resets this proposal to draft for a fresh strategy review. A newer version must be reloaded before editing.</p>
+<form method="post" action="/campaign-proposals/{{ proposal.id }}/edit" class="form-stack">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="expected_version" value="{{ proposal.version }}"><input type="hidden" name="strategy_json" value="{{ strategy_json }}">
+  <label>Campaign objective<textarea name="objective" rows="3" required>{{ strategy.objective }}</textarea></label>
+  <label>Positioning<textarea name="positioning" rows="3" required>{{ strategy.positioning }}</textarea></label>
+  {% for claim in strategy.claims %}<label>Evidence-backed claim {{ loop.index }}<textarea name="claim_{{ loop.index0 }}_text" rows="3" required maxlength="2000">{{ claim.text }}</textarea></label><p class="stage-muted">Saved source references are retained. Edited claims must remain supported by those sources.</p>{% endfor %}
+  <label>Hypotheses to verify (one per line)<textarea name="hypotheses" rows="4">{{ strategy.hypotheses|join('\n') }}</textarea></label>
+  {% for asset in strategy.assets %}<label>{{ asset.type }} recommendation rationale<textarea name="asset_{{ loop.index0 }}_rationale" rows="3" required maxlength="2000">{{ asset.rationale }}</textarea></label>{% endfor %}
+  {% for channel in strategy.channels %}<fieldset><legend>{{ channel.channel }}</legend><label>Subject<input name="channel_{{ loop.index0 }}_subject" value="{{ channel.subject or '' }}"></label><label>Channel copy<textarea name="channel_{{ loop.index0 }}_body" rows="7" required>{{ channel.body }}</textarea></label><label>Rationale<textarea name="channel_{{ loop.index0 }}_rationale" rows="3" required>{{ channel.rationale }}</textarea></label></fieldset>{% endfor %}
+  <button class="button" type="submit">Save proposal changes</button>
+</form>
+</section>
+{% endif %}
+{% endblock %}

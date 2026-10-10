@@ -58,6 +58,22 @@
 </div>
 {% endif %}
 
+<section class="card section-card">
+  <div class="card-head"><h2>Campaign Strategist</h2><span class="badge">Mock preview</span></div>
+  <p>Create an evidence-backed campaign proposal from completed research, qualification and product matches. Review the strategy and channel copy before using it in outreach.</p>
+  <p class="stage-muted">Generation costs $0 with the mock provider. Asset recommendations are plans; no assets are generated and no messages are sent.</p>
+  {% if current_workspace.role in ['ADMIN','OPERATOR','REVIEWER'] %}
+  <form method="post" action="/leads/{{ lead.id }}/campaign-proposals">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="idempotency_key" value="{{ campaign_request_id }}">
+    <button class="button" type="submit">Generate campaign proposal</button>
+  </form>
+  {% endif %}
+  {% for proposal in campaign_proposals %}
+  <p><a href="/campaign-proposals/{{ proposal.id }}">Review saved proposal · Version {{ proposal.version }}</a> <span class="badge">{{ proposal.status }}</span> · {{ proposal.created_at|iso_date }}</p>
+  {% else %}<p class="stage-muted">No campaign proposals saved yet.</p>{% endfor %}
+</section>
+
 <div class="metric-grid detail-metrics">
 
 <div class="metric-card"><span>Current Score</span><strong>{{ lead.current_score if lead.current_score is not none else '—' }}</strong>

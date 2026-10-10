@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
+from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -972,6 +974,8 @@ async def lead_detail(
                 "pipeline_runs": pipeline_runs,
                 "pipeline_state": pipeline_state,
                 "company_contacts": company_contacts,
+                "campaign_proposals": await safe_get(f"/api/leads/{lead_id}/campaign-proposals", []),
+                "campaign_request_id": str(uuid4()),
                 "created": bool(created),
                 "closed": bool(closed),
                 "error": error,
@@ -988,6 +992,74 @@ async def lead_detail(
             },
             status_code=exc.status_code,
         )
+
+
+@app.post('/leads/{lead_id}/campaign-proposals')
+async def generate_campaign_proposal(request: Request, lead_id: str, csrf: str = Form(...), idempotency_key: str = Form(...)):
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f'/leads/{lead_id}?error=csrf', status_code=303)
+    try:
+        proposal = await api.post(f'/api/leads/{lead_id}/campaign-proposals', json={'idempotency_key': idempotency_key, 'max_estimated_cost_usd': 0})
+        return RedirectResponse(f"/campaign-proposals/{proposal['id']}", status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(f'/leads/{lead_id}?error={quote(exc.message)}', status_code=303)
+
+
+@app.get('/campaign-proposals/{proposal_id}', response_class=HTMLResponse)
+async def campaign_proposal_detail(request: Request, proposal_id: str):
+    try:
+        proposal = await api.get(f'/api/campaign-proposals/{proposal_id}')
+        research = await api.get(f"/api/research/{proposal['research_id']}")
+        return render(request, 'campaign_proposal.html', {
+            'proposal': proposal, 'research': research,
+            'strategy_json': json.dumps(proposal['strategy'], indent=2),
+        })
+    except MarketingAPIError as exc:
+        return render(request, 'error.html', {'title': 'Campaign proposal unavailable', 'message': exc.message}, status_code=exc.status_code)
+
+
+@app.post('/campaign-proposals/{proposal_id}/edit')
+async def edit_campaign_proposal(request: Request, proposal_id: str, csrf: str = Form(...), expected_version: int = Form(...), strategy_json: str = Form(...), objective: str | None = Form(None), positioning: str | None = Form(None)):
+    target = f'/campaign-proposals/{proposal_id}'
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f'{target}?error=csrf', status_code=303)
+    try:
+        strategy = json.loads(strategy_json)
+        if not isinstance(strategy, dict):
+            raise ValueError('Strategy must be a JSON object.')
+        if isinstance(objective, str) and isinstance(positioning, str):
+            strategy['objective'] = objective
+            strategy['positioning'] = positioning
+            form = await request.form()
+            for index, claim in enumerate(strategy.get('claims', [])):
+                if f'claim_{index}_text' in form:
+                    claim['text'] = str(form[f'claim_{index}_text'])
+            if 'hypotheses' in form:
+                strategy['hypotheses'] = split_lines(str(form['hypotheses']))
+            for index, asset in enumerate(strategy.get('assets', [])):
+                if f'asset_{index}_rationale' in form:
+                    asset['rationale'] = str(form[f'asset_{index}_rationale'])
+            for index, channel in enumerate(strategy.get('channels', [])):
+                channel['subject'] = clean(str(form.get(f'channel_{index}_subject', '')))
+                channel['body'] = str(form.get(f'channel_{index}_body', ''))
+                channel['rationale'] = str(form.get(f'channel_{index}_rationale', ''))
+        await api.patch(f'/api/campaign-proposals/{proposal_id}', json={'expected_version': expected_version, 'strategy': strategy})
+        return RedirectResponse(f'{target}?saved=1', status_code=303)
+    except (ValueError, MarketingAPIError) as exc:
+        message = exc.message if isinstance(exc, MarketingAPIError) else 'Please enter a valid strategy JSON object.'
+        return RedirectResponse(f'{target}?error={quote(message)}', status_code=303)
+
+
+@app.post('/campaign-proposals/{proposal_id}/review')
+async def review_campaign_proposal(request: Request, proposal_id: str, csrf: str = Form(...), expected_version: int = Form(...), decision: str = Form(...), notes: str = Form('')):
+    target = f'/campaign-proposals/{proposal_id}'
+    if not verify_csrf(request, csrf):
+        return RedirectResponse(f'{target}?error=csrf', status_code=303)
+    try:
+        await api.post(f'/api/campaign-proposals/{proposal_id}/review', json={'expected_version': expected_version, 'decision': decision, 'notes': notes})
+        return RedirectResponse(f'{target}?saved=1', status_code=303)
+    except MarketingAPIError as exc:
+        return RedirectResponse(f'{target}?error={quote(exc.message)}', status_code=303)
 
 
 @app.post('/leads/{lead_id}/research')

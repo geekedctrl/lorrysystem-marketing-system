@@ -39,6 +39,11 @@ jobs:
       - name: Test research brief presentation
         run: python3 dashboard/scripts/validate_research_presentation.py
 
+      - name: Test campaign proposal dashboard
+        run: |
+          python3 -m pip install -r dashboard/requirements.txt
+          python3 dashboard/scripts/validate_campaign_proposals.py
+
       - name: Test dashboard UX state summaries
         run: |
           python3 dashboard/scripts/validate_ux_states.py
@@ -384,6 +389,13 @@ jobs:
         run: |
           docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
             lorrysystem-dev-marketing-api python scripts/validate_lead_pipeline.py
+
+      - name: Test mock campaign strategy, tenancy and human review
+        run: |
+          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/test_campaign_strategist.py
+          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_campaign_strategist.py
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+            lorrysystem-dev-marketing-api python scripts/validate_campaign_http.py
 
       - name: Test shared product onboarding and automatic preparation
         run: |
