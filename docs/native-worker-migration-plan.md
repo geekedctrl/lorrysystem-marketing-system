@@ -4,6 +4,8 @@ Status: planned on 11 October 2026. This document describes the next implementat
 
 Implementation update: the shared native stage handlers, scheduling/API controls, source validation, provider reservations and pending approval path are implemented locally. See [native preparation workers](native-preparation-workers.md) for verified scope and limitations. Encrypted provider management, real-provider calibration, dashboard/data migration, sending parity and executor cutover remain outstanding.
 
+Parallel DEV rollout update: the root Compose file now includes the native API/database/worker stack and a separate single-process native dashboard on loopback ports 8020/8093. It does not migrate legacy data or stop n8n. See [native DEV cutover runbook](native-dev-cutover.md) for server configuration and release gates. The deployment helper must start all included services; verify its exact service selection before merging/deploying. Native dashboard sessions remain process-local, so this is validation infrastructure, not a horizontally scalable production cutover.
+
 ## Outcome and boundaries
 
 Replace n8n execution with one shared Python preparation pipeline driven by each workspace's product form, real catalog, targeting, preferences and policy. Administrators create and activate products; operators request discovery and resolve exceptions. Normal preparation advances automatically to a draft pending human approval. Approval never sends. Sending remains a separate explicit stage.

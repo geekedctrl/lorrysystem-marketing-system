@@ -6,6 +6,10 @@ This repository contains the core application used by the **development environm
 
 > **Important:** Never commit passwords, API keys, database files, `.env` files, n8n credentials, or other runtime secrets to this repository.
 
+## Orchestration migration status
+
+The target orchestration is the native Python API and durable workers; n8n is being retired from the product path after a staged cutover. The root Compose file now includes a separate native DEV stack beside the legacy app. This does not migrate existing data or remove the currently deployed n8n services. See the [native DEV cutover runbook](docs/native-dev-cutover.md) for configuration and release gates. Older n8n diagrams and setup notes below describe the legacy runtime only.
+
 ---
 
 ## Product workspaces update
@@ -30,12 +34,14 @@ configuration described in older sections below.
 
 ## 1. Project Overview
 
-The system is built around four main components:
+The replacement runtime uses four native components:
 
-- **FastAPI** — REST API and application/business logic
-- **PostgreSQL** — persistent application database
-- **Dashboard** — server-rendered FastAPI/Jinja web interface
-- **n8n** — workflow orchestration and automation
+- **FastAPI** — workspace-scoped API and application/business logic
+- **PostgreSQL** — persistent state, workspace boundaries and durable job queue
+- **Native dashboard** — server-rendered FastAPI/Jinja BFF and web interface
+- **Python worker** — discovery and shared lead-preparation orchestration
+
+The legacy deployed dashboard/API/n8n runtime remains active during staged DEV validation. It is not the target orchestration architecture.
 
 Typical lead lifecycle:
 
@@ -64,36 +70,37 @@ Research automation is designed to collect publicly available company informatio
 ## 2. Architecture
 
 ```text
-                         ┌──────────────────────┐
-                         │      Dashboard       │
-                         │   FastAPI + Jinja    │
-                         └──────────┬───────────┘
-                                    │ REST API
-                                    ▼
-┌─────────────┐            ┌──────────────────────┐
-│     n8n     │───────────▶│   Marketing API      │
-│ Automation  │ REST API   │       FastAPI        │
-└─────────────┘            └──────────┬───────────┘
-                                      │ SQLAlchemy
-                                      ▼
-                           ┌──────────────────────┐
-                           │     PostgreSQL       │
-                           └──────────────────────┘
+┌────────────────────┐      ┌──────────────────────┐
+│ Native Dashboard   │─────▶│ Native Marketing API │
+│ FastAPI + Jinja BFF│      │     FastAPI          │
+└────────────────────┘      └──────────┬───────────┘
+                                        │ enqueue / scoped API
+                                        ▼
+                              ┌──────────────────────┐
+                              │ PostgreSQL + Queue   │
+                              └──────────▲───────────┘
+                                         │ restricted worker role
+                              ┌──────────┴───────────┐
+                              │ Python Worker        │
+                              │ discovery + stages   │
+                              └──────────────────────┘
+
+Legacy DEV n8n ──(transition only)──▶ Legacy Marketing API / PostgreSQL
 ```
 
 ### Security boundary
 
-Only the Marketing API is allowed to communicate directly with PostgreSQL.
+The native API uses a restricted API database role; the native Python worker uses a separate restricted role for durable job claims and stage persistence. The native dashboard talks to the API and never to PostgreSQL.
 
 ```text
-n8n        ✕ PostgreSQL
-Dashboard  ✕ PostgreSQL
-Internet   ✕ PostgreSQL
+Native Dashboard  ✕ PostgreSQL
+Internet          ✕ PostgreSQL
 
-Marketing API ✓ PostgreSQL
+Native API       ✓ restricted PostgreSQL role
+Python Worker   ✓ restricted PostgreSQL role
 ```
 
-The Dashboard and n8n must communicate with the database **through the API only**.
+Legacy n8n remains connected only to the legacy runtime until the separate migration and cutover gates pass. See [native DEV cutover](docs/native-dev-cutover.md).
 
 ---
 

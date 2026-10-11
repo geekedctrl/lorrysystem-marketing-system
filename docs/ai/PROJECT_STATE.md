@@ -89,3 +89,7 @@ Acceptance: 50 PostgreSQL/backend tests, including actual Chromium network isola
 
 
 Release checkpoint: implementation commit `bec7684`, integrated latest develop `9e74818` with merge `cf90bb9`; pushed branch `rebuild/manual-discovery`. Draft PR #36 targets develop: https://github.com/geekedctrl/lorrysystem-marketing-system/pull/36 . Keep draft until coordinated legacy guard/API publication or native cutover is ready; DEV has not been changed. GitHub CI is running. Local fixture projects `discovery-review-test` and `discovery-legacy-test`, their disposable volumes and the port 8098 gateway were removed after verification; pre-existing local stacks remain untouched. User-owned root compose/gitignore hashes remain unchanged and those edits are excluded.
+
+## Native DEV rollout checkpoint - 12 October 2026
+
+Implementation branch: geekedctrl/native-dev-cutover. Native API, worker, isolated PostgreSQL and native dashboard are wired in Compose/CI alongside legacy DEV. Native image builds, fresh DB migration and container health/network checks passed. DietPi helper still builds/starts only legacy API/dashboard; add native migration, services and health checks before rollout. Server needs three native DB passwords before Compose preflight; Compose include needs v2.20.3+. No provider calls, deployment, production changes, data migration, push or PR occurred. Preserve n8n until native human-reviewed DEV acceptance and rollback gates are complete. See docs/native-dev-cutover.md and docs/ai/TASK_BOARD.md.

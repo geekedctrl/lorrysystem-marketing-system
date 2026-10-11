@@ -106,6 +106,9 @@ jobs:
           PG_PASSWORD="$(openssl rand -hex 32)"
           API_KEY="$(openssl rand -hex 32)"
           DASHBOARD_SECRET="$(openssl rand -hex 32)"
+          BACKEND_DB_PASSWORD="$(openssl rand -hex 32)"
+          BACKEND_API_DB_PASSWORD="$(openssl rand -hex 32)"
+          BACKEND_WORKER_DB_PASSWORD="$(openssl rand -hex 32)"
 
           cat > .env <<EOF
           APP_ENV=ci
@@ -117,6 +120,12 @@ jobs:
           POSTGRES_PASSWORD=${PG_PASSWORD}
 
           MARKETING_API_KEY=${API_KEY}
+
+          BACKEND_DB_PASSWORD=${BACKEND_DB_PASSWORD}
+          BACKEND_API_DB_PASSWORD=${BACKEND_API_DB_PASSWORD}
+          BACKEND_WORKER_DB_PASSWORD=${BACKEND_WORKER_DB_PASSWORD}
+          BACKEND_PROVIDER_MONTHLY_BUDGET_USD=50
+          NATIVE_DASHBOARD_SECURE_COOKIES=false
           EOF
 
           cat > dashboard/.env <<EOF
@@ -137,9 +146,9 @@ jobs:
           docker compose config -q
           echo "Docker Compose configuration is valid."
 
-      - name: Build API and Dashboard
+      - name: Build legacy and native API and Dashboard images
         run: |
-          docker compose build marketing-api-dev dashboard-dev
+          docker compose build marketing-api-dev dashboard-dev backend-api backend-worker native-dashboard
 
       - name: Start PostgreSQL and API
         run: |
@@ -395,6 +404,33 @@ jobs:
             >/dev/null
 
           echo "Dashboard page loaded successfully."
+
+      - name: Start native API, worker and dashboard alongside legacy DEV
+        run: |
+          docker compose up -d backend-api backend-worker native-dashboard
+          docker compose ps backend-db backend-api backend-worker native-dashboard
+
+      - name: Verify native API and dashboard health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for url in http://127.0.0.1:8020/health http://127.0.0.1:8093/health; do
+            READY=0
+            for attempt in {1..45}; do
+              STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${url}" || true)"
+              if [ "${STATUS}" = "200" ]; then
+                echo "${url} returned HTTP 200."
+                READY=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "${READY}" != "1" ]; then
+              echo "${url} did not become healthy (HTTP ${STATUS:-none})."
+              exit 1
+            fi
+          done
 
       - name: Test workspace isolation, roles and browser sessions
         run: |
