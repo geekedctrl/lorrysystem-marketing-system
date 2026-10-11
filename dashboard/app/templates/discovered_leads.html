@@ -26,7 +26,7 @@
   {% if latest_run %}
   <div role="status" aria-live="polite" id="discovery-run-status" data-run-id="{{ latest_run.id }}" data-status="{{ latest_run.status }}" data-managed="{{ 'true' if discovery_config.managed else 'false' }}">
     {% if latest_run.status in ['QUEUED','RUNNING'] %}<strong>Finding leads…</strong> This page will refresh when discovery finishes.
-    {% elif latest_run.status == 'COMPLETED' %}<strong>Discovery finished.</strong> {% if discovery_config.managed %}{% if latest_run.summary.get('new_candidates',0) %}{{ latest_run.summary.get('new_candidates',0) }} suitable companies accepted for automatic research. <a href="/leads">View leads</a>.{% else %}No new companies were verified in this batch. Try another customer type or location.{% endif %}{% else %}{{ latest_run.summary.get('new_candidates', 0) }} new candidates saved from {{ latest_run.summary.get('websites_fetched', 0) }} websites. {{ latest_run.summary.get('existing_skipped', 0) }} previously seen websites skipped.{% endif %}
+    {% elif latest_run.status == 'COMPLETED' %}<strong>Discovery finished.</strong> {% if discovery_config.managed %}{% if latest_run.summary.get('accepted_leads',0) %}{{ latest_run.summary.get('accepted_leads',0) }} companies accepted under the earlier policy. <a href="/leads">View leads</a>.{% elif latest_run.summary.get('new_candidates',0) %}{{ latest_run.summary.get('new_candidates',0) }} companies ready for your review. Accept suitable candidates to start research.{% else %}No new companies were verified in this batch. Try another customer type or location.{% endif %}{% else %}{{ latest_run.summary.get('new_candidates', 0) }} new candidates saved from {{ latest_run.summary.get('websites_fetched', 0) }} websites. {{ latest_run.summary.get('existing_skipped', 0) }} previously seen websites skipped.{% endif %}
     {% if latest_run.summary.get('fetch_failures', 0) or latest_run.summary.get('model_failures', 0) %}<span class="sub">{{ latest_run.summary.get('fetch_failures', 0) }} websites could not be read; {{ latest_run.summary.get('model_failures', 0) }} extractions failed.</span>{% endif %}
     {% else %}<strong>Discovery did not finish.</strong> {% if latest_run.error_code == 'DISCOVERY_FETCH_FAILED' %}The selected company websites could not be read.{% elif latest_run.error_code == 'SEARCH_FAILED' %}The search provider could not return results.{% elif latest_run.error_code == 'DISCOVERY_EVIDENCE_REJECTED' %}The proposed companies could not be verified against their website evidence.{% endif %} You can try again. Any companies already saved remain available.
     {% endif %}
@@ -93,7 +93,7 @@
 {% else %}
 <div class="card empty">
   <strong>No discovered leads in this view.</strong>
-  <span>{% if discovery_config.managed %}Verified companies become official leads automatically. <a href="/leads">View leads</a> or <a href="/discovered-leads?status=ALL">all discoveries</a>.{% else %}Discovered companies appear here for your review before acceptance.{% endif %}</span>
+  <span>{% if discovery_config.managed %}Discovered companies wait here for your review before acceptance. <a href="/leads">View leads</a> or <a href="/discovered-leads?status=ALL">all discoveries</a>.{% else %}Discovered companies appear here for your review before acceptance.{% endif %}</span>
 </div>
 {% endif %}
 {% endblock %}

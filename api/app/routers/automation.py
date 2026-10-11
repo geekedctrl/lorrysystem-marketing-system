@@ -522,32 +522,18 @@ def memory(db=Depends(get_db)):
 
 @router.post("/candidates")
 def candidate(data: dict, db=Depends(get_db)):
-    from app.schemas.candidate import CandidateCreate, CandidateAccept
-    from app.services.candidate_service import (
-        create_candidate,
-        accept_candidate,
-        ICPProfileNotFoundError,
-        CandidateStateError,
-        CandidateContactConflictError,
-        ExistingActiveLeadError,
-    )
+    from app.schemas.candidate import CandidateCreate
+    from app.services.candidate_service import create_candidate, ICPProfileNotFoundError
     from pydantic import ValidationError
 
-    # Read under the lock once: a cached pre-lock result could lose accepted
-    # counts or allow concurrent requests to exceed the batch limit.
     job = scoped_job(db, "DISCOVERY", lock=True)
     try:
         parsed = CandidateCreate.model_validate(data)
     except ValidationError:
         raise HTTPException(422, "Invalid sourced discovery candidate") from None
     if parsed.icp_confidence < 0.75:
-        raise HTTPException(
-            422,
-            "Automatic acceptance requires supported ICP confidence of at least 75%",
-        )
-    if job.result.get("accepted_leads", 0) >= job.payload.get(
-        "target_new_companies", 5
-    ):
+        raise HTTPException(422, "Discovery requires supported ICP confidence of at least 75%")
+    if job.result.get("new_candidates", 0) >= job.payload.get("target_new_companies", 5):
         raise HTTPException(409, "Discovery batch limit reached")
     try:
         result = create_candidate(db, parsed, commit=False)
@@ -558,37 +544,9 @@ def candidate(data: dict, db=Depends(get_db)):
         return {"outcome": result["outcome"]}
     saved = result["candidate"]
     candidate_id = saved.id if hasattr(saved, "id") else saved["id"]
-    try:
-        accepted = accept_candidate(
-            db,
-            candidate_id=UUID(str(candidate_id)),
-            data=CandidateAccept(
-                reviewed_by=current_principal.get().actor,
-                review_notes="Automatically accepted under the activated product discovery policy.",
-            ),
-            commit=False,
-        )
-    except (
-        ValueError,
-        CandidateStateError,
-        CandidateContactConflictError,
-        ExistingActiveLeadError,
-    ):
-        raise HTTPException(422, "Candidate cannot be accepted automatically") from None
-    research = db.scalar(
-        select(LeadResearch).where(
-            LeadResearch.lead_id == accepted["lead_id"],
-            LeadResearch.research_status == "PENDING",
-        )
-    )
-    if research:
-        schedule(db, "RESEARCH", research.id)
-    job.result = {
-        **job.result,
-        "accepted_leads": job.result.get("accepted_leads", 0) + 1,
-    }
+    job.result = {**job.result, "new_candidates": job.result.get("new_candidates", 0) + 1}
     db.commit()
-    return {"outcome": "ACCEPTED", "lead_id": str(accepted["lead_id"])}
+    return {"outcome": "READY_FOR_REVIEW", "candidate_id": str(candidate_id)}
 
 
 @router.post("/workers", status_code=201)
@@ -898,13 +856,14 @@ def finish_scoped(job, data):
                         }
                         settings_db.commit()
                 elif owned.kind == "DISCOVERY":
-                    accepted = owned.result.get("accepted_leads", 0)
+                    ready = owned.result.get("new_candidates", 0)
                     owned.result = {
                         **owned.result,
-                        "accepted_leads": accepted,
+                        "accepted_leads": 0,
+                        "new_candidates": ready,
                         "outcome": (
-                            "COMPANIES_ACCEPTED"
-                            if accepted
+                            "CANDIDATES_READY"
+                            if ready
                             else "NO_NEW_SUITABLE_COMPANIES"
                         ),
                     }

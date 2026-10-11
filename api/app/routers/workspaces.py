@@ -342,7 +342,7 @@ def workspace_context(db=Depends(get_db)):
                     'credential_kind': ('job' if principal.automation_job_id else 'legacy' if principal.actor == 'legacy-lorrysystem-worker'
                                         else 'workspace' if principal.role == 'SERVICE' else 'user'),
                     'registry_namespace': f'workspace:{principal.workspace_id}:discovery',
-                    'human_candidate_review_required': not bool(principal.automation_job_id or managed_service),
+                    'human_candidate_review_required': True,
                     'human_marketing_approval_required': True,
                     **({'job_id': str(principal.automation_job_id)} if principal.automation_job_id else {}),
                 },

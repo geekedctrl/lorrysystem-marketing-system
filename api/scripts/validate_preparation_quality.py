@@ -178,7 +178,7 @@ for _ in products:
                 + domain
                 + "."
             )
-        accepted = call(
+        candidate = call(
             "POST",
             "/api/automation/candidates",
             {
@@ -195,6 +195,19 @@ for _ in products:
                 },
             },
             lease(job),
+        )
+        assert candidate["outcome"] == "READY_FOR_REVIEW"
+        candidate_id = candidate["candidate_id"]
+        stored = call("GET", f"/api/candidates/{candidate_id}", headers=p["headers"])
+        assert stored["accepted_lead_id"] is None
+        accepted = call(
+            "POST",
+            f"/api/candidates/{candidate_id}/accept",
+            {
+                "reviewed_by": email,
+                "review_notes": "Reviewed the sourced company and customer fit.",
+            },
+            p["headers"],
         )
         assert accepted["outcome"] == "ACCEPTED"
         companies[accepted["lead_id"]] = {

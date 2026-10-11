@@ -133,7 +133,7 @@ def runs(db=Depends(get_db)):
     from app.models.automation import AutomationJob,ProductAutomationPlan
     if db.scalar(select(ProductAutomationPlan.id)):
         return [{'id':j.id,'status':'QUEUED' if j.status=='PENDING' else j.status,'query':j.payload.get('query',''),
-                 'target_new_companies':j.payload.get('target_new_companies',5),'summary':{**j.result,'new_candidates':j.result.get('accepted_leads',0)},
+                 'target_new_companies':j.payload.get('target_new_companies',5),'summary':{**j.result,'new_candidates':j.result.get('new_candidates',j.result.get('accepted_leads',0))},
                  'error_code':j.failure_reason,'created_at':j.created_at,'started_at':j.started_at,'finished_at':j.finished_at}
                 for j in db.scalars(select(AutomationJob).where(AutomationJob.kind=='DISCOVERY').order_by(AutomationJob.created_at.desc()).limit(10))]
     expire_runs(db)

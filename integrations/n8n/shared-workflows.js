@@ -72,15 +72,15 @@ function discoveryChild(input){
     http(b,'xKiro Discovery Extraction','',{url:`=${b.llm.base_url}/chat/completions`,credential:b.llm.credential,method:'POST',body:'={{ JSON.stringify($json.request) }}',soft:true,timeout:120000}),
     code('Validate Discovered Companies',`${runtime}\n${models}\nreturn discoveryResults($json,$('Prepare Discovery Extraction').first().json.pages,$('Workspace Guard').first().json.workspace_context,$('Shared Job Input').first().json,completionContent).map(json=>({json}));`),
     gate('Has Suitable Company?','={{ !$json.no_candidate }}'),
-    http(b,'Accept Sourced Company','/api/automation/candidates',{method:'POST',body:'={{ JSON.stringify($json.candidate) }}'}),
-    code('Discovery Batch Result',"return [{json:{shared_outcome:'COMPLETED',output:{accepted:$input.all().filter(i=>i.json.outcome==='ACCEPTED').length}}}];"),
-    code('Empty Discovery Result',"const failure=$json.search_failed?'SEARCH_FAILED':$json.failure_reason;return [{json:{shared_outcome:failure?'FAILED':'COMPLETED',...(failure?{failure_reason:failure}:{}),output:{accepted:0}}}];"),
+    http(b,'Save Review Candidate','/api/automation/candidates',{method:'POST',body:'={{ JSON.stringify($json.candidate) }}'}),
+    code('Discovery Batch Result',"return [{json:{shared_outcome:'COMPLETED',output:{new_candidates:$input.all().filter(i=>i.json.outcome==='READY_FOR_REVIEW').length}}}];"),
+    code('Empty Discovery Result',"const failure=$json.search_failed?'SEARCH_FAILED':$json.failure_reason;return [{json:{shared_outcome:failure?'FAILED':'COMPLETED',...(failure?{failure_reason:failure}:{}),output:{new_candidates:0}}}];"),
     code('Discovery Validation Result','return [{json:$json}];'));
   const result=graph('Shared Company Discovery',nodes,[
     ['Shared Job Input','Workspace Configuration','Load Workspace Context','Workspace Guard','Load Discovery Memory','Prepare Company Search','Search New Companies','Select New Company Pages','Has New Page?'],
     ['Fetch New Company Page','Clean New Company Pages','Prepare Discovery Extraction','Has Fetched Evidence?'],
-    ['xKiro Discovery Extraction','Validate Discovered Companies','Has Suitable Company?'],['Accept Sourced Company','Discovery Batch Result']
-  ],{'Has New Page?':[['Fetch New Company Page'],['Empty Discovery Result']],'Has Fetched Evidence?':[['xKiro Discovery Extraction'],['Empty Discovery Result']],'Has Suitable Company?':[['Accept Sourced Company'],['Discovery Validation Result']]});
+    ['xKiro Discovery Extraction','Validate Discovered Companies','Has Suitable Company?'],['Save Review Candidate','Discovery Batch Result']
+  ],{'Has New Page?':[['Fetch New Company Page'],['Empty Discovery Result']],'Has Fetched Evidence?':[['xKiro Discovery Extraction'],['Empty Discovery Result']],'Has Suitable Company?':[['Save Review Candidate'],['Discovery Validation Result']]});
   return dynamic(result,b,'Shared Job Input');
 }
 function sharedChildren(input){

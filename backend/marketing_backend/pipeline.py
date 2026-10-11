@@ -144,55 +144,66 @@ def finalize(db, job, result):
         workspace.next_discovery_at = now()
         return
     if job.kind == "DISCOVERY":
-        for item in result["candidates"]:
-            host = domain(item["website"])
-            # Concurrent discovery commits lock this workspace in queue.owned().
-            if db.scalar(
-                select(DiscoveryMemory.id).where(
+        from datetime import timedelta
+        from .discovery import excluded
+
+        existing_domains = {
+            domain(lead.website)
+            for lead in db.scalars(
+                select(Lead).where(Lead.workspace_id == job.workspace_id)
+            )
+        }
+        saved_candidates = 0
+
+        for item in [*result["candidates"], *result.get("evaluated_domains", [])]:
+            host = item.get("domain") or domain(item["website"])
+            memory = db.scalar(
+                select(DiscoveryMemory)
+                .where(
                     DiscoveryMemory.workspace_id == job.workspace_id,
                     DiscoveryMemory.domain == host,
                 )
-            ):
+                .with_for_update()
+            )
+            if memory and excluded(memory, job.payload["context_hash"]):
                 continue
-            known = any(
-                domain(l.website) == host
-                for l in db.scalars(
-                    select(Lead).where(Lead.workspace_id == job.workspace_id)
-                )
-            )
-            db.add(
-                DiscoveryMemory(
-                    workspace_id=job.workspace_id,
-                    domain=host,
-                    candidate=item,
-                    outcome="KNOWN" if known else "ACCEPTED",
-                )
-            )
-            if not known:
-                lead = Lead(
-                    workspace_id=job.workspace_id,
-                    company_name=item["company_name"],
-                    website=item["website"],
-                )
-                db.add(lead)
-                db.flush()
-                start(db, lead, f"{job.id}:{host}:RESEARCH", item["icp_code"])
-        db.flush()
-        for item in result.get("evaluated_domains", []):
-            if not db.scalar(
-                select(DiscoveryMemory.id).where(
-                    DiscoveryMemory.workspace_id == job.workspace_id,
-                    DiscoveryMemory.domain == item["domain"],
-                )
-            ):
-                db.add(
-                    DiscoveryMemory(
-                        workspace_id=job.workspace_id,
-                        domain=item["domain"],
-                        candidate=item,
-                        outcome="REVIEW_REQUIRED",
+            if not memory:
+                memory = DiscoveryMemory(workspace_id=job.workspace_id, domain=host)
+                db.add(memory)
+            memory.candidate = item
+            memory.source_job_id = job.id
+            memory.context_hash = job.payload["context_hash"]
+            memory.created_at = now()
+            memory.outcome = (
+                "READY_FOR_REVIEW"
+                if "company_name" in item
+                else (
+                    "NO_MATCH"
+                    if item["reason"] == "NO_MATCH"
+                    else (
+                        "ASSESSMENT_FAILED"
+                        if item["reason"].startswith(("MODEL", "CANDIDATE"))
+                        else "FETCH_UNAVAILABLE"
                     )
                 )
+            )
+            if host in existing_domains:
+                memory.outcome = "KNOWN"
+            if memory.outcome == "READY_FOR_REVIEW":
+                saved_candidates += 1
+            memory.retry_after = (
+                None
+                if memory.outcome == "READY_FOR_REVIEW"
+                else now() + timedelta(hours=24 if memory.outcome == "NO_MATCH" else 1)
+            )
+        db.flush()
+        job.result = {
+            **result,
+            "counts": {
+                **result.get("counts", {}),
+                "candidates_ready": saved_candidates,
+            },
+        }
         return
     run = db.scalar(
         select(PreparationRun)

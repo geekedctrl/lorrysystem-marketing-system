@@ -125,3 +125,8 @@ Any new route needs a frontend bridge allowlist/role update and screen adapter; 
 Return implemented task IDs, branch/checkpoint, changed APIs and migrations, regenerated OpenAPI and example responses, exact synthetic tests executed/results, reproducible integration commands, remaining dependencies and frontend adaptations required. Separate executed real-native tests from mocked frontend checks. Update the backend-to-frontend handoff and engineering state docs so the frontend owner can continue from verified contracts.
 
 Recommended order: **BE-01 connectivity → BE-02 actual integration → BE-03 typed contracts/capabilities → BE-04 detail/lists → BE-05 revisions → BE-06 catalog lifecycle**, then separately scoped broader APIs. Confirm existing behavior before duplicating functionality added after checkpoint721a44f.
+
+
+### Discovery review update — 11 October 2026
+
+Discovery now waits for explicit user acceptance before lead creation/research. See [native lead discovery](native-lead-discovery.md) for candidate APIs, native UI/BFF adapters, migration008, worker libraries/limits, local acceptance and coordinated release requirements. Earlier automatic discovery acceptance guidance is superseded.

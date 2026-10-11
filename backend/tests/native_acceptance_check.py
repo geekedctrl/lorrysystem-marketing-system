@@ -85,12 +85,26 @@ def main():
             lambda j: j["status"] == "COMPLETED",
             "product setup",
         )
-        leads = until(
-            lambda: check(api.get(prefix + "/leads", headers=headers)),
-            bool,
-            "native discovery",
+        found = until(
+            lambda: check(
+                api.get(
+                    prefix + "/candidates",
+                    headers=headers,
+                    params={"status": "READY_FOR_REVIEW"},
+                )
+            ),
+            lambda value: bool(value["items"]),
+            "native discovery candidates",
         )
-        lid = leads[0]["id"]
+        assert check(api.get(prefix + "/leads", headers=headers)) == []
+        accepted = check(
+            api.post(
+                prefix + "/candidates/" + found["items"][0]["id"] + "/accept",
+                headers=headers,
+                json={"note": "Reviewed synthetic company evidence"},
+            )
+        )
+        lid = accepted["lead_id"]
         lead = until(
             lambda: check(api.get(prefix + "/leads/" + lid, headers=headers)),
             lambda l: l["current_preparation"]

@@ -83,6 +83,49 @@ class LeadResponse(Public):
     website: str
 
 
+class DiscoveryCandidate(Public):
+    id: UUID
+    domain: str
+    status: str
+    company_name: str | None = None
+    website: str | None = None
+    industry: str | None = None
+    confidence: int | None = None
+    icp_code: str | None = None
+    reasoning: str | None = None
+    source_url: str | None = None
+    evidence_quote: str | None = None
+    unknowns: list[str] = Field(default_factory=list)
+    failure_reason: str | None = None
+    source_job_id: UUID | None
+    accepted_lead_id: UUID | None
+    reviewed_at: datetime | None
+    review_note: str | None
+    retry_after: datetime | None
+    stale: bool
+    created_at: datetime
+
+
+class DiscoveryPage(Public):
+    items: list[DiscoveryCandidate]
+    total: int
+    offset: int
+    limit: int
+
+
+class CandidateAccepted(Public):
+    candidate_id: UUID
+    lead_id: UUID
+    run_id: UUID
+    status: Literal["ACCEPTED"]
+
+
+class CandidateReviewed(Public):
+    candidate_id: UUID
+    status: Literal["REJECTED", "RETRY_PENDING"]
+    job_id: UUID | None = None
+
+
 class Profile(Public):
     url: str
     platform: str

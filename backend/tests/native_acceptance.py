@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import secrets
+import re
 from pathlib import Path
 from unittest.mock import patch
 from sqlalchemy import select
@@ -74,7 +75,7 @@ class SyntheticProviders(Providers):
     def ready(self, search=False):
         guard()
 
-    def search(self, operation, query):
+    def search(self, operation, query, **options):
         key = "search:" + operation
         if key in self.cache:
             return self.cache[key]
@@ -82,11 +83,9 @@ class SyntheticProviders(Providers):
         rows = []
         if operation.startswith("discovery"):
             accounting = "accounting" in json.dumps(self.job.payload["context"]).lower()
-            url = (
-                "https://"
-                + ("accounting" if accounting else "haulage")
-                + ".fixtures.example.org/"
-            )
+            marker = re.search(r"browser discovery acceptance ([a-z0-9]{8})", json.dumps(self.job.payload["context"]).lower())
+            suffix = "-browser-" + marker[1] if marker else ""
+            url = "https://" + ("accounting" if accounting else "haulage") + suffix + ".fixtures.example.org/"
             name, service, *_ = company(url)
             rows = [{"url": url, "title": name, "text": service}]
         elif "contact-review" in self.job.payload.get(
@@ -144,26 +143,29 @@ class SyntheticProviders(Providers):
                 "icps": icps,
             }
         else:
-            url = self.job.payload.get("website") or data["pages"][0]["source_url"]
+            url = (
+                self.job.payload.get("website")
+                or (data.get("pages") or data.get("excerpts"))[0]["source_url"]
+            )
             name, service, need, signal, person = company(url)
             citation = lambda quote: {"source_url": url, "evidence_quote": quote}
-            if operation == "discovery":
+            if operation.startswith("discovery:"):
                 icp = next(
                     c["code"]
                     for c in self.job.payload["context"]["catalog"]
                     if c["kind"] == "ICP"
                 )
-                value = {
-                    "candidates": [
-                        {
-                            "company_name": name,
-                            "icp_code": icp,
-                            "confidence": 90,
-                            "official_company": True,
-                            **citation(service),
-                        }
-                    ]
-                }
+                value = dict(
+                    suitable=True,
+                    company_name=name,
+                    icp_code=icp,
+                    confidence=90,
+                    official_company=True,
+                    excerpt_id=data["excerpts"][0]["excerpt_id"],
+                    industry="Business services",
+                    reasoning="The public services fit this actual catalog customer segment.",
+                    unknowns=[],
+                )
             elif operation == "research":
                 value = {
                     "facts": [

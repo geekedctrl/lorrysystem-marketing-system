@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--container", default="native-acceptance-native-frontend-1")
     parser.add_argument("--port", type=int, default=8095)
     args = parser.parse_args()
-    if not args.container.startswith("native-acceptance-"):
+    if args.container not in {"native-acceptance-native-frontend-1", "discovery-review-test-native-frontend-1"}:
         raise SystemExit(
             "Only task-owned native-acceptance frontend containers are allowed"
         )

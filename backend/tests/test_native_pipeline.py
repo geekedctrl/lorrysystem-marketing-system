@@ -60,8 +60,8 @@ class FixtureProviders:
         self.save(self.cache)
         return value
 
-    def search(self, operation, query):
-        if operation == "discovery":
+    def search(self, operation, query, **options):
+        if operation.startswith("discovery"):
             return [{"url": URL, "title": "Example Logistics", "text": SERVICE}]
         if self.ambiguous and operation.endswith("linkedin"):
             return [
@@ -80,18 +80,18 @@ class FixtureProviders:
                 "discovery_query": "Commercial transport businesses Malaysia",
                 "icps": [],
             }
-        if operation == "discovery":
-            return {
-                "candidates": [
-                    dict(
-                        company_name="Example Logistics",
-                        icp_code="ICP",
-                        confidence=90,
-                        official_company=True,
-                        **citation(SERVICE),
-                    )
-                ]
-            }
+        if operation.startswith("discovery:"):
+            return dict(
+                suitable=True,
+                company_name="Example Logistics",
+                icp_code="ICP",
+                confidence=90,
+                official_company=True,
+                excerpt_id=data["excerpts"][0]["excerpt_id"],
+                industry="Logistics",
+                reasoning="Public company services fit the transport customer segment.",
+                unknowns=["Buying intent unknown"],
+            )
         if operation == "research":
             facts = [
                 dict(
@@ -470,7 +470,21 @@ class NativeTests(BackendFixtures):
             json={"idempotency_key": "discovery-test-key"},
         )
         self.assertEqual(r.status_code, 202, r.text)
-        self.assertEqual(self.drain(), ["DISCOVERY", *pipeline.STAGES])
+        self.assertEqual(self.drain(), ["DISCOVERY"])
+        candidates = self.client.get(
+            f"/workspaces/{self.wid}/candidates", headers=self.headers
+        ).json()["items"]
+        self.assertEqual(candidates[0]["status"], "READY_FOR_REVIEW")
+        with Session() as db:
+            self.assertEqual(len(list(db.scalars(select(Lead)))), 0)
+            self.assertEqual(len(list(db.scalars(select(PreparationRun)))), 0)
+        accepted = self.client.post(
+            f"/workspaces/{self.wid}/candidates/{candidates[0]['id']}/accept",
+            headers=self.headers,
+            json={},
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        self.assertEqual(self.drain(), list(pipeline.STAGES))
         r = self.client.post(
             f"/workspaces/{self.wid}/discovery",
             headers=self.headers,

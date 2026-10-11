@@ -29,9 +29,13 @@ services:
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
   backend-worker:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
     environment:
       DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+      DISCOVERY_BROWSER_FALLBACK: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
       MODEL_BASE_URL: ${BACKEND_MODEL_BASE_URL:-https://api.xkiro.com/v1}
       MODEL_NAME: ${BACKEND_MODEL_NAME:-mistralai/mistral-large-2512}
       MODEL_AUTH_HEADER: ${BACKEND_MODEL_AUTH_HEADER:-Authorization}
