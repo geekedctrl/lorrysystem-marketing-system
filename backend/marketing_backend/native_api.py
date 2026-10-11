@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
+from . import contracts as out
 from .db import session
 from .auth import user, scope
 from .models import (
@@ -109,7 +110,7 @@ def enqueue_workspace(db, workspace, kind, key):
     return job
 
 
-@router.post("/automation/activate", status_code=202)
+@router.post("/automation/activate", status_code=202, response_model=out.JobQueued)
 def activate(wid: UUID, data: Activation, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN"])
     workspace = workspace_lock(db, wid)
@@ -149,7 +150,7 @@ def activate(wid: UUID, data: Activation, actor=Depends(user), db=Depends(sessio
     return {"job_id": job.id, "status": job.status}
 
 
-@router.post("/automation/pause")
+@router.post("/automation/pause", response_model=out.Enabled)
 def pause(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN"])
     # Lock jobs before workspace, matching worker completion lock ordering.
@@ -177,10 +178,22 @@ def pause(wid: UUID, actor=Depends(user), db=Depends(session)):
     return {"enabled": False}
 
 
-@router.post("/automation/resume")
+@router.post("/automation/resume", response_model=out.Enabled)
 def resume(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN"])
     workspace = workspace_lock(db, wid)
+    if workspace.automation.get("discovery_query"):
+        active_kinds = set(
+            db.scalars(
+                select(Catalog.kind).where(
+                    Catalog.workspace_id == wid, Catalog.active.is_(True)
+                )
+            )
+        )
+        if not {"PRODUCT", "ICP"} <= active_kinds:
+            raise HTTPException(
+                409, "Restore active products and targeting before resuming"
+            )
     if not workspace.automation.get("discovery_query") and not db.scalar(
         select(Job.id).where(
             Job.workspace_id == wid,
@@ -190,11 +203,16 @@ def resume(wid: UUID, actor=Depends(user), db=Depends(session)):
     ):
         raise HTTPException(409, "Finish or retry product setup first")
     workspace.automation_enabled = True
+    if (
+        workspace.automation.get("discovery_query")
+        and workspace.next_discovery_at is None
+    ):
+        workspace.next_discovery_at = now()
     db.commit()
     return {"enabled": True}
 
 
-@router.post("/discovery", status_code=202)
+@router.post("/discovery", status_code=202, response_model=out.JobQueued)
 def discover(wid: UUID, data: Request, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
     workspace = workspace_lock(db, wid)
@@ -208,7 +226,9 @@ def discover(wid: UUID, data: Request, actor=Depends(user), db=Depends(session))
     return {"job_id": job.id, "status": job.status}
 
 
-@router.post("/leads/{lid}/prepare", status_code=202)
+@router.post(
+    "/leads/{lid}/prepare", status_code=202, response_model=out.PreparationStarted
+)
 def prepare(
     wid: UUID, lid: UUID, data: PrepareRequest, actor=Depends(user), db=Depends(session)
 ):
@@ -253,7 +273,11 @@ def prepare(
     return {"run_id": run.id}
 
 
-@router.get("/leads/{lid}/preparation")
+@router.get(
+    "/leads/{lid}/preparation",
+    response_model=list[out.PreparationHistory],
+    response_model_exclude_unset=True,
+)
 def runs(wid: UUID, lid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     return [
@@ -271,13 +295,21 @@ def runs(wid: UUID, lid: UUID, actor=Depends(user), db=Depends(session)):
     ]
 
 
-@router.get("/preparation/{rid}")
+@router.get(
+    "/preparation/{rid}",
+    response_model=out.PreparationResponse,
+    response_model_exclude_unset=True,
+)
 def run(wid: UUID, rid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     return public_run(run_for(db, wid, rid))
 
 
-@router.post("/preparation/{rid}/contact", status_code=202)
+@router.post(
+    "/preparation/{rid}/contact",
+    status_code=202,
+    response_model=out.PreparationContinued,
+)
 def contact(
     wid: UUID, rid: UUID, data: ContactChoice, actor=Depends(user), db=Depends(session)
 ):
@@ -394,7 +426,11 @@ def contact(
     return {"run_id": item.id, "status": item.status}
 
 
-@router.post("/preparation/{rid}/retry-contact-search", status_code=202)
+@router.post(
+    "/preparation/{rid}/retry-contact-search",
+    status_code=202,
+    response_model=out.PreparationContinued,
+)
 def retry_contacts(wid: UUID, rid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
     # Same lock order as queue completion: job, workspace, run.
@@ -440,7 +476,11 @@ def retry_contacts(wid: UUID, rid: UUID, actor=Depends(user), db=Depends(session
     return {"run_id": item.id, "status": item.status}
 
 
-@router.get("/approvals")
+@router.get(
+    "/approvals",
+    response_model=list[out.ApprovalResponse],
+    response_model_exclude_unset=True,
+)
 def approvals(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     output = []
@@ -473,6 +513,7 @@ def approvals(wid: UUID, actor=Depends(user), db=Depends(session)):
                         "created_at",
                     )
                 },
+                "version": a.version,
                 "stale": item.context_hash
                 != fingerprint(context(db, wid, item.lead_id))
                 or latest != item.id,
@@ -481,7 +522,7 @@ def approvals(wid: UUID, actor=Depends(user), db=Depends(session)):
     return output
 
 
-@router.post("/approvals/{aid}/decision")
+@router.post("/approvals/{aid}/decision", response_model=out.DecisionResponse)
 def decide(
     wid: UUID, aid: UUID, data: Decision, actor=Depends(user), db=Depends(session)
 ):
@@ -501,6 +542,10 @@ def decide(
         ):
             return {"status": approval.status, "sent": False}
         raise HTTPException(409, "Approval already decided")
+    if data.decision == "APPROVED" and approval.editor_id == actor.id:
+        raise HTTPException(
+            403, "A different reviewer must approve a human-edited draft"
+        )
     item = run_for(db, wid, approval.run_id)
     latest = db.scalar(
         select(PreparationRun.id)
@@ -529,7 +574,9 @@ def decide(
     return {"status": approval.status, "sent": False}
 
 
-@router.get("/operations")
+@router.get(
+    "/operations", response_model=out.Operations, response_model_exclude_unset=True
+)
 def operations(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     usage = list(

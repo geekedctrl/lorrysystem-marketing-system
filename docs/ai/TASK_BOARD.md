@@ -25,3 +25,9 @@ Next: dashboard integration, encrypted provider connections, authorized live cal
 | N-02 Discovery through pending approval | Implemented locally | 30 tests, six synthetic companies/two catalogs, restricted-role smoke |
 | N-03 App connections, dashboard integration, calibration and migration | Next | Separate native database; live provider spend not authorized in this implementation |
 | N-04 Sending parity and guarded executor cutover | Pending N-03 | Keep deployed n8n until parity and rollback acceptance |
+
+## Native frontend backend support — 11 October 2026
+
+Implemented BE-01–BE-06 locally on rebuild/native-frontend-support, based on merged PR #29. See ../native-frontend-backend-support.md for new typed contracts/auth capabilities, direct/paginated leads, immutable human revision and separate reviewer, soft catalog lifecycle/versioning, partial setup semantics and frontend adapter requirements. Independent compose.native-integration.yml provides actual restricted API/DB/workers plus the frontend owner's read-only native UI. Synthetic external providers only; worker-loop discovery scheduling gap fixed.
+
+Verification: 37 PostgreSQL tests passed; actual API/BFF/worker two-product/contact/failure/retry/role/isolation checks passed; actual headless Edge product-form/preparation/review/approval and tablet/mobile checks passed; actual restricted API revision/lifecycle checks passed. Windows Docker forwarding remains defective, with a tested localhost-only gateway fallback at8095; frontend-to-API internal networking works. No frontend-owned files, deployed executor, paid providers or sending changed. New BFF allowlists/adapters and nonzero unavailable-search count rendering remain frontend-owner work. BE-07–11 and shared production sessions remain later milestones. New changes local, not pushed/deployed; PR base develop.

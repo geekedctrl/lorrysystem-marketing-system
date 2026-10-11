@@ -72,6 +72,8 @@ def main():
     while not stop.is_set():
         try:
             with Session() as db:
+                from .pipeline import schedule
+                schedule(db)
                 job = queue.claim(db)
             if job:
                 execute(job)
