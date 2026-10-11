@@ -334,8 +334,10 @@ def browser_acceptance():
                 page.get_by_label("Email",exact=True).fill(role+"@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click();page.get_by_role("heading",name="Ready for human review").wait_for()
                 assert page.get_by_role("link",name="Product setup",exact=True).count()==0
                 page.get_by_role("link",name="Discovery",exact=True).click()
+                page.get_by_role("heading",name="Find your next customers",exact=True).wait_for()
                 assert page.get_by_role("button",name="Find leads",exact=True).count()==(1 if role=="operator" else 0)
                 page.get_by_role("link",name="Approvals",exact=True).click()
+                page.get_by_role("heading",name="Draft review",exact=True).wait_for()
                 assert page.get_by_role("button",name="Approve draft",exact=True).count()==(1 if role=="reviewer" else 0)
                 page.get_by_role("button",name="Sign out",exact=True).click();page.get_by_role("heading",name="Welcome back").wait_for()
             fixture.stale=False;fixture.status="CHANGES_REQUESTED"
