@@ -50,6 +50,9 @@ class Workspace(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    automation_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    automation: Mapped[dict] = mapped_column(JSONB, default=dict)
+    next_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Membership(Base):
@@ -99,9 +102,34 @@ class Lead(Base):
 class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
+        UniqueConstraint("workspace_id", "id"),
         UniqueConstraint("workspace_id", "idempotency_key"),
         ForeignKeyConstraint(
             ["workspace_id", "lead_id"], ["leads.workspace_id", "leads.id"]
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id"],
+            ["preparation_runs.workspace_id", "preparation_runs.id"],
+        ),
+        UniqueConstraint("run_id", "kind"),
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id", "lead_id"],
+            [
+                "preparation_runs.workspace_id",
+                "preparation_runs.id",
+                "preparation_runs.lead_id",
+            ],
+            name="job_run_lead",
+        ),
+        CheckConstraint(
+            "(managed AND (kind IN ('SETUP','DISCOVERY') OR run_id IS NOT NULL)) OR (NOT managed AND kind='RESEARCH' AND run_id IS NULL)",
+            name="managed_stage_scope",
+        ),
+        CheckConstraint(
+            "kind IN ('SETUP','DISCOVERY','RESEARCH','CONTACT_SEARCH','SCORING','MATCHING','DRAFTING')"
+        ),
+        CheckConstraint(
+            "(kind IN ('SETUP','DISCOVERY') AND lead_id IS NULL AND run_id IS NULL) OR (kind NOT IN ('SETUP','DISCOVERY') AND lead_id IS NOT NULL)"
         ),
         CheckConstraint(
             "status IN ('PENDING','RUNNING','COMPLETED','NEEDS_REVIEW','FAILED')"
@@ -121,7 +149,9 @@ class Job(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
-    lead_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    managed: Mapped[bool] = mapped_column(Boolean, default=False)
     kind: Mapped[str] = mapped_column(String(30), default="RESEARCH")
     idempotency_key: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(16), default="PENDING")
@@ -135,4 +165,85 @@ class Job(Base):
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     lease_token: Mapped[str | None] = mapped_column(String(64))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class PreparationRun(Base):
+    __tablename__ = "preparation_runs"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id"),
+        UniqueConstraint("workspace_id", "id", "lead_id", name="run_lead_identity"),
+        ForeignKeyConstraint(
+            ["workspace_id", "lead_id"], ["leads.workspace_id", "leads.id"]
+        ),
+        CheckConstraint(
+            "status IN ('PREPARING','NEEDS_REVIEW','PENDING_APPROVAL','APPROVED','REJECTED','CHANGES_REQUESTED','FAILED','STALE')"
+        ),
+        Index(
+            "one_preparing_run",
+            "workspace_id",
+            "lead_id",
+            unique=True,
+            postgresql_where=text("status = 'PREPARING'"),
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    lead_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    context_hash: Mapped[str] = mapped_column(String(64))
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(24), default="PREPARING")
+    stop_reason: Mapped[str | None] = mapped_column(String(80))
+    results: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DiscoveryMemory(Base):
+    __tablename__ = "discovery_memory"
+    __table_args__ = (UniqueConstraint("workspace_id", "domain"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    domain: Mapped[str] = mapped_column(String(254))
+    candidate: Mapped[dict] = mapped_column(JSONB)
+    outcome: Mapped[str] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ProviderUsage(Base):
+    __tablename__ = "provider_usage"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "job_id"], ["jobs.workspace_id", "jobs.id"]
+        ),
+        CheckConstraint("estimated_microusd >= 0"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    provider: Mapped[str] = mapped_column(String(24))
+    operation: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(24), default="RESERVED")
+    estimated_microusd: Mapped[int] = mapped_column(Integer)
+    usage: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Approval(Base):
+    __tablename__ = "approvals"
+    __table_args__ = (
+        UniqueConstraint("run_id"),
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id"],
+            ["preparation_runs.workspace_id", "preparation_runs.id"],
+        ),
+        CheckConstraint(
+            "status IN ('PENDING','APPROVED','REJECTED','CHANGES_REQUESTED')"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(24), default="PENDING")
+    decision: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

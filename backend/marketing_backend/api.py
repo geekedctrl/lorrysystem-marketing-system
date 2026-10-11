@@ -71,6 +71,8 @@ def job_read(j):
             "workspace_id",
             "lead_id",
             "kind",
+            "run_id",
+            "managed",
             "status",
             "attempts",
             "max_attempts",
@@ -78,6 +80,8 @@ def job_read(j):
             "failure_code",
             "history",
             "created_at",
+            "available_at",
+            "lease_until",
         )
     }
 
@@ -179,6 +183,36 @@ def save_catalog(
     wid: UUID, data: CatalogInput, actor=Depends(user), db=Depends(session)
 ):
     scope(wid, actor, db, ["ADMIN"])
+    pending = list(
+        db.scalars(
+            select(Job)
+            .where(
+                Job.workspace_id == wid,
+                Job.managed.is_(True),
+                Job.status.in_(["PENDING", "RUNNING"]),
+            )
+            .with_for_update()
+        )
+    )
+    workspace = db.scalar(
+        select(Workspace).where(Workspace.id == wid).with_for_update()
+    )
+    if pending and workspace.automation_enabled:
+        raise HTTPException(
+            409, "Pause or finish preparation before changing the catalog"
+        )
+    for job in pending:
+        from .models import PreparationRun
+
+        job.status, job.failure_code = "FAILED", "CATALOG_CHANGED"
+        job.lease_token = job.lease_until = None
+        job.history = [
+            *job.history,
+            {"code": "CATALOG_CHANGED", "at": now().isoformat()},
+        ]
+        if job.run_id:
+            run = db.get(PreparationRun, job.run_id)
+            run.status, run.stop_reason = "FAILED", "CATALOG_CHANGED"
     item = db.scalar(
         select(Catalog)
         .where(
@@ -326,7 +360,8 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
         raise HTTPException(404, "Job not found")
     if item.status != "FAILED":
         raise HTTPException(409, "Only failed jobs can be retried")
-    lead_for(db, wid, item.lead_id)
+    if item.lead_id:
+        lead_for(db, wid, item.lead_id)
     if db.scalar(
         select(Job.id).where(
             Job.workspace_id == wid,
@@ -347,5 +382,36 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
     item.attempts = 0
     item.failure_code = None
     item.available_at = now()
-    db.commit()
+    if item.managed:
+        # Explicit retries regenerate invalid model outputs, retaining fetched/search evidence.
+        item.checkpoint = {
+            k: v for k, v in item.checkpoint.items() if not k.startswith("model:")
+        }
+        from .pipeline import valid_context
+        from .research import ProviderFailure
+        from .models import PreparationRun
+
+        if not db.get(Workspace, wid).automation_enabled:
+            raise HTTPException(409, "Resume automation before retrying")
+        try:
+            valid_context(db, item)
+        except ProviderFailure:
+            raise HTTPException(
+                409, "Context changed; start a fresh preparation run"
+            ) from None
+        if item.run_id:
+            run = db.get(PreparationRun, item.run_id)
+            run.status, run.stop_reason = "PREPARING", None
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409, "Another preparation attempt is already active"
+        ) from None
     return job_read(item)
+
+
+from .native_api import router as native_router
+
+app.include_router(native_router)

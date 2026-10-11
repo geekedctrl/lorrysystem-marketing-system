@@ -1,6 +1,6 @@
 import secrets
 from datetime import timedelta
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from .models import Job, Workspace, now
 
 LEASE_SECONDS = 180
@@ -32,6 +32,11 @@ def claim(db):
         job.status = "FAILED" if job.attempts >= job.max_attempts else "PENDING"
         job.available_at = instant + timedelta(seconds=min(300, 2**job.attempts))
         job.lease_token = job.lease_until = None
+        if job.run_id and job.status == "FAILED":
+            from .models import PreparationRun
+
+            run = db.get(PreparationRun, job.run_id)
+            run.status, run.stop_reason = "FAILED", "LEASE_EXPIRED"
     db.flush()
     job = db.scalar(
         select(Job)
@@ -40,6 +45,7 @@ def claim(db):
             Job.status == "PENDING",
             Job.available_at <= instant,
             Workspace.active.is_(True),
+            or_(Job.managed.is_(False), Workspace.automation_enabled.is_(True)),
         )
         .order_by(Job.created_at, Job.id)
         .with_for_update(of=Job, skip_locked=True)
@@ -50,6 +56,14 @@ def claim(db):
         job.attempts += 1
         job.lease_token = secrets.token_hex(32)
         job.lease_until = instant + timedelta(seconds=LEASE_SECONDS)
+        job.history = [
+            *job.history,
+            {
+                "code": "STAGE_STARTED",
+                "attempt": job.attempts,
+                "at": instant.isoformat(),
+            },
+        ]
     db.commit()
     return job
 
@@ -63,8 +77,14 @@ def owned(db, job_id, token):
         or job.lease_until <= now()
     ):
         raise LeaseLost()
-    workspace = db.get(Workspace, job.workspace_id)
-    if not workspace or not workspace.active:
+    workspace = db.scalar(
+        select(Workspace).where(Workspace.id == job.workspace_id).with_for_update()
+    )
+    if (
+        not workspace
+        or not workspace.active
+        or (job.managed and not workspace.automation_enabled)
+    ):
         raise LeaseLost()
     return job
 
@@ -82,6 +102,12 @@ def complete(db, job_id, token, result, review=False):
     job.status = "NEEDS_REVIEW" if review else "COMPLETED"
     job.failure_code = "CONTACT_REVIEW_REQUIRED" if review else None
     job.lease_token = job.lease_until = None
+    if job.managed:
+        from .pipeline import finalize
+
+        db.flush()
+        finalize(db, job, result)
+    job.history = [*job.history, {"code": "STAGE_COMPLETED", "at": now().isoformat()}]
     db.commit()
 
 
@@ -97,6 +123,11 @@ def fail(db, job_id, token, code, retryable=False):
     )
     job.available_at = now() + timedelta(seconds=min(300, 2**job.attempts))
     job.lease_token = job.lease_until = None
+    if job.run_id and job.status == "FAILED":
+        from .models import PreparationRun
+
+        run = db.get(PreparationRun, job.run_id)
+        run.status, run.stop_reason = "FAILED", code
     db.commit()
 
 

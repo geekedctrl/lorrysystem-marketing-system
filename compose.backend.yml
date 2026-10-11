@@ -34,7 +34,13 @@ services:
       DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
       MODEL_BASE_URL: ${BACKEND_MODEL_BASE_URL:-https://api.xkiro.com/v1}
       MODEL_NAME: ${BACKEND_MODEL_NAME:-mistralai/mistral-large-2512}
+      MODEL_AUTH_HEADER: ${BACKEND_MODEL_AUTH_HEADER:-Authorization}
       MODEL_API_KEY: ${BACKEND_MODEL_API_KEY:-}
+      BRAVE_SEARCH_API_KEY: ${BACKEND_BRAVE_SEARCH_API_KEY:-}
+      MODEL_INPUT_USD_PER_MILLION: ${BACKEND_MODEL_INPUT_USD_PER_MILLION:-}
+      MODEL_OUTPUT_USD_PER_MILLION: ${BACKEND_MODEL_OUTPUT_USD_PER_MILLION:-}
+      SEARCH_USD_PER_REQUEST: ${BACKEND_SEARCH_USD_PER_REQUEST:-}
+      PROVIDER_MONTHLY_BUDGET_USD: ${BACKEND_PROVIDER_MONTHLY_BUDGET_USD:-50}
     command: ["python", "-m", "marketing_backend.worker"]
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
