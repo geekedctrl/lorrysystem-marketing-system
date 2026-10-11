@@ -2,7 +2,7 @@
 
 Prepared 11 October 2026. This brief is for the developer rebuilding the frontend alongside the native Python backend.
 
-Update: BE-01 through BE-06 backend support is implemented locally on `rebuild/native-frontend-support`. Read [the verified integration and API update](native-frontend-backend-support.md) first: it supersedes the missing-API and untyped-contract notes below. The frontend owner has a separate native UI and same-origin bridge, tested against the real disposable backend. New endpoint adapters remain frontend work.
+Update: BE-01 through BE-06 backend support is merged into `develop`. Read [the verified integration and API update](native-frontend-backend-support.md) first: it supersedes the missing-API and untyped-contract notes below. The native UI, same-origin bridge and new endpoint adapters are implemented and tested against the real disposable backend. See [frontend behavior and verification](native-frontend.md).
 
 ## Objective and current state
 

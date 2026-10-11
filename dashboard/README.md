@@ -1,5 +1,9 @@
 # Marketing Dashboard
 
+The independent native-backend frontend is available through `app.native:app`.
+See [Native frontend setup and verification](../docs/native-frontend.md). It uses
+the new native routes and does not replace the deployed legacy dashboard.
+
 The dashboard now supports private product workspaces, authenticated accounts,
 workspace switching, team invitations, role management and workspace catalogs.
 

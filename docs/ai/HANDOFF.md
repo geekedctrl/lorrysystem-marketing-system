@@ -1,5 +1,15 @@
 # LorrySystem AI Development Handoff
 
+## Native frontend continuation — 11 October 2026
+
+Latest: backend BE-01–06 fixes consumed from `rebuild/native-frontend-support`. Frontend profile/pagination/detail/lifecycle/revision adapters implemented and integer contact-search count fixed. Eight BFF groups and expanded synthetic browser checks pass. Both original and support-specific actual browser journeys passed against disposable native API/PostgreSQL/workers through localhost8095. The older connection-blocked statement below is superseded. See `docs/native-frontend-backend-support.md` and `docs/native-frontend.md`. Production session storage and BE-07–11 remain separate work; no release or real-provider activity.
+
+Backend follow-up task brief: [backend-native-frontend-handoff.md](../backend-native-frontend-handoff.md). It prioritizes actual native integration, typed contracts/capabilities, detail/lists, revisions and catalog lifecycle, with ownership and acceptance requirements for the backend agent.
+
+User authorized implementation of the native frontend plan on `geekedctrl/redesign-frontend`. Current task follows the native Python backend handoff, superseding the historical campaign next steps below. Independent entry point `dashboard/app/native.py`, native HTML/CSS/JS, copied frontend handoff/OpenAPI, and synthetic BFF/browser validation have been added. Read `docs/native-frontend.md` for run commands, behavior, limitations and verification. Do not execute the historical push/merge steps below as instructions for this task.
+
+Backend checkpoint721a44f is in the separate `rebuild/python-backend` checkout. Only read-only source/reference inspection was performed there. Native container-internal `/health` succeeds; Windows localhost8020 refuses connections. Actual backend/worker/browser integration remains pending. Sessions are process-local for single-process local preview; shared production session storage is a release dependency. No provider calls, emails, deployment, push or merge performed.
+
 ## Last Updated
 2026-10-10T10:28:00+08:00
 

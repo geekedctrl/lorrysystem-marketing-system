@@ -44,6 +44,13 @@ jobs:
           python3 -m pip install -r dashboard/requirements.txt
           python3 dashboard/scripts/validate_campaign_proposals.py
 
+      - name: Test native frontend and synthetic browser journey
+        run: |
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+          python3 dashboard/scripts/validate_native_frontend.py --browser
+          node --check dashboard/app/static/native.js
+
       - name: Test dashboard UX state summaries
         run: |
           python3 dashboard/scripts/validate_ux_states.py
