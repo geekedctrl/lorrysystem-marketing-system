@@ -1,5 +1,6 @@
 import os
 import secrets
+import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, Request
@@ -9,9 +10,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .api_client import MarketingAPIError
 from .workspace_context import request_auth, request_icps
+from .sessions import SESSION_COOKIE
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceDashboardMiddleware(BaseHTTPMiddleware):
@@ -142,11 +145,10 @@ def page(request, template, status_code=200, **context):
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, notice: str = ""):
-    error = (
-        "Your sign-in session expired. Please try again using this refreshed form."
-        if notice == "session-expired"
-        else None
-    )
+    error = {
+        "session-expired": "Your sign-in session expired. Please try again using this refreshed form.",
+        "cookies-required": "Your browser did not return the sign-in cookie. Allow cookies for this site, then try again.",
+    }.get(notice)
     return page(request, "login.html", error=error)
 
 
@@ -158,9 +160,21 @@ async def login(
     csrf_token: str = Form(""),
 ):
     if not valid_csrf(request, csrf_token):
+        if not csrf_token:
+            reason = "missing_form_token"
+        elif not request.session.get("csrf_token"):
+            reason = (
+                "missing_cookie" if SESSION_COOKIE not in request.cookies
+                else "invalid_or_expired_cookie"
+            )
+        else:
+            reason = "csrf_mismatch"
+        # Record only the category: no cookie, token, email or password values.
+        logger.warning("Login form rejected: reason=%s", reason)
+        notice = "cookies-required" if reason == "missing_cookie" else "session-expired"
         # A 303 loads a new GET form; reloading a failed POST only resubmits
         # the same stale token. Never authenticate the rejected submission.
-        return RedirectResponse("/login?notice=session-expired", status_code=303)
+        return RedirectResponse("/login?notice=" + notice, status_code=303)
     try:
         result = await request.app.state.api.post(
             "/api/auth/login",
