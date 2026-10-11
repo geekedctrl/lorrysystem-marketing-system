@@ -254,9 +254,6 @@ dd { margin:0; text-align:right; font-weight:700; font-size:13px; }
 @media (max-width: 760px) {
   .app-shell { display:block; }
   .sidebar { position:static; height:auto; min-height:0; }
-  nav { flex-direction:row; overflow:auto; }
-  nav a { white-space:nowrap; }
-  .nav-spacer { display:none; }
   .topbar { position:static; padding:17px 18px; }
   .user-chip { display:none; }
   .page { padding:18px; }
