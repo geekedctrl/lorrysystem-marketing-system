@@ -16,13 +16,13 @@
         const runs = await response.json();
         const run = runs.find(item => item.id === status.dataset.runId);
         if (!run) {
-          window.location.assign('/discovered-leads');
+          window.location.assign(status.dataset.managed === 'true' ? '/discovered-leads?status=ALL' : '/discovered-leads');
           return;
         }
         if (run && !['QUEUED', 'RUNNING'].includes(run.status)) {
           // Retain the selected workspace, but clear old list filters so fresh
-          // candidates are visible after a run finishes.
-          window.location.assign('/discovered-leads');
+          // automatically accepted companies are visible after a run finishes.
+          window.location.assign(status.dataset.managed === 'true' ? '/discovered-leads?status=ALL' : '/discovered-leads');
           return;
         }
       }
