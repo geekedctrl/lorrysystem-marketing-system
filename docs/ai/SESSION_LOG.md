@@ -10,3 +10,7 @@ Three bounded audits dispatched using available collaboration tools and inherite
 Existing preparation quality regression passed. Product automation initially reached successful assertions then failed printing Unicode under Windows cp1252; rerun with PYTHONIOENCODING=utf-8 pending.
 
 Final lead rerun:13 offline,27 PostgreSQL,62 live HTTP/dashboard,8 dashboard tests passed. Existing183 workspace +research/pipeline/quality/automation +70 n8n checks passed. CI extended for new campaign suites. No live spend or outbound activity. All specialists finished; lead owns final PR.
+# Mobile sidebar fix — 11 October 2026
+
+Removed the legacy horizontal mobile navigation override. Shared sidebar now uses a vertical drawer with wrapped labels, 44px targets, viewport-bounded width and contained vertical scrolling. Native drawer also contains scrolling and hides the desktop collapse control on phones. Updated legacy CSS cache versions. Rendered actual base template browser checks passed at 320/390/760px (vertical links, no horizontal overflow, Escape/focus/inert); eight BFF groups and native browser journey passed.
+
