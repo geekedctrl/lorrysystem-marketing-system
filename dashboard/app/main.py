@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
+from .sessions import StableSessionMiddleware, SESSION_COOKIE
 
 from .api_client import MarketingAPI, MarketingAPIError
 from .config import Settings, icp_options
@@ -50,8 +50,9 @@ app.include_router(workspace_router)
 app.add_middleware(WorkspaceDashboardMiddleware, api=api)
 
 app.add_middleware(
-    SessionMiddleware,
+    StableSessionMiddleware,
     secret_key=settings.session_secret,
+    session_cookie=SESSION_COOKIE,
     same_site="lax",
     https_only=os.getenv("DASHBOARD_SECURE_COOKIES", "false").lower() == "true",
     max_age=43200,
