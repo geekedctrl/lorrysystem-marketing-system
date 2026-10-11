@@ -377,11 +377,17 @@ summary:focus-visible {
     width: min(300px, 85vw);
     z-index: 40;
     height: 100dvh;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    left: 0;
     top: 0;
   }
   .native-sidebar.open {
     display: block;
+  }
+  .native-sidebar #collapse {
+    display: none;
   }
   .native-shell.collapsed .nav-label,
   .native-shell.collapsed .workspace-controls,
