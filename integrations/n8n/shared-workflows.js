@@ -60,23 +60,24 @@ function setupChild(input){
 function discoveryChild(input){
   const b=binding(input),nodes=head(b,false);
   nodes.push(http(b,'Load Discovery Memory','/api/automation/memory'),
+    code('Prepare Company Search',`${runtime}\nreturn [{json:discoverySearch($('Shared Job Input').first().json,$('Load Discovery Memory').first().json)}];`),
     http(b,'Search New Companies','',{url:'https://api.search.brave.com/res/v1/web/search',credential:b.brave_credential,soft:true,headers:[{name:'Accept',value:'application/json'}],query:[
-      {name:'q',value:"={{ $('Workspace Guard').first().json.query }}"},{name:'country',value:"={{ $('Workspace Guard').first().json.workspace_context.settings.country_code || 'MY' }}"},{name:'count',value:'20'}]}),
+      {name:'q',value:'={{ $json.query }}'},{name:'country',value:"={{ $('Workspace Guard').first().json.workspace_context.settings.country_code || 'MY' }}"},{name:'count',value:'20'}]}),
     code('Select New Company Pages',`${runtime}\n${research}\nconst job=$('Shared Job Input').first().json;return discoveryPages($json,$('Load Discovery Memory').first().json,job,publicResearchUrl).map(json=>({json}));`),
     gate('Has New Page?','={{ !$json.no_fetch }}'),
     http(b,'Fetch New Company Page','/api/research/fetch-public',{method:'POST',body:'={{ JSON.stringify({url:$json.url}) }}',soft:true,timeout:65000}),
     code('Clean New Company Pages',`${research}\nconst requests=$('Select New Company Pages').all();return $input.all().map((item,index)=>{const request=requests[index].json;const page=cleanResearchPage(item.json,request,{company:{domain:request.domain}});return {json:{...page,domain:publicResearchUrl(page.url)?.host||request.domain},pairedItem:{item:index}};});`),
-    code('Prepare Discovery Extraction',`${runtime}\nconst pages=$input.all().map(i=>i.json).filter(p=>!p.failed && p.evidence);const workspace=$('Workspace Guard').first().json;return [{json:{pages,no_pages:!pages.length,request:discoveryRequest(pages,workspace.workspace_context,$('Workspace Configuration').first().json.config.llm,workspace.query)}}];`),
+    code('Prepare Discovery Extraction',`${runtime}\nconst pages=$input.all().map(i=>i.json).filter(p=>!p.failed && p.evidence);const workspace=$('Workspace Guard').first().json;return [{json:{pages,no_pages:!pages.length,...(!pages.length?{failure_reason:'DISCOVERY_FETCH_FAILED'}:{}),request:discoveryRequest(pages,workspace.workspace_context,$('Workspace Configuration').first().json.config.llm,workspace.query)}}];`),
     gate('Has Fetched Evidence?','={{ !$json.no_pages }}'),
     http(b,'xKiro Discovery Extraction','',{url:`=${b.llm.base_url}/chat/completions`,credential:b.llm.credential,method:'POST',body:'={{ JSON.stringify($json.request) }}',soft:true,timeout:120000}),
     code('Validate Discovered Companies',`${runtime}\n${models}\nreturn discoveryResults($json,$('Prepare Discovery Extraction').first().json.pages,$('Workspace Guard').first().json.workspace_context,$('Shared Job Input').first().json,completionContent).map(json=>({json}));`),
     gate('Has Suitable Company?','={{ !$json.no_candidate }}'),
     http(b,'Accept Sourced Company','/api/automation/candidates',{method:'POST',body:'={{ JSON.stringify($json.candidate) }}'}),
     code('Discovery Batch Result',"return [{json:{shared_outcome:'COMPLETED',output:{accepted:$input.all().filter(i=>i.json.outcome==='ACCEPTED').length}}}];"),
-    code('Empty Discovery Result',"return [{json:{shared_outcome:$json.search_failed?'FAILED':'COMPLETED',...($json.search_failed?{failure_reason:'SEARCH_FAILED'}:{}),output:{accepted:0}}}];"),
+    code('Empty Discovery Result',"const failure=$json.search_failed?'SEARCH_FAILED':$json.failure_reason;return [{json:{shared_outcome:failure?'FAILED':'COMPLETED',...(failure?{failure_reason:failure}:{}),output:{accepted:0}}}];"),
     code('Discovery Validation Result','return [{json:$json}];'));
   const result=graph('Shared Company Discovery',nodes,[
-    ['Shared Job Input','Workspace Configuration','Load Workspace Context','Workspace Guard','Load Discovery Memory','Search New Companies','Select New Company Pages','Has New Page?'],
+    ['Shared Job Input','Workspace Configuration','Load Workspace Context','Workspace Guard','Load Discovery Memory','Prepare Company Search','Search New Companies','Select New Company Pages','Has New Page?'],
     ['Fetch New Company Page','Clean New Company Pages','Prepare Discovery Extraction','Has Fetched Evidence?'],
     ['xKiro Discovery Extraction','Validate Discovered Companies','Has Suitable Company?'],['Accept Sourced Company','Discovery Batch Result']
   ],{'Has New Page?':[['Fetch New Company Page'],['Empty Discovery Result']],'Has Fetched Evidence?':[['xKiro Discovery Extraction'],['Empty Discovery Result']],'Has Suitable Company?':[['Accept Sourced Company'],['Discovery Validation Result']]});

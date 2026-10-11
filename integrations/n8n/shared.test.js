@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const {sharedChildren,sharedWorker}=require('./shared-workflows');
-const {sharedJob,setupResult,discoveryPages,discoveryResults}=require('./shared-runtime');
+const {sharedJob,setupResult,discoverySearch,discoveryPages,discoveryResults}=require('./shared-runtime');
 const {completionContent}=require('./model-runtime');
 const {publicResearchUrl}=require('./research-runtime');
 const {assertWorkspaceContext}=require('./workspace-runtime');
@@ -83,6 +83,51 @@ test('shared discovery declares the Accept header required by Brave Search',()=>
  assert.equal(search.parameters.sendHeaders,true);
  assert.ok(search.parameters.headerParameters.parameters.some(h=>h.name==='Accept' && h.value==='application/json'));
  assert.deepEqual(search.credentials.httpHeaderAuth,binding.brave_credential);
+});
+
+test('directories cannot consume the company fetch budget; official homepages rank ahead of product articles',()=>{
+  const results=[
+    {url:'https://ensun.io/search/fleet-management/malaysia'},
+    {url:'https://www.goodfirms.co/logistics'},
+    {url:'https://motawill.com/top-10-logistics-companies-in-malaysia/',title:'Top 10 logistics companies'},
+    {url:'https://vendor.com/products/fleet-software'},
+    {url:'https://old.com/'},
+    {url:'https://new.com/',title:'New Company Logistics'},
+    {url:'https://new.com/services'},
+    {url:'https://linkedin.com/company/test'},
+  ];
+  const pages=discoveryPages({web:{results}},{domains:['old.com']},job(),publicResearchUrl);
+  assert.deepEqual(pages.map(p=>p.domain),['new.com','vendor.com']);
+  assert.equal(pages[0].url,'https://new.com/');
+});
+
+test('search excludes this workspace memory and stays bounded without inserting unsafe operators',()=>{
+  const a=discoverySearch(job(A),{domains:['old.com','www.OLD.com','bad.com OR site:private.test']});
+  const b=discoverySearch(job(B),{domains:['other.com']});
+  assert.match(a.query,/official company website/);assert.match(a.query,/-site:old.com/);
+  assert.equal(a.query.match(/-site:old.com/g).length,1);
+  assert.doesNotMatch(a.query,/private|other.com/);assert.doesNotMatch(b.query,/old.com/);
+  assert.match(b.query,/-site:other.com/);
+  const long=discoverySearch({...job(),input:{...job().input,query:'a '.repeat(149)}},{domains:Array.from({length:10000},(_,i)=>`company${i}.com`)});
+  assert.ok(long.query.length<=400);assert.ok(long.query.split(/\s+/).length<=50);
+});
+
+test('search preparation is wired before Brave, and unreadable websites fail instead of reporting no matches',()=>{
+  const workflow=sharedChildren(binding).discovery;
+  assert.equal(workflow.connections['Load Discovery Memory'].main[0][0].node,'Prepare Company Search');
+  assert.equal(workflow.connections['Prepare Company Search'].main[0][0].node,'Search New Companies');
+  const prepare=workflow.nodes.find(n=>n.name==='Prepare Discovery Extraction');
+  const inputs=[{json:{failed:true,failure_reason:'HTTP_403'}}];
+  const [item]=vm.runInNewContext('(function(){'+prepare.parameters.jsCode+'})()',{
+    $input:{all:()=>inputs},$:name=>({first:()=>({json:name==='Workspace Guard'?{query:'example',workspace_context:{}}:{config:{llm:{model:'fixture',max_tokens:100}}}})})
+  });
+  assert.equal(item.json.failure_reason,'DISCOVERY_FETCH_FAILED');
+  const empty=workflow.nodes.find(n=>n.name==='Empty Discovery Result');
+  const run=json=>vm.runInNewContext('(function(){'+empty.parameters.jsCode+'})()',{$json:json,$:()=>({all:()=>[]})})[0].json;
+  assert.equal(run(item.json).shared_outcome,'FAILED');
+  assert.equal(run(item.json).failure_reason,'DISCOVERY_FETCH_FAILED');
+  assert.equal(run({no_fetch:true}).shared_outcome,'COMPLETED');
+  assert.equal(run({search_failed:true}).failure_reason,'SEARCH_FAILED');
 });
 
 test('rejected model candidates fail visibly; an empty assessment remains a valid no-match result',()=>{
