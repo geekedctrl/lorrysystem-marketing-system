@@ -1,3 +1,8 @@
+include:
+  # Run the replacement native API, worker, database and dashboard alongside
+  # the legacy DEV app until native discovery passes its cutover checks.
+  - path: compose.backend.yml
+
 services:
 
   postgres-dev:

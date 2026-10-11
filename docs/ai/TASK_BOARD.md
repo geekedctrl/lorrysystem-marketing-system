@@ -107,3 +107,12 @@ Acceptance: 50 PostgreSQL/backend tests, including actual Chromium network isola
 
 
 Release checkpoint: implementation commit `bec7684`, integrated latest develop `9e74818` with merge `cf90bb9`; pushed branch `rebuild/manual-discovery`. Draft PR #36 targets develop: https://github.com/geekedctrl/lorrysystem-marketing-system/pull/36 . Keep draft until coordinated legacy guard/API publication or native cutover is ready; DEV has not been changed. GitHub CI is running. Local fixture projects `discovery-review-test` and `discovery-legacy-test`, their disposable volumes and the port 8098 gateway were removed after verification; pre-existing local stacks remain untouched. User-owned root compose/gitignore hashes remain unchanged and those edits are excluded.
+
+
+## Parallel native DEV rollout - 12 October 2026
+
+| Task | Status | Remaining gates |
+| --- | --- | --- |
+| N-05 Native runtime alongside legacy DEV | Implemented locally on native-dev-cutover | Merge to develop; add three DB passwords and provider credentials/rates to protected server .env; verify deploy helper starts included services; provision first admin/catalog; configure HTTPS route; run bounded human-reviewed discovery and preparation. Keep all n8n and production services until acceptance. |
+
+N-05 verification update - 12 October 2026: root Compose model includes all native services; all native images build; a fresh disposable DB migrated; API and native dashboard started healthy, and dashboard-to-API returned HTTP 200 inside the Compose network. The current DietPi helper only builds/starts marketing-api-dev and dashboard-dev. Before native DEV rollout, update the helper with native image builds, backend-migrate run, native API/worker/dashboard startup and health/log checks. Verify Compose v2.20.3+ and add native DB passwords to the protected server .env before the helper config preflight. No server or provider changes have been made.

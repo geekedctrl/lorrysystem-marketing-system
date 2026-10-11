@@ -1,6 +1,7 @@
 services:
   backend-db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: marketing_rebuild
       POSTGRES_USER: marketing_rebuild
@@ -23,9 +24,15 @@ services:
       backend-db: {condition: service_healthy}
   backend-api:
     build: ./backend
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://backend_api:${BACKEND_API_DB_PASSWORD}@backend-db:5432/marketing_rebuild
-    ports: ["127.0.0.1:8020:8000"]
+    ports: ["127.0.0.1:${NATIVE_API_HOST_PORT:-8020}:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
   backend-worker:
@@ -33,6 +40,7 @@ services:
       context: ./backend
       args:
         INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
       DISCOVERY_BROWSER_FALLBACK: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
@@ -48,6 +56,22 @@ services:
     command: ["python", "-m", "marketing_backend.worker"]
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
+  native-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.native
+    restart: unless-stopped
+    environment:
+      NATIVE_API_BASE_URL: http://backend-api:8000
+      DASHBOARD_SECURE_COOKIES: ${NATIVE_DASHBOARD_SECURE_COOKIES:-true}
+    ports: ["127.0.0.1:${NATIVE_DASHBOARD_HOST_PORT:-8093}:8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    depends_on:
+      backend-api: {condition: service_healthy}
   backend-smoke:
     build: ./backend
     profiles: [test]
