@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const {sharedChildren,sharedWorker}=require('./shared-workflows');
-const {sharedJob,setupResult,discoverySearch,discoveryPages,discoveryResults}=require('./shared-runtime');
+const {sharedJob,setupResult,discoverySearch,discoveryPages,discoveryEvidence,discoveryRequest,discoveryResults}=require('./shared-runtime');
 const {completionContent}=require('./model-runtime');
 const {publicResearchUrl}=require('./research-runtime');
 const {assertWorkspaceContext}=require('./workspace-runtime');
@@ -128,6 +128,42 @@ test('search preparation is wired before Brave, and unreadable websites fail ins
   assert.equal(run(item.json).failure_reason,'DISCOVERY_FETCH_FAILED');
   assert.equal(run({no_fetch:true}).shared_outcome,'COMPLETED');
   assert.equal(run({search_failed:true}).failure_reason,'SEARCH_FAILED');
+});
+
+test('selected excerpt IDs preserve exact fetched evidence instead of model-combined passages',()=>{
+  const quote='New Company provides industrial haulage services across Malaysia. Mission: deliver safely. Vision: grow carefully. Its fleet includes public transport equipment.';
+  const pages=[{url:'https://new.com/',domain:'new.com',title:'New Company',evidence:quote}];
+  const ws=assertWorkspaceContext(context(),{workspace_id:A,job_id:J,shared_job:true});
+  const candidate={company_name:'New Company',source_id:'P1',excerpt_id:'P1_E1',icp_code:'AUTO_1',icp_confidence:.85,icp_reasoning:'The excerpt documents industrial transport operations.',company_identity_verified:true,
+    source_url:'https://invented.com/',evidence_quote:'New Company guarantees unreal savings.'};
+  const [result]=discoveryResults(envelope({candidates:[candidate]}),pages,ws,job(),completionContent);
+  assert.equal(result.candidate.website_url,pages[0].url);
+  assert.equal(result.candidate.source_summary,quote);
+  assert.ok(pages[0].evidence.includes(result.candidate.source_summary));
+  assert.doesNotMatch(result.candidate.source_summary,/guarantees/);
+  const request=discoveryRequest(pages,ws,binding.llm,job().input.query);
+  assert.equal(JSON.parse(request.messages[1].content)[0].excerpts[0].text,quote);
+  assert.match(request.messages[0].content,/Do not write an evidence quote or URL/);
+});
+
+test('invented or cross-page excerpt IDs and unsupported identity/ICP cannot create companies',()=>{
+  const pages=[{url:'https://new.com/',domain:'new.com',evidence:'New Company provides industrial haulage services across Malaysia.'},
+    {url:'https://other.com/',domain:'other.com',evidence:'Other Company provides accounting services across Malaysia.'}];
+  const ws=assertWorkspaceContext(context(),{workspace_id:A,job_id:J,shared_job:true});
+  const c={company_name:'New Company',source_id:'P1',excerpt_id:'P1_E1',icp_code:'AUTO_1',icp_confidence:.85,icp_reasoning:'Industrial transport operations are documented.',company_identity_verified:true};
+  for(const bad of [{...c,source_id:'FOREIGN'},{...c,excerpt_id:'P2_E1'},{...c,excerpt_id:'P1_E99'},
+    {...c,company_name:'Invented Company'},{...c,icp_code:'__proto__'},{...c,icp_code:'FOREIGN'},
+    {...c,company_identity_verified:false},{...c,icp_confidence:.5}]){
+    assert.equal(discoveryResults(envelope({candidates:[bad]}),pages,ws,job(),completionContent)[0].failure_reason,'DISCOVERY_EVIDENCE_REJECTED');
+  }
+});
+
+test('excerpt windows overlap and stay within source and persisted quotation bounds',()=>{
+  const text='New Company transport services. '+'z'.repeat(9000);
+  const [source]=discoveryEvidence([{url:'https://new.com/',evidence:text}]);
+  assert.equal(source.excerpts.length,8);
+  for(const e of source.excerpts){assert.ok(e.text.length<=1000);assert.ok(text.includes(e.text));}
+  assert.equal(source.excerpts[0].text.slice(800),source.excerpts[1].text.slice(0,200));
 });
 
 test('rejected model candidates fail visibly; an empty assessment remains a valid no-match result',()=>{

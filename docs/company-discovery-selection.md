@@ -16,8 +16,14 @@ If all selected websites fail to provide evidence, discovery returns `DISCOVERY_
 
 The dashboard explains no-match/fetch/search/evidence outcomes. Managed discovery polling opens All discoveries when the run finishes, so automatically accepted companies are visible; completion and empty-state links lead to the official Leads list. Human outreach approval and separate sending are unchanged.
 
+## Source excerpt selection
+
+The first corrected-search live batch still failed evidence validation. A bounded diagnostic batch confirmed that the model combined nonadjacent passages from Hock Cheong's official website into one quote, omitting intervening headings and mission/vision text. The recorded quote was rejected correctly. Prompt instructions alone had not prevented this repeated error.
+
+The model now selects `source_id` and `excerpt_id` from overlapping windows of fetched text, rather than generating a URL and quote. Source URLs and saved quotations are resolved deterministically from those identifiers. Each page supplies at most eight excerpts of at most 1,000 characters from at most 6,000 fetched characters. Unknown or cross-page identifiers, unsupported company names, foreign/prototype ICP keys, unverified identity and low confidence remain rejected. Legacy output with an explicit quote remains supported only when its original strict continuous-quotation checks pass. Model-written replacements cannot alter the selected fetched excerpt or source URL.
+
 ## Verification and release
 
-All 76 n8n JavaScript tests pass, including directory-budget starvation, homepage priority, workspace-specific bounded query exclusions, unsafe-operator rejection and all-fetch failure. Thirteen login/session, eight campaign dashboard and five UX tests pass; discovery JavaScript syntax is valid. Two bounded diagnostic Brave searches verified the original directory-heavy pool and the revised official-company pool; real payloads remain private ignored files.
+All 79 n8n JavaScript tests pass, including directory-budget starvation, homepage priority, workspace-specific bounded query exclusions, unsafe-operator rejection, all-fetch failure and exact source-identifier quotation persistence/rejection. Thirteen login/session, eight campaign dashboard and five UX tests pass; discovery JavaScript syntax is valid. Two bounded diagnostic Brave searches verified the original directory-heavy pool and the revised official-company pool; real payloads remain private ignored files. Execution retention was temporarily enabled for one diagnostic discovery batch and restored to `none` immediately after collection.
 
 The DEV n8n child must be published separately from the app deployment. Its existing named credentials and lease headers must be preserved, along with the dispatcher and other child workflows. Changes are limited to discovery code/search preparation and the setup prompt. Live dashboard acceptance and release identifiers are recorded in `docs/ai/TEST_STATUS.md` and the PR. No production changes or outbound messages are part of this repair. Large-catalog search paging and broader calibration remain separate native-worker rollout work.
