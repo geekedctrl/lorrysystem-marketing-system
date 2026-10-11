@@ -1,5 +1,16 @@
 # Task board
 
+## Native frontend — 11 October 2026
+
+| ID | Scope | State |
+| --- | --- | --- |
+| UI-N01 | Opaque server sessions, native bridge, workspace/role shell | Implemented; synthetic BFF checks |
+| UI-N02 | Setup/discovery/preparation/contact/qualification/approval/operations | Implemented against native handoff |
+| UI-N03 | Synthetic browser acceptance, responsive screenshots, docs | Local validation; see native-frontend.md |
+| UI-N04 | Disposable actual native-worker browser integration | DONE locally through gateway8095; original and support-control journeys passed |
+| UI-N06 | Profile, paging/detail, catalog lifecycle, human revision and contact-count adapters | DONE; eight BFF groups, expanded synthetic browser and actual support browser passed |
+| UI-N05 | Production sessions, missing API parity, migration and release | Backend/release dependencies; no deployment |
+
 | ID | Scope | Priority | Role/owner | Branch | Dependencies | Acceptance / last verified result | Status |
 |---|---|---|---|---|---|---|---|
 | B-01 | Application, deployment, product audits and shared knowledge | P1 | lead + read-only specialists | codex/campaign-strategist | baseline | app9c0a3b0/deploycba785a, canonical docs and competitor gaps saved | DONE |
