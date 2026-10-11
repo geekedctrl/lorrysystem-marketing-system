@@ -13,4 +13,3 @@ Final lead rerun:13 offline,27 PostgreSQL,62 live HTTP/dashboard,8 dashboard tes
 # Mobile sidebar fix — 11 October 2026
 
 Removed the legacy horizontal mobile navigation override. Shared sidebar now uses a vertical drawer with wrapped labels, 44px targets, viewport-bounded width and contained vertical scrolling. Native drawer also contains scrolling and hides the desktop collapse control on phones. Updated legacy CSS cache versions. Rendered actual base template browser checks passed at 320/390/760px (vertical links, no horizontal overflow, Escape/focus/inert); eight BFF groups and native browser journey passed.
-
