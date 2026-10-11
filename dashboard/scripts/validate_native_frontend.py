@@ -201,6 +201,15 @@ class BFFAcceptance(unittest.TestCase):
         self.assertNotIn("ADMIN", self.client.cookies.get("native_session"))
         self.assertEqual(self.client.post(f"/gateway/{W1}/discovery", json={"idempotency_key": "synthetic-key"}).status_code, 403)
 
+    def test_native_dashboard_deployment_routes(self):
+        response = self.client.get("/", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], "/dashboard")
+        page = self.client.get("/dashboard")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("/static/native.js", page.text)
+        self.assertEqual(self.client.get("/health").json(), {"status": "ok", "frontend": "native"})
+
     def test_switch_rejects_old_workspace_and_csrf(self):
         headers = self.sign_in()
         switch = self.client.post("/session/workspace", headers=headers, json={"workspace_id": W2})

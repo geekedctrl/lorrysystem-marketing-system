@@ -10,6 +10,8 @@ This repository contains the core application used by the **development environm
 
 The target orchestration is the native Python API and durable workers; n8n is being retired from the product path after a staged cutover. The root Compose file now includes a separate native DEV stack beside the legacy app. This does not migrate existing data or remove the currently deployed n8n services. See the [native DEV cutover runbook](docs/native-dev-cutover.md) for configuration and release gates. Older n8n diagrams and setup notes below describe the legacy runtime only.
 
+The DEV dashboard cutover uses the native dashboard at the existing hostname/port 8081. The legacy dashboard remains available on port 8082 for rollback. See the [native dashboard and provider guide](docs/native-dashboard-dev.md) for catalog restoration and Brave/xKiro configuration.
+
 ---
 
 ## Product workspaces update
