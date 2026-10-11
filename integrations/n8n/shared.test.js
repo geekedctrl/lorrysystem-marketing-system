@@ -84,3 +84,28 @@ test('shared discovery declares the Accept header required by Brave Search',()=>
  assert.ok(search.parameters.headerParameters.parameters.some(h=>h.name==='Accept' && h.value==='application/json'));
  assert.deepEqual(search.credentials.httpHeaderAuth,binding.brave_credential);
 });
+
+test('rejected model candidates fail visibly; an empty assessment remains a valid no-match result',()=>{
+  const quote='Trading and Transport Sdn Bhd provides industrial transport services across Malaysia.';
+  const pages=[{url:'https://new.com/',domain:'new.com',evidence:quote}];
+  const ws={icp_ids:{AUTO_1:A+'-icp'}};
+  const candidate={company_name:'Trading & Transport Sdn Bhd',source_url:pages[0].url,evidence_quote:quote,icp_code:'AUTO_1',icp_confidence:.85,icp_reasoning:'Source confirms the business transport services.',company_identity_verified:true};
+  const rejected=discoveryResults(envelope({candidates:[candidate]}),pages,ws,job(),completionContent)[0];
+  assert.equal(rejected.shared_outcome,'FAILED');
+  assert.equal(rejected.failure_reason,'DISCOVERY_EVIDENCE_REJECTED');
+  assert.equal(discoveryResults(envelope({candidates:[]}),pages,ws,job(),completionContent)[0].shared_outcome,'COMPLETED');
+  const valid=discoveryResults(envelope({candidates:[{...candidate,company_name:'Trading and Transport Sdn Bhd'}]}),pages,ws,job(),completionContent)[0];
+  assert.equal(valid.candidate.company_name,'Trading and Transport Sdn Bhd');
+});
+
+test('visible HTML punctuation is decoded before extraction without weakening exact quotation checks',()=>{
+  const node=sharedChildren(binding).discovery.nodes.find(n=>n.name==='Clean New Company Pages');
+  const input={json:{fetch_status:'SUCCESS',final_url:'https://new.com/',body:'<html><title>New Company</title><p>New Company is Johor&rsquo;s transport operator &mdash; serving Malaysia with industrial transport and warehousing services.</p></html>'}};
+  const page=vm.runInNewContext('(function(){'+node.parameters.jsCode+'})()',{$input:{all:()=>[input]},$:()=>({all:()=>[{json:{url:'https://new.com/',domain:'new.com'}}]})})[0].json;
+  const quote='New Company is Johor\u2019s transport operator \u2014 serving Malaysia with industrial transport and warehousing services.';
+  assert.ok(page.evidence.includes(quote));
+  const candidate={company_name:'New Company',source_url:page.url,evidence_quote:quote,icp_code:'AUTO_1',icp_confidence:.85,icp_reasoning:'Industrial transport services are explicitly documented.',company_identity_verified:true};
+  const ws={icp_ids:{AUTO_1:A+'-icp'}};
+  assert.equal(discoveryResults(envelope({candidates:[candidate]}),[page],ws,job(),completionContent)[0].candidate.company_name,'New Company');
+  assert.equal(discoveryResults(envelope({candidates:[{...candidate,evidence_quote:quote+' We guarantee savings.'}]}),[page],ws,job(),completionContent)[0].failure_reason,'DISCOVERY_EVIDENCE_REJECTED');
+});

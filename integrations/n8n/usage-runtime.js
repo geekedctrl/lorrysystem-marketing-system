@@ -16,3 +16,20 @@ function workflowUsage(node) {
     model_status:models.length?(models.every(ok)?'OK':'ERROR'):'NOT_USED'};
 }
 if(typeof module!=='undefined')module.exports={workflowUsage};
+
+// Literal node references let the n8n task runner resolve upstream data dependencies.
+function capturedWorkflowUsage() {
+  const readers={
+    'Search New Companies':()=>$('Search New Companies').all(),
+    'Search Research Evidence':()=>$('Search Research Evidence').all(),
+    'Search Professional Profiles':()=>$('Search Professional Profiles').all(),
+    'Fetch New Company Page':()=>$('Fetch New Company Page').all(),
+    'Fetch Guarded Research Page':()=>$('Fetch Guarded Research Page').all(),
+    'Fetch Official Contact Page':()=>$('Fetch Official Contact Page').all(),
+    'xKiro Product Targeting':()=>$('xKiro Product Targeting').all(),
+    'xKiro Discovery Extraction':()=>$('xKiro Discovery Extraction').all(),
+    'xKiro Research Extraction':()=>$('xKiro Research Extraction').all(),
+    'xKiro Stage Extraction':()=>$('xKiro Stage Extraction').all(),
+  };
+  return workflowUsage(name=>({all:readers[name]}));
+}

@@ -450,3 +450,9 @@ retry CSRF and role restrictions in disposable environments. Native n8n 2.41.7
 tests against the disposable API exercise two workspaces, empty queues, API
 deployment waiting, partial evidence, model failure and a mismatched child using
 synthetic website/search/model responses; these tests incur no provider charges.
+
+Real DEV discovery acceptance on 11 October 2026 found and corrected visible HTML
+punctuation mismatches, silent rejection of all model candidates, and task-runner
+usage collection returning zero. Exact source quotes remain required. See
+[DEV discovery acceptance](../../docs/dev-discovery-acceptance.md) for the real
+company/job evidence, deployed executor and limits of the test.
