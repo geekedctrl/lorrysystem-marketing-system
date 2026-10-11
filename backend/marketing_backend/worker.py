@@ -7,7 +7,7 @@ log = logging.getLogger("marketing-worker")
 stop = threading.Event()
 
 
-def execute(job, handler=research):
+def execute(job, handler=None):
     def save(value):
         with Session() as db:
             queue.checkpoint(db, job.id, job.lease_token, value)
@@ -25,15 +25,29 @@ def execute(job, handler=research):
     renewer = threading.Thread(target=renew, daemon=True)
     renewer.start()
     try:
-        if job.kind != "RESEARCH":
+        if job.managed:
+            from .stages import dispatch
+            from .pipeline import valid_context
+
+            with Session() as db:
+                queue.owned(db, job.id, job.lease_token)
+                valid_context(db, job)
+            handler = handler or dispatch
+        elif job.kind != "RESEARCH":
             raise ProviderFailure("UNSUPPORTED_JOB_KIND")
+        else:
+            handler = handler or research
         result = handler(job, save)
         with Session() as db:
-            queue.complete(db, job.id, job.lease_token, result, review=True)
+            queue.complete(db, job.id, job.lease_token, result, review=not job.managed)
     except queue.LeaseLost:
         log.warning("Lease lost for job %s; no stale result saved", job.id)
     except ProviderFailure as exc:
         try:
+            from .pipeline import schedule
+
+            with Session() as db:
+                schedule(db)
             with Session() as db:
                 queue.fail(db, job.id, job.lease_token, exc.code, exc.retryable)
         except queue.LeaseLost:

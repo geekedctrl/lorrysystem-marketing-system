@@ -19,3 +19,11 @@ Executed:
 
 api/scripts/validate_campaign_http.py —62 checks passed against running API/dashboard in final lead rerun. CI executes the new suites; remote CI pending PR. No live model/search/SMTP calls. No viewport/browser visual check yet. Runtime AI quality, provider terms/pricing and production deployment remain unverified.
 
+
+## Native worker acceptance — 11 October 2026
+
+Independent Docker project `marketing-rebuild`, PostgreSQL17 `marketing_rebuild_test`, native migrations through005_job_run_ownership. Thirty integration tests passed with synthetic providers, including six companies across transport/accounting catalogs, actual restricted worker role, source-backed contact continuation, contact-search refresh, atomic rollback/idempotency, pause/context/ownership guards, conservative provider reservations and provider error handling. No paid provider calls or outbound messages.
+
+Command: `docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml --profile test run --rm --build backend-test`. Running HTTP API/worker smoke command uses the same Compose invocation with backend-smoke. Its missing-provider checks verify both manual and native queues using their actual restricted database roles, removing only the explicit smoke fixtures.
+
+Synthetic results do not validate real provider prose/coverage, dashboard migration, sending or DEV cutover. Legacy test records remain historical.

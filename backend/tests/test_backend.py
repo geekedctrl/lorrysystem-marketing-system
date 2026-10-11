@@ -16,6 +16,10 @@ from marketing_backend.models import (
     Lead,
     Job,
     now,
+    Approval,
+    ProviderUsage,
+    PreparationRun,
+    DiscoveryMemory,
 )
 from marketing_backend.auth import hash_password
 from marketing_backend.api import app
@@ -27,11 +31,15 @@ if os.getenv("APP_ENV") != "test" or engine.url.database != "marketing_rebuild_t
     raise RuntimeError("Tests require the dedicated marketing_rebuild_test database")
 
 
-class BackendTests(unittest.TestCase):
+class BackendFixtures(unittest.TestCase):
     def setUp(self):
         with Session() as db:
             for model in (
+                Approval,
+                ProviderUsage,
                 Job,
+                DiscoveryMemory,
+                PreparationRun,
                 Lead,
                 Catalog,
                 Membership,
@@ -104,6 +112,8 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(r.status_code, 202, r.text)
         return uuid.UUID(r.json()["id"])
 
+
+class BackendTests(BackendFixtures):
     def test_database_isolation_and_worker_permissions(self):
         self.enqueue()
         with Session() as db:
@@ -279,7 +289,14 @@ class BackendTests(unittest.TestCase):
                 ]
             },
         )
-        with patch.dict(os.environ, {"MODEL_API_KEY": "fixture-only"}), patch(
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_API_KEY": "fixture-only",
+                "MODEL_INPUT_USD_PER_MILLION": "1",
+                "MODEL_OUTPUT_USD_PER_MILLION": "1",
+            },
+        ), patch(
             "marketing_backend.research.fetch_public",
             return_value={
                 "fetch_status": "SUCCESS",
@@ -291,7 +308,7 @@ class BackendTests(unittest.TestCase):
                 + "</p></html>",
             },
         ) as fetch, patch(
-            "marketing_backend.research.httpx.post", return_value=response
+            "marketing_backend.providers.httpx.post", return_value=response
         ) as model:
             execute(job)
             self.assertEqual(fetch.call_count, 1)
