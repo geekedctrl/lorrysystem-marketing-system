@@ -439,7 +439,7 @@ def robots_permission(url):
 # ============================================================
 
 
-def fetch_public(target):
+def fetch_public(target, *, content_types=ALLOWED_CONTENT_TYPES, allowed_hosts=None):
 
     current, _, _, _, _ = checked_url(target)
 
@@ -450,7 +450,9 @@ def fetch_public(target):
 
     for hop in range(MAX_REDIRECTS + 1):
 
-        checked, scheme, _, _, _ = checked_url(current)
+        checked, scheme, host, _, _ = checked_url(current)
+        if allowed_hosts is not None and host not in allowed_hosts:
+            raise FetchError("CROSS_SITE_REQUEST_DENIED")
 
         if checked in visited:
             raise FetchError("REDIRECT_LOOP")
@@ -531,7 +533,7 @@ def fetch_public(target):
 
         mime = result["content_type"].split(";", 1)[0].strip().lower()
 
-        if mime not in ALLOWED_CONTENT_TYPES:
+        if mime not in content_types:
 
             return dict(
                 common,

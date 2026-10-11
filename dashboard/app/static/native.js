@@ -18,6 +18,7 @@
     timer: null,
     user: null,
     leadFilters: { q: "", status: "", cursor: null, previous: [] },
+    candidateFilters: { status: "READY_FOR_REVIEW", offset: 0 },
   };
   const esc = (value) =>
     String(value ?? "").replace(
@@ -43,6 +44,8 @@
     `<section class="card"><h2>${esc(title)}</h2>${body}</section>`;
   const canWork = () => ["ADMIN", "OPERATOR"].includes(state.workspace?.role);
   const canReview = () => ["ADMIN", "REVIEWER"].includes(state.workspace?.role);
+  const canReviewCandidate = () =>
+    ["ADMIN", "OPERATOR", "REVIEWER"].includes(state.workspace?.role);
   const isAdmin = () => state.workspace?.role === "ADMIN";
   const uid = () => crypto.randomUUID();
   const url = (value) => {
@@ -158,6 +161,7 @@
   function login(message = "") {
     state.user = null;
     state.leadFilters = { q: "", status: "", cursor: null, previous: [] };
+    state.candidateFilters = { status: "READY_FOR_REVIEW", offset: 0 };
     state.page = "overview";
     state.lead = null;
     state.tab = "Overview";
@@ -204,6 +208,7 @@
       state.lead = null;
       state.page = "overview";
       state.leadFilters = { q: "", status: "", cursor: null, previous: [] };
+      state.candidateFilters = { status: "READY_FOR_REVIEW", offset: 0 };
       notice("");
       document.querySelector("#view").innerHTML = empty("Switching workspace…");
       try {
@@ -349,6 +354,12 @@
           request(`leads/${encodeURIComponent(state.lead)}/preparation`),
           request(`leads/${encodeURIComponent(state.lead)}`),
         ]);
+      const candidates =
+        state.page === "discovery"
+          ? await request(
+              `candidates?${new URLSearchParams({ limit: "25", offset: String(state.candidateFilters.offset), ...(state.candidateFilters.status ? { status: state.candidateFilters.status } : {}) })}`,
+            )
+          : { items: [], total: 0 };
       if (epoch !== state.epoch) return;
       state.data = {
         operations,
@@ -360,6 +371,7 @@
         allCatalog,
         runs,
         leadDetail,
+        candidates,
       };
       if (!state.dirty && !state.busy) {
         const scroll = window.scrollY;
@@ -400,6 +412,21 @@
           "No leads yet. Find companies or add a company to start preparation.",
         );
   }
+  function candidateInbox(page) {
+    return `<form id="candidate-filters"><label for="candidate-status">Discovery status</label><select id="candidate-status" name="status">${[
+      ["READY_FOR_REVIEW", "Awaiting your review"],
+      ["", "All discoveries"],
+      ["ACCEPTED", "Accepted"],
+      ["REJECTED", "Rejected"],
+    ]
+      .map(
+        ([s, t]) =>
+          `<option value="${s}" ${state.candidateFilters.status === s ? "selected" : ""}>${t}</option>`,
+      )
+      .join(
+        "",
+      )}</select><button>Apply filter</button></form><p class="muted">${page.total} ${page.total === 1 ? "discovery" : "discoveries"} in this view</p>${page.items.length ? page.items.map((c) => card(c.company_name || c.domain, `<div class="actions">${badge(c.status)}${c.stale ? badge("STALE") : ""}${link(c.website || c.source_url, "Company website")}</div>${c.industry ? `<p><strong>Suggested industry:</strong> ${esc(c.industry)}</p>` : ""}${c.icp_code ? `<p><strong>Customer fit:</strong> ${esc(productName(c.icp_code))} · ${esc(c.confidence)}% confidence</p>` : ""}${c.reasoning ? `<p>${esc(c.reasoning)}</p>` : ""}${c.evidence_quote ? evidence([{ source_url: c.source_url, evidence_quote: c.evidence_quote }]) : ""}${c.unknowns?.length ? `<p class="muted">Not established: ${esc(c.unknowns.join(" · "))}</p>` : ""}${c.failure_reason ? `<p class="error">${esc(label(c.failure_reason))}. You can retry this company.</p>` : ""}${c.stale ? `<p class="muted">The catalog or targeting changed. Reassess before accepting.</p>` : ""}${c.status === "READY_FOR_REVIEW" && canReviewCandidate() ? `<div class="actions">${command(`candidates/${c.id}/accept`, "Accept & start research", {note: ""}, c.stale || !state.data.operations.enabled)}<form data-command="candidates/${esc(c.id)}/reject">${field("note", "Reason for rejection", "", "required minlength=5 maxlength=1000")}<button>Reject candidate</button><div class="error" hidden role="alert"></div></form></div>` : ""}${!["ACCEPTED", "REJECTED", "KNOWN", "RETRY_PENDING"].includes(c.status) && canReviewCandidate() ? command(`candidates/${c.id}/retry`, "Reassess company", {}, !state.data.operations.enabled) : ""}${c.accepted_lead_id ? `<button data-lead="${esc(c.accepted_lead_id)}">Open accepted lead</button>` : ""}${c.review_note ? `<p class="muted">Review note: ${esc(c.review_note)}</p>` : ""}`)).join("") : empty("No candidates in this view. Find leads to collect companies for review, or select All discoveries to inspect stopped assessments.")}<div class="actions"><button data-candidates-prev ${state.candidateFilters.offset ? "" : "disabled"}>Previous</button><button data-candidates-next ${state.candidateFilters.offset + 25 < page.total ? "" : "disabled"}>Next</button></div>`;
+  }
   function render() {
     const d = state.data,
       view = document.querySelector("#view");
@@ -423,8 +450,9 @@
       view.innerHTML =
         card(
           "Find your next customers",
-          `<p>Discover sourced companies for your configured targeting. A batch can return fewer companies than the maximum.</p><p>Batch maximum: ${esc(d.operations.preferences?.batch_size ?? "Not configured")}</p>${canWork() ? command("discovery", "Find leads", {}, !d.operations.enabled) : empty("An administrator or operator can start discovery.")}${!d.operations.enabled ? '<p class="muted">Ask an administrator to activate or resume automation.</p>' : ""}`,
+          `<p>Find companies matching your product and target customers. Review the evidence and accept suitable candidates before research starts. A batch may return fewer companies than its maximum.</p><p>Batch maximum: ${esc(d.operations.preferences?.batch_size ?? "Not configured")}</p>${canWork() ? command("discovery", "Find leads", {}, !d.operations.enabled) : empty("An administrator or operator can start discovery.")}${!d.operations.enabled ? '<p class="muted">Ask an administrator to activate or resume automation.</p>' : ""}`,
         ) +
+        card("Candidate review", candidateInbox(d.candidates)) +
         card(
           "Discovery batches",
           jobCards(d.jobs.filter((j) => j.kind === "DISCOVERY")),
@@ -487,7 +515,7 @@
       ? jobs
           .map(
             (j) =>
-              `<article class="card"><strong>${esc(label(j.kind))}</strong> ${badge(j.status)}<p class="muted">Attempt ${esc(j.attempts)} of ${esc(j.max_attempts)} · ${esc(j.created_at)}</p>${j.failure_code ? `<p>${esc(label(j.failure_code))}. ${/PROVIDER|BUDGET|CONFIG|MODEL/.test(j.failure_code) ? "Ask an administrator to review configuration." : "Review the saved context before retrying."}</p>` : ""}<details><summary>Stage events & technical details</summary><pre>${esc(JSON.stringify({ history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>${canWork() && j.status === "FAILED" ? command(`jobs/${j.id}/retry`, "Retry failed job") : ""}</article>`,
+              `<article class="card"><strong>${esc(label(j.kind))}</strong> ${badge(j.status)}<p class="muted">Attempt ${esc(j.attempts)} of ${esc(j.max_attempts)} · ${esc(j.created_at)}</p>${j.kind === "DISCOVERY" && j.result?.counts ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p><p>${esc(label(j.result.outcome))}. Suitable candidates await your acceptance.</p>` : ""}${j.failure_code ? `<p>${esc(label(j.failure_code))}. ${/PROVIDER|BUDGET|CONFIG|MODEL/.test(j.failure_code) ? "Ask an administrator to review configuration." : "Review the saved context before retrying."}</p>` : ""}<details><summary>Stage events & technical details</summary><pre>${esc(JSON.stringify({ history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>${canWork() && j.status === "FAILED" ? command(`jobs/${j.id}/retry`, "Retry failed job") : ""}</article>`,
           )
           .join("")
       : empty("No jobs recorded yet.");
@@ -831,6 +859,16 @@
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target;
+    if (form.id === "candidate-filters") {
+      e.preventDefault();
+      state.candidateFilters = {
+        status: new FormData(form).get("status"),
+        offset: 0,
+      };
+      state.dirty = false;
+      await load();
+      return;
+    }
     if (!form.matches("[data-command]")) return;
     e.preventDefault();
     if (state.busy) return;
@@ -883,7 +921,13 @@
       notice(
         form.dataset.command.includes("decision")
           ? "Decision saved. No message was sent."
-          : "Request accepted. Check the current status below.",
+          : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/accept")
+            ? "Candidate accepted. Research has been queued."
+            : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/reject")
+              ? "Candidate rejected. Your decision has been saved."
+              : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/retry")
+                ? "Company reassessment queued."
+                : "Request accepted. Check the current status below.",
       );
       state.busy = false;
       await load();
@@ -893,6 +937,19 @@
       state.busy = false;
       buttons.forEach((b, i) => (b.disabled = disabled[i]));
     }
+  });
+  document.addEventListener("click", async (e) => {
+    const button = e.target.closest(
+      "[data-candidates-prev],[data-candidates-next]",
+    );
+    if (!button || button.disabled) return;
+    state.candidateFilters.offset = Math.max(
+      0,
+      state.candidateFilters.offset +
+        (button.hasAttribute("data-candidates-next") ? 25 : -25),
+    );
+    state.dirty = false;
+    await load();
   });
   document.addEventListener("click", (e) => {
     const theme = e.target.closest("button[data-theme]");

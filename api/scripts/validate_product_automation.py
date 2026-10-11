@@ -175,7 +175,7 @@ for f in fixtures:
     contract = call("GET", "/api/workspace-context", headers=legacy)["automation"]
     assert (
         contract["credential_kind"] == "workspace"
-        and contract["human_candidate_review_required"] is False
+        and contract["human_candidate_review_required"] is True
         and "job_id" not in contract
     )
     assert call("POST", "/api/research/claim", headers=legacy) is None
@@ -218,8 +218,14 @@ for job in claims:
     call("POST", "/api/automation/candidates", candidate, lease(job), 422)
     candidate["suggested_icp_profile_id"] = f["catalog"]["icps"][0]["id"]
     result = call("POST", "/api/automation/candidates", candidate, lease(job))
-    assert result["outcome"] == "ACCEPTED"
-    f["lead"] = result["lead_id"]
+    assert result["outcome"] == "READY_FOR_REVIEW"
+    candidate_id = result["candidate_id"]
+    stored = call("GET", f"/api/candidates/{candidate_id}", headers=f["headers"])
+    assert stored["accepted_lead_id"] is None
+    call("POST", f"/api/candidates/{candidate_id}/accept", {"reviewed_by": email}, lease(job), 403)
+    accepted = call("POST", f"/api/candidates/{candidate_id}/accept", {"reviewed_by": email, "review_notes": "Reviewed public services and targeting"}, f["headers"])
+    assert accepted["outcome"] == "ACCEPTED"
+    f["lead"] = accepted["lead_id"]
     f["quote"] = quote
     f["url"] = url
     assert (
@@ -235,7 +241,7 @@ for job in claims:
     )
     finish(job)
 print(
-    "PASS bounded sourced discovery, automatic acceptance, atomic research scheduling and duplicate rejection",
+    "PASS review-only sourced discovery, lease cannot accept, human acceptance, atomic research scheduling and duplicate rejection",
     flush=True,
 )
 for _ in range(2):
@@ -417,7 +423,8 @@ no_contact = {
         "evidence": "Unknown Contact Company provides professional business services in Malaysia.",
     },
 }
-lead = call("POST", "/api/automation/candidates", no_contact, lease(job))["lead_id"]
+pending = call("POST", "/api/automation/candidates", no_contact, lease(job))
+lead = call("POST", f"/api/candidates/{pending['candidate_id']}/accept", {"reviewed_by": email}, f["headers"])["lead_id"]
 finish(job)
 job = claim()
 assert job["kind"] == "RESEARCH"
@@ -586,8 +593,10 @@ with ThreadPoolExecutor(max_workers=2) as pool:
             ["Alpha", "Beta"],
         )
     )
-assert sum(r.get("outcome") == "ACCEPTED" for r in results) == 1
-assert finish(batch)["result"]["accepted_leads"] == 1
+assert sum(r.get("outcome") == "READY_FOR_REVIEW" for r in results) == 1
+assert finish(batch)["result"]["new_candidates"] == 1
+winner = next(r for r in results if r.get("outcome") == "READY_FOR_REVIEW")
+call("POST", f"/api/candidates/{winner['candidate_id']}/accept", {"reviewed_by": email}, f["headers"])
 batch_research = claim()
 assert batch_research["kind"] == "RESEARCH"
 finish(batch_research, reason="VALIDATION_TEST_FAILURE")

@@ -25,12 +25,14 @@ L1 = "33333333-3333-4333-8333-333333333333"
 RID = "44444444-4444-4444-8444-444444444444"
 AID = "55555555-5555-4555-8555-555555555555"
 JID = "66666666-6666-4666-8666-666666666666"
+CID = "77777777-7777-4777-8777-777777777777"
 NOW = "2026-10-11T10:00:00Z"
 
 
 class NativeFixture:
     def __init__(self):
         self.calls = []
+        self.candidates = {W1: [{"id":CID,"domain":"candidate.example.com","company_name":"Synthetic Candidate Logistics","website":"https://candidate.example.com/","status":"READY_FOR_REVIEW","industry":"Logistics","confidence":85,"icp_code":"ICP","reasoning":"Supported public transport services fit the customer segment.","source_url":"https://candidate.example.com/","evidence_quote":"Synthetic Candidate Logistics provides transport and freight services.","unknowns":["Buying intent unknown"],"stale":False,"accepted_lead_id":None}], W2: []}
         self.queries = []
         self.enabled = {W1: True, W2: True}
         self.catalog = {wid: [{"id": "catalog", "kind": "PRODUCT", "code": "OFFER", "name": name, "description": "Documented product capabilities", "rules": {}}, {"id": "icp", "kind": "ICP", "code": "ICP", "name": "Business customers", "description": "Source-backed business targeting", "rules": {}}] for wid, name in [(W1, "Fleet operations"), (W2, "Learning platform")]}
@@ -98,6 +100,20 @@ class NativeFixture:
                 self.catalog[wid] = [x for x in self.catalog[wid] if x["code"] != body["code"]] + [body]
                 return httpx.Response(201, json={"id": "catalog", "code": body["code"]})
             return httpx.Response(200, json=[c for c in self.catalog[wid] if c.get("active",True)])
+        if suffix == "candidates":
+            values=dict(request.url.params)
+            rows=[c for c in self.candidates[wid] if not values.get("status") or c["status"]==values["status"]]
+            offset=int(values.get("offset",0));limit=int(values.get("limit",25))
+            return httpx.Response(200,json={"items":rows[offset:offset+limit],"total":len(rows),"offset":offset,"limit":limit})
+        if suffix.startswith("candidates/"):
+            if request.method == "POST":
+                c=self.candidates[wid][0]
+                c["status"]="REJECTED" if suffix.endswith("/reject") else "RETRY_PENDING" if suffix.endswith("/retry") else "ACCEPTED"
+                if c["status"]=="ACCEPTED":
+                    c["accepted_lead_id"]=CID
+                    self.leads[wid].append({"id":CID,"company_name":c["company_name"],"website":c["website"]})
+                return httpx.Response(200,json={"candidate_id":suffix.split("/")[1],"status":"REJECTED" if suffix.endswith("/reject") else "ACCEPTED"})
+            return httpx.Response(404,json={"detail":"Candidate not found"})
         if suffix == "operations":
             return httpx.Response(200, json={"enabled": self.enabled[wid], "preferences": {"product_description": "Actual product with documented capabilities", "batch_size": 3}, "next_discovery_at": None, "stalled_jobs": [], "delayed_pending_jobs": [], "current_preparation": [self.run()], "provider_health": {}, "recent_provider_usage": [], "cost_basis": "Conservative reservations"})
         if suffix == "leads":
@@ -222,6 +238,19 @@ class BFFAcceptance(unittest.TestCase):
             self.assertIsNone(safe_url(source))
         self.assertEqual(safe_url("https://company.example.com/team"),"https://company.example.com/team")
 
+    def test_candidate_review_permissions_and_filter_allowlist(self):
+        for role in ["admin", "operator", "reviewer", "viewer"]:
+            headers=self.sign_in(role)
+            response=self.client.get(f"/gateway/{W1}/candidates?status=READY_FOR_REVIEW&limit=25&offset=0")
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response.json()["items"][0]["accepted_lead_id"],None)
+            self.assertEqual(self.client.post(f"/gateway/{W1}/candidates/{CID}/accept",headers=headers,json={}).status_code,403 if role=="viewer" else 200)
+            self.fixture.candidates[W1][0]["status"]="READY_FOR_REVIEW"
+            self.fixture.candidates[W1][0]["accepted_lead_id"]=None
+        self.sign_in()
+        for query in ["limit=101", "offset=-1", "offset=0&offset=1", "token=private", "cursor=anything"]:
+            self.assertEqual(self.client.get(f"/gateway/{W1}/candidates?{query}").status_code,422)
+
     def test_profile_and_validated_paging(self):
         self.sign_in()
         profile=self.client.get("/session").json()["user"]
@@ -273,6 +302,16 @@ def browser_acceptance():
                 print("URL:",page.url);print("Errors:",errors);print("Calls:",fixture.calls)
                 raise
             page.screenshot(path=str(output/"overview-desktop.png"),full_page=True)
+            original_leads=len(fixture.leads[W1])
+            page.get_by_role("link",name="Discovery",exact=True).click()
+            page.get_by_role("heading",name="Synthetic Candidate Logistics",exact=True).wait_for()
+            assert len(fixture.leads[W1])==original_leads
+            page.screenshot(path=str(output/"discovery-candidate-review.png"),full_page=True)
+            page.get_by_role("button",name="Accept & start research",exact=True).click()
+            page.get_by_text("No candidates in this view.",exact=False).wait_for()
+            assert len(fixture.leads[W1])==original_leads+1
+            assert fixture.candidates[W1][0]["status"]=="ACCEPTED"
+            page.screenshot(path=str(output/"discovery-manual-acceptance.png"),full_page=True)
             page.get_by_role("link",name="Product setup",exact=True).click()
             page.get_by_role("button",name="Pause automation",exact=True).click()
             page.get_by_role("button",name="Resume automation",exact=True).wait_for()
@@ -299,7 +338,7 @@ def browser_acceptance():
             page.get_by_text("website: Use a public company website",exact=True).wait_for()
             assert page.get_by_label("Company name",exact=True).input_value()=="Synthetic new company"
             page.on("dialog",lambda dialog:dialog.accept())
-            page.get_by_role("button",name="Open lead",exact=True).click()
+            page.get_by_role("row").filter(has_text="Synthetic Haulage").get_by_role("button",name="Open lead",exact=True).click()
             page.get_by_role("button",name="Start fresh preparation").click()
             page.get_by_role("tab",name="Qualification",exact=True).click()
             page.get_by_text("Qualification has not completed yet.",exact=True).wait_for()

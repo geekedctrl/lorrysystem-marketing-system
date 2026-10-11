@@ -189,7 +189,7 @@ class Providers:
         self.record(uid, "SUCCESS", usage)
         return self.remember(cache_key, value)
 
-    def search(self, operation, query):
+    def search(self, operation, query, *, count=5, country=None):
         cache_key = "search:" + operation
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -205,7 +205,11 @@ class Providers:
             response = httpx.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 headers={"X-Subscription-Token": key, "Accept": "application/json"},
-                params={"q": query, "count": 5},
+                params={
+                    "q": query,
+                    "count": min(20, max(1, count)),
+                    **({"country": country} if country else {}),
+                },
                 timeout=30,
                 follow_redirects=False,
             )
@@ -219,7 +223,7 @@ class Providers:
                 response.status_code == 429 or response.status_code >= 500,
             )
         try:
-            rows = response.json().get("web", {}).get("results", [])[:5]
+            rows = response.json().get("web", {}).get("results", [])[:count]
             results = [
                 dict(
                     url=r["url"],

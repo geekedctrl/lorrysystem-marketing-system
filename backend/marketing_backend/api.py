@@ -217,10 +217,18 @@ def save_catalog(
 @app.post("/workspaces/{wid}/leads", status_code=201, response_model=out.LeadResponse)
 def create_lead(wid: UUID, data: LeadInput, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
+    from .pipeline import domain
+
+    db.scalar(select(Workspace).where(Workspace.id == wid).with_for_update())
     try:
         checked_url(data.website)
     except FetchError:
         raise HTTPException(422, "Use a public company HTTP(S) website") from None
+    if any(
+        domain(lead.website) == domain(data.website)
+        for lead in db.scalars(select(Lead).where(Lead.workspace_id == wid))
+    ):
+        raise HTTPException(409, "This company already has a lead")
     lead = Lead(workspace_id=wid, **data.model_dump())
     db.add(lead)
     try:
@@ -410,3 +418,7 @@ app.include_router(frontend_router)
 from .native_api import router as native_router
 
 app.include_router(native_router)
+
+from .discovery_api import router as discovery_router
+
+app.include_router(discovery_router)

@@ -202,13 +202,33 @@ class PreparationRun(Base):
 
 class DiscoveryMemory(Base):
     __tablename__ = "discovery_memory"
-    __table_args__ = (UniqueConstraint("workspace_id", "domain"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "domain"),
+        UniqueConstraint("workspace_id", "id", name="discovery_identity"),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_job_id"],
+            ["jobs.workspace_id", "jobs.id"],
+            name="discovery_job_scope",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "accepted_lead_id"],
+            ["leads.workspace_id", "leads.id"],
+            name="discovery_lead_scope",
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
     domain: Mapped[str] = mapped_column(String(254))
     candidate: Mapped[dict] = mapped_column(JSONB)
     outcome: Mapped[str] = mapped_column(String(24))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    source_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    context_hash: Mapped[str | None] = mapped_column(String(64))
+    accepted_lead_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProviderUsage(Base):

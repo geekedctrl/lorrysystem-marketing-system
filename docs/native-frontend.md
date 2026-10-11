@@ -71,3 +71,8 @@ This runner refuses non-loopback URLs and non-synthetic fixture accounts. It mut
 Remaining native APIs include invitations/team provisioning, account recovery/settings, imports, provider connection management and native sending. Atomic setup remains intentionally unsupported: separate catalog upserts and activation have verified partial-save/idempotent retry semantics. Jobs/approval/history lists remain capped100/100/50. No fake working controls are exposed for unavailable features.
 
 Before release: agree production session storage, complete remaining API parity and reviewed data/account/approval migration/executor cutover, and obtain release authorization. Local native integration is verified with synthetic providers; it does not establish real-provider quality. PRs target `develop`; deployment and merge remain separate user decisions.
+
+
+### Discovery review update — 11 October 2026
+
+Discovery now waits for explicit user acceptance before lead creation/research. See [native lead discovery](native-lead-discovery.md) for candidate APIs, native UI/BFF adapters, migration008, worker libraries/limits, local acceptance and coordinated release requirements. Earlier automatic discovery acceptance guidance is superseded.

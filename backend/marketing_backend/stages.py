@@ -145,7 +145,7 @@ class Links(PageText):
         super().handle_starttag(tag, attrs)
         if tag == "a":
             href = dict(attrs).get("href", "")
-            if len(href) <= 1500:
+            if isinstance(href, str) and 0 < len(href) <= 1500:
                 self.links.append(href)
 
 
@@ -160,11 +160,14 @@ def page(providers, url):
         fetched = fetch_public(url)
         if fetched["fetch_status"] != "SUCCESS":
             raise FetchError("UNAVAILABLE")
+        from .scraping import readable
+
         parser = Links()
         parser.feed(fetched["body"])
         value = {
             "source_url": fetched["final_url"],
-            "text": normalize(" ".join(parser.parts))[:12000],
+            "text": readable(fetched["body"])
+            or normalize(" ".join(parser.parts))[:12000],
             "links": parser.links[:100],
         }
     except FetchError:
@@ -178,7 +181,7 @@ def setup(job, providers):
         SetupOutput,
         providers.model(
             "setup",
-            "Prepare targeting from the real catalog and product description. Never invent capabilities. Return discovery_query and icps (code,name,description), at most five. Preserve existing ICPs by returning an empty icps array when ICPs already exist.",
+            "Prepare targeting from the real catalog and product description. Never invent capabilities. Search observable customer business types and geography, not software vendors or hypothetical buying needs. Return discovery_query and icps (code,name,description), at most five. Preserve existing ICPs by returning an empty icps array when ICPs already exist.",
             job.payload["context"],
         ),
     )
@@ -192,115 +195,9 @@ def setup(job, providers):
 
 
 def discovery(job, providers):
-    ctx = job.payload["context"]
-    query = ctx["preferences"].get("discovery_query")
-    if not query:
-        raise ProviderFailure("TARGETING_NOT_READY")
-    with Session() as db:
-        known = set(
-            db.scalars(
-                select(DiscoveryMemory.domain).where(
-                    DiscoveryMemory.workspace_id == job.workspace_id
-                )
-            )
-        )
-        known.update(
-            domain(l.website)
-            for l in db.scalars(
-                select(Lead).where(Lead.workspace_id == job.workspace_id)
-            )
-        )
-    pages, seen, evaluated = [], set(), []
-    queries = [query]
-    country = ctx["preferences"].get("country", "MY")
-    queries += [
-        f"{c['name']} {country} company services"[:300]
-        for c in ctx["catalog"]
-        if c["kind"] == "ICP"
-    ]
-    queries = list(dict.fromkeys(queries))[:3]
-    rows = []
-    for index, search_query in enumerate(queries):
-        rows.extend(
-            providers.search(
-                "discovery" if index == 0 else f"discovery-{index}", search_query
-            )
-        )
-    for row in rows:
-        url = row["url"]
-        host = domain(url)
-        if (
-            not host
-            or host in known
-            or host in seen
-            or any(
-                host == h or host.endswith("." + h)
-                for h in (
-                    "linkedin.com",
-                    "facebook.com",
-                    "instagram.com",
-                    "twitter.com",
-                    "x.com",
-                    "youtube.com",
-                )
-            )
-        ):
-            continue
-        seen.add(host)
-        fetched = page(providers, url)
-        evaluated.append(
-            {
-                "domain": host,
-                "source_url": fetched["source_url"],
-                "reason": (
-                    "NO_SUPPORTED_CANDIDATE" if fetched["text"] else "FETCH_UNAVAILABLE"
-                ),
-            }
-        )
-        if fetched["text"] and domain(fetched["source_url"]) not in known:
-            pages.append(fetched)
-        if len(seen) >= 10:
-            break
-    if not pages:
-        return {
-            "candidates": [],
-            "evaluated_domains": evaluated,
-            "coverage": "No new fetchable company evidence in bounded search.",
-        }
-    pages = evidence_pages(pages)
-    value = validated(
-        DiscoveryOutput,
-        providers.model(
-            "discovery",
-            "Assess official company pages against active ICPs and real products. Return candidates (company_name,source_url,evidence_quote,icp_code,confidence integer75-100,official_company:true). Exact quotes must include the company name and support its business identity and ICP fit. Exclude directories/unrelated businesses. Empty candidates is valid.",
-            {"context": ctx, "pages": pages},
-        ),
-    )
-    icps = {c["code"] for c in ctx["catalog"] if c["kind"] == "ICP"}
-    domains = set()
-    for item in value["candidates"]:
-        cite(item, pages)
-        if (
-            item["icp_code"] not in icps
-            or normalize(item["company_name"]).lower()
-            not in normalize(item["evidence_quote"]).lower()
-        ):
-            raise ProviderFailure("CANDIDATE_NOT_SUPPORTED")
-        item["website"] = item["source_url"]
-        host = domain(item["website"])
-        if host in domains:
-            raise ProviderFailure("DUPLICATE_CANDIDATE")
-        domains.add(host)
-    proposed = {domain(c["website"]) for c in value["candidates"]}
-    value["candidates"] = value["candidates"][: ctx["preferences"].get("batch_size", 3)]
-    accepted = {domain(c["website"]) for c in value["candidates"]}
-    value["evaluated_domains"] = [
-        v for v in evaluated if v["domain"] not in proposed - accepted
-    ]
-    value["coverage"] = (
-        "At most three public searches and ten fetched domains; accepted candidates require fetched evidence."
-    )
-    return value
+    from .discovery import discover
+
+    return discover(job, providers)
 
 
 def research(job, providers):
@@ -705,5 +602,8 @@ def dispatch(job, save):
     if job.kind not in HANDLERS:
         raise ProviderFailure("UNSUPPORTED_JOB_KIND")
     providers = Providers(job, save)
-    providers.ready(search=job.kind in ("DISCOVERY", "CONTACT_SEARCH"))
+    providers.ready(
+        search=job.kind == "CONTACT_SEARCH"
+        or (job.kind == "DISCOVERY" and not job.payload.get("retry_domain"))
+    )
     return HANDLERS[job.kind](job, providers)

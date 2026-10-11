@@ -37,8 +37,8 @@ class BackendFixtures(unittest.TestCase):
             for model in (
                 Approval,
                 ProviderUsage,
-                Job,
                 DiscoveryMemory,
+                Job,
                 PreparationRun,
                 Lead,
                 Catalog,

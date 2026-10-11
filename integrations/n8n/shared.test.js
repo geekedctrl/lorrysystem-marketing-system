@@ -10,7 +10,7 @@ const credential={id:'worker-ref',name:'Shared worker'};
 const binding={api_base_url:'http://marketing-api:8000',api_credential:credential,brave_credential:{id:'brave-ref',name:'Brave'},llm:{base_url:'https://api.xkiro.com/v1',provider:'xkiro',model:'mistralai/mistral-large-2512',max_tokens:6000,credential:{id:'model-ref',name:'xKiro'}}};
 const job=(wid=A)=>({job_id:J,kind:'DISCOVERY',workspace_id:wid,lease_token:'fixture-token-'.repeat(4),input:{workspace_id:wid,target_new_companies:1,query:'Business software buyers Malaysia'}});
 const envelope=value=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(value)}}]});
-function context(wid=A){return {workspace:{id:wid,role:'SERVICE',name:wid===A?'Fleet':'Accounting'},automation:{contract_version:1,credential_kind:'job',job_id:J,registry_namespace:`workspace:${wid}:discovery`,human_candidate_review_required:false,human_marketing_approval_required:true},icps:[{id:wid+'-icp',code:'AUTO_1',name:'Target customers'}],products:[{id:wid+'-product',code:'PRODUCT_MAIN',name:'Offering'}]};}
+function context(wid=A){return {workspace:{id:wid,role:'SERVICE',name:wid===A?'Fleet':'Accounting'},automation:{contract_version:1,credential_kind:'job',job_id:J,registry_namespace:`workspace:${wid}:discovery`,human_candidate_review_required:true,human_marketing_approval_required:true},icps:[{id:wid+'-icp',code:'AUTO_1',name:'Target customers'}],products:[{id:wid+'-product',code:'PRODUCT_MAIN',name:'Offering'}]};}
 test('same generated child graphs receive two unrelated workspaces and exact job contexts',()=>{
   const graphs=sharedChildren(binding);
   for(const graph of Object.values(graphs))for(const wid of [A,B]){
@@ -21,6 +21,7 @@ test('same generated child graphs receive two unrelated workspaces and exact job
     assert.equal(assertWorkspaceContext(context(wid),item.json.config).workspace_name,wid===A?'Fleet':'Accounting');
     assert.throws(()=>assertWorkspaceContext(context(wid===A?B:A),item.json.config),/match/);
     assert.throws(()=>assertWorkspaceContext({...context(wid),automation:{...context(wid).automation,job_id:B}},item.json.config),/contract/);
+    assert.throws(()=>assertWorkspaceContext({...context(wid),automation:{...context(wid).automation,human_candidate_review_required:false}},item.json.config),/contract/);
   }
 });
 test('every business request has dynamic lease/workspace headers; providers retain named credentials; no sending or execution retention',()=>{
