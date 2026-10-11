@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
+from . import contracts as out
 from .db import session
 from .models import (
     User,
@@ -92,7 +93,7 @@ def health(db=Depends(session)):
     return {"status": "ok", "backend": "python-workers"}
 
 
-@app.post("/auth/login")
+@app.post("/auth/login", response_model=out.LoginResponse)
 def login(data: Login, db=Depends(session)):
     identity = digest(data.email.lower())
     db.execute(
@@ -136,7 +137,7 @@ def logout(
     db.commit()
 
 
-@app.get("/workspaces")
+@app.get("/workspaces", response_model=list[out.WorkspaceResponse])
 def workspaces(actor=Depends(user), db=Depends(session)):
     return [
         {"id": w.id, "name": w.name, "role": m.role}
@@ -148,7 +149,7 @@ def workspaces(actor=Depends(user), db=Depends(session)):
     ]
 
 
-@app.post("/workspaces", status_code=201)
+@app.post("/workspaces", status_code=201, response_model=out.WorkspaceCreated)
 def create_workspace(data: WorkspaceInput, actor=Depends(user), db=Depends(session)):
     if not actor.platform_admin:
         raise HTTPException(403, "Platform administrator required")
@@ -160,7 +161,7 @@ def create_workspace(data: WorkspaceInput, actor=Depends(user), db=Depends(sessi
     return {"id": w.id, "name": w.name}
 
 
-@app.get("/workspaces/{wid}/catalog")
+@app.get("/workspaces/{wid}/catalog", response_model=list[out.CatalogResponse])
 def catalog(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     return [
@@ -178,41 +179,16 @@ def catalog(wid: UUID, actor=Depends(user), db=Depends(session)):
     ]
 
 
-@app.put("/workspaces/{wid}/catalog", status_code=201)
+@app.put("/workspaces/{wid}/catalog", status_code=201, response_model=out.CatalogSaved)
 def save_catalog(
     wid: UUID, data: CatalogInput, actor=Depends(user), db=Depends(session)
 ):
     scope(wid, actor, db, ["ADMIN"])
-    pending = list(
-        db.scalars(
-            select(Job)
-            .where(
-                Job.workspace_id == wid,
-                Job.managed.is_(True),
-                Job.status.in_(["PENDING", "RUNNING"]),
-            )
-            .with_for_update()
-        )
-    )
-    workspace = db.scalar(
-        select(Workspace).where(Workspace.id == wid).with_for_update()
-    )
-    if pending and workspace.automation_enabled:
-        raise HTTPException(
-            409, "Pause or finish preparation before changing the catalog"
-        )
-    for job in pending:
-        from .models import PreparationRun
+    from .catalog_policy import lock_catalog_change
 
-        job.status, job.failure_code = "FAILED", "CATALOG_CHANGED"
-        job.lease_token = job.lease_until = None
-        job.history = [
-            *job.history,
-            {"code": "CATALOG_CHANGED", "at": now().isoformat()},
-        ]
-        if job.run_id:
-            run = db.get(PreparationRun, job.run_id)
-            run.status, run.stop_reason = "FAILED", "CATALOG_CHANGED"
+    lock_catalog_change(
+        db, wid, kind=data.kind, code=data.code, desired=data.model_dump()
+    )
     item = db.scalar(
         select(Catalog)
         .where(
@@ -226,6 +202,8 @@ def save_catalog(
         item = Catalog(workspace_id=wid, **data.model_dump())
         db.add(item)
     else:
+        if any(getattr(item, key) != value for key, value in data.model_dump().items()):
+            item.context_version += 1
         for key, value in data.model_dump().items():
             setattr(item, key, value)
     try:
@@ -236,7 +214,7 @@ def save_catalog(
     return {"id": item.id, "code": item.code}
 
 
-@app.post("/workspaces/{wid}/leads", status_code=201)
+@app.post("/workspaces/{wid}/leads", status_code=201, response_model=out.LeadResponse)
 def create_lead(wid: UUID, data: LeadInput, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
     try:
@@ -253,16 +231,25 @@ def create_lead(wid: UUID, data: LeadInput, actor=Depends(user), db=Depends(sess
     return {"id": lead.id, "company_name": lead.company_name, "website": lead.website}
 
 
-@app.get("/workspaces/{wid}/leads")
+@app.get("/workspaces/{wid}/leads", response_model=list[out.LeadResponse])
 def leads(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     return [
         {"id": l.id, "company_name": l.company_name, "website": l.website}
-        for l in db.scalars(select(Lead).where(Lead.workspace_id == wid).limit(100))
+        for l in db.scalars(
+            select(Lead)
+            .where(Lead.workspace_id == wid)
+            .order_by(Lead.created_at.desc(), Lead.id.desc())
+            .limit(100)
+        )
     ]
 
 
-@app.post("/workspaces/{wid}/leads/{lid}/research", status_code=202)
+@app.post(
+    "/workspaces/{wid}/leads/{lid}/research",
+    status_code=202,
+    response_model=out.JobResponse,
+)
 def research(
     wid: UUID,
     lid: UUID,
@@ -327,7 +314,7 @@ def research(
     return job_read(job)
 
 
-@app.get("/workspaces/{wid}/jobs/{jid}")
+@app.get("/workspaces/{wid}/jobs/{jid}", response_model=out.JobResponse)
 def job(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     item = db.scalar(select(Job).where(Job.workspace_id == wid, Job.id == jid))
@@ -336,7 +323,7 @@ def job(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
     return job_read(item)
 
 
-@app.get("/workspaces/{wid}/jobs")
+@app.get("/workspaces/{wid}/jobs", response_model=list[out.JobResponse])
 def jobs(wid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
     return [
@@ -350,7 +337,11 @@ def jobs(wid: UUID, actor=Depends(user), db=Depends(session)):
     ]
 
 
-@app.post("/workspaces/{wid}/jobs/{jid}/retry", status_code=202)
+@app.post(
+    "/workspaces/{wid}/jobs/{jid}/retry",
+    status_code=202,
+    response_model=out.JobResponse,
+)
 def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
     item = db.scalar(
@@ -411,6 +402,10 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
         ) from None
     return job_read(item)
 
+
+from .frontend_api import router as frontend_router
+
+app.include_router(frontend_router)
 
 from .native_api import router as native_router
 

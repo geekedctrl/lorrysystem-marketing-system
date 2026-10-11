@@ -1,7 +1,7 @@
 name: Backend Rebuild CI
 on:
   pull_request:
-    paths: ['backend/**', 'compose.backend.yml', '.github/workflows/backend-rebuild-ci.yml']
+    paths: ['backend/**', 'compose.backend.yml', 'compose.native-integration.yml', 'docs/contracts/native-backend-openapi.json', '.github/workflows/backend-rebuild-ci.yml']
   push:
     branches: ['rebuild/**']
 jobs:
@@ -40,6 +40,14 @@ jobs:
           PY
       - name: Test running API and worker roles
         run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm backend-smoke
+      - name: Verify exported native API contract
+        run: |
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml exec -T backend-api python -c "import json; from marketing_backend.api import app; print(json.dumps(app.openapi()))" > native-openapi.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          assert json.loads(Path('native-openapi.json').read_text()) == json.loads(Path('docs/contracts/native-backend-openapi.json').read_text()), 'Refresh the native OpenAPI snapshot'
+          PY
       - name: Stop isolated test containers
         if: always()
         run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test down

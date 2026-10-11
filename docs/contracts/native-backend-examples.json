@@ -1,0 +1,1067 @@
+{
+  "source": "Isolated actual native acceptance responses; synthetic data; IDs/times normalized.",
+  "current_user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "email": "admin@example.test",
+    "capabilities": {
+      "create_workspace": false
+    },
+    "expires_at": "2026-10-11T12:00:00Z"
+  },
+  "workspaces": [
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "name": "Accounting Acceptance",
+      "role": "ADMIN"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "name": "Transport Acceptance",
+      "role": "ADMIN"
+    }
+  ],
+  "catalog_all": [
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "kind": "ICP",
+      "code": "ICP",
+      "name": "Transport operators",
+      "description": "Companies with publicly documented relevant business operations",
+      "rules": {},
+      "active": true,
+      "version": 1
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "kind": "PRODUCT",
+      "code": "OFFER",
+      "name": "Transport Scheduling",
+      "description": "Commercial transport scheduling and delivery operations",
+      "rules": {},
+      "active": true,
+      "version": 3
+    }
+  ],
+  "lead_detail": {
+    "id": "00000000-0000-0000-0000-000000000006",
+    "company_name": "Provider Failure Haulage",
+    "website": "https://provider-failure.fixtures.example.org/",
+    "created_at": "2026-10-11T12:00:00Z",
+    "current_preparation": {
+      "id": "00000000-0000-0000-0000-000000000007",
+      "lead_id": "00000000-0000-0000-0000-000000000006",
+      "status": "APPROVED",
+      "stop_reason": null,
+      "results": {
+        "RESEARCH": {
+          "facts": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "category": "INDUSTRY",
+              "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "category": "SERVICES",
+              "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+              "category": "PAIN_POINT",
+              "statement": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system.",
+              "category": "SIGNAL",
+              "statement": "Provider Failure Haulage is seeking a new transport scheduling system.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            }
+          ],
+          "people": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+              "name": "Casey Sample",
+              "role": "Operations Director",
+              "email": "casey@fixtures.example.org",
+              "phone": null
+            }
+          ],
+          "unknowns": [
+            "Operating scale not established"
+          ],
+          "pages": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "text": "Provider Failure Haulage provides commercial transport and delivery services. Provider Failure Haulage reports delayed deliveries and manual route planning. Provider Failure Haulage is seeking a new transport scheduling system. Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org. Existing systems remain in place."
+            }
+          ],
+          "industry": {
+            "source_url": "https://provider-failure.fixtures.example.org/",
+            "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+            "category": "INDUSTRY",
+            "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+            "confidence": 90,
+            "kind": "OBSERVED"
+          },
+          "coverage": {
+            "pages_attempted": 1,
+            "unavailable_pages": 0
+          }
+        },
+        "CONTACT_SEARCH": {
+          "people": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+              "name": "Casey Sample",
+              "role": "Operations Director",
+              "email": "casey@fixtures.example.org",
+              "phone": null,
+              "profiles": [],
+              "profile_candidates": []
+            }
+          ],
+          "selected_contact": {
+            "source_url": "https://provider-failure.fixtures.example.org/",
+            "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+            "name": "Casey Sample",
+            "role": "Operations Director",
+            "email": "casey@fixtures.example.org",
+            "phone": null,
+            "profiles": [],
+            "profile_candidates": []
+          },
+          "unavailable_queries": 0,
+          "stop_reason": null
+        },
+        "SCORING": {
+          "criteria": [
+            {
+              "criterion": "icp_fit",
+              "points": 40,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            },
+            {
+              "criterion": "operational_need",
+              "points": 30,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning."
+                }
+              ]
+            },
+            {
+              "criterion": "operating_scale",
+              "points": 0,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            },
+            {
+              "criterion": "buying_signals",
+              "points": 10,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system."
+                }
+              ]
+            },
+            {
+              "criterion": "evidence_quality",
+              "points": 5,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            }
+          ],
+          "unknowns": [],
+          "score": 85,
+          "relevance": 45,
+          "opportunity": 40,
+          "adjustments": [],
+          "stop_reason": null
+        },
+        "MATCHING": {
+          "matches": [
+            {
+              "product_code": "OFFER",
+              "fit": 85,
+              "rationale": "Matches documented catalog capabilities",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            }
+          ],
+          "selected_product": "OFFER",
+          "stop_reason": null
+        },
+        "DRAFTING": {
+          "subject": "A brief capability discussion",
+          "body": "Hello Casey, your public site describes Provider Failure Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?\n\nHappy to share the documented capabilities.",
+          "evidence": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+            }
+          ],
+          "channel": "EMAIL",
+          "recipient": "casey@fixtures.example.org",
+          "product_code": "OFFER",
+          "status": "PENDING_APPROVAL"
+        }
+      },
+      "created_at": "2026-10-11T12:00:00Z"
+    },
+    "primary_contact": {
+      "source_url": "https://provider-failure.fixtures.example.org/",
+      "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+      "name": "Casey Sample",
+      "role": "Operations Director",
+      "email": "casey@fixtures.example.org",
+      "phone": null,
+      "profiles": [],
+      "profile_candidates": []
+    }
+  },
+  "lead_page": {
+    "items": [
+      {
+        "id": "00000000-0000-0000-0000-000000000006",
+        "company_name": "Provider Failure Haulage",
+        "website": "https://provider-failure.fixtures.example.org/",
+        "created_at": "2026-10-11T12:00:00Z",
+        "current_preparation": {
+          "id": "00000000-0000-0000-0000-000000000007",
+          "lead_id": "00000000-0000-0000-0000-000000000006",
+          "status": "APPROVED",
+          "stop_reason": null,
+          "results": {
+            "RESEARCH": {
+              "facts": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+                  "category": "INDUSTRY",
+                  "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+                  "category": "SERVICES",
+                  "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+                  "category": "PAIN_POINT",
+                  "statement": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system.",
+                  "category": "SIGNAL",
+                  "statement": "Provider Failure Haulage is seeking a new transport scheduling system.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                }
+              ],
+              "people": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                  "name": "Casey Sample",
+                  "role": "Operations Director",
+                  "email": "casey@fixtures.example.org",
+                  "phone": null
+                }
+              ],
+              "unknowns": [
+                "Operating scale not established"
+              ],
+              "pages": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "text": "Provider Failure Haulage provides commercial transport and delivery services. Provider Failure Haulage reports delayed deliveries and manual route planning. Provider Failure Haulage is seeking a new transport scheduling system. Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org. Existing systems remain in place."
+                }
+              ],
+              "industry": {
+                "source_url": "https://provider-failure.fixtures.example.org/",
+                "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+                "category": "INDUSTRY",
+                "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+                "confidence": 90,
+                "kind": "OBSERVED"
+              },
+              "coverage": {
+                "pages_attempted": 1,
+                "unavailable_pages": 0
+              }
+            },
+            "CONTACT_SEARCH": {
+              "people": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                  "name": "Casey Sample",
+                  "role": "Operations Director",
+                  "email": "casey@fixtures.example.org",
+                  "phone": null,
+                  "profiles": [],
+                  "profile_candidates": []
+                }
+              ],
+              "selected_contact": {
+                "source_url": "https://provider-failure.fixtures.example.org/",
+                "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                "name": "Casey Sample",
+                "role": "Operations Director",
+                "email": "casey@fixtures.example.org",
+                "phone": null,
+                "profiles": [],
+                "profile_candidates": []
+              },
+              "unavailable_queries": 0,
+              "stop_reason": null
+            },
+            "SCORING": {
+              "criteria": [
+                {
+                  "criterion": "icp_fit",
+                  "points": 40,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "operational_need",
+                  "points": 30,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "operating_scale",
+                  "points": 0,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "buying_signals",
+                  "points": 10,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "evidence_quality",
+                  "points": 5,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                }
+              ],
+              "unknowns": [],
+              "score": 85,
+              "relevance": 45,
+              "opportunity": 40,
+              "adjustments": [],
+              "stop_reason": null
+            },
+            "MATCHING": {
+              "matches": [
+                {
+                  "product_code": "OFFER",
+                  "fit": 85,
+                  "rationale": "Matches documented catalog capabilities",
+                  "evidence": [
+                    {
+                      "source_url": "https://provider-failure.fixtures.example.org/",
+                      "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                }
+              ],
+              "selected_product": "OFFER",
+              "stop_reason": null
+            },
+            "DRAFTING": {
+              "subject": "A brief capability discussion",
+              "body": "Hello Casey, your public site describes Provider Failure Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?\n\nHappy to share the documented capabilities.",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ],
+              "channel": "EMAIL",
+              "recipient": "casey@fixtures.example.org",
+              "product_code": "OFFER",
+              "status": "PENDING_APPROVAL"
+            }
+          },
+          "created_at": "2026-10-11T12:00:00Z"
+        },
+        "primary_contact": {
+          "source_url": "https://provider-failure.fixtures.example.org/",
+          "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+          "name": "Casey Sample",
+          "role": "Operations Director",
+          "email": "casey@fixtures.example.org",
+          "phone": null,
+          "profiles": [],
+          "profile_candidates": []
+        }
+      },
+      {
+        "id": "00000000-0000-0000-0000-000000000008",
+        "company_name": "Contact Review Haulage",
+        "website": "https://contact-review.fixtures.example.org/",
+        "created_at": "2026-10-11T12:00:00Z",
+        "current_preparation": {
+          "id": "00000000-0000-0000-0000-000000000009",
+          "lead_id": "00000000-0000-0000-0000-000000000008",
+          "status": "PENDING_APPROVAL",
+          "stop_reason": null,
+          "results": {
+            "RESEARCH": {
+              "facts": [
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services.",
+                  "category": "INDUSTRY",
+                  "statement": "Contact Review Haulage provides commercial transport and delivery services.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services.",
+                  "category": "SERVICES",
+                  "statement": "Contact Review Haulage provides commercial transport and delivery services.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Contact Review Haulage reports delayed deliveries and manual route planning.",
+                  "category": "PAIN_POINT",
+                  "statement": "Contact Review Haulage reports delayed deliveries and manual route planning.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                },
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Contact Review Haulage is seeking a new transport scheduling system.",
+                  "category": "SIGNAL",
+                  "statement": "Contact Review Haulage is seeking a new transport scheduling system.",
+                  "confidence": 90,
+                  "kind": "OBSERVED"
+                }
+              ],
+              "people": [
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                  "name": "Casey Sample",
+                  "role": "Operations Director",
+                  "email": null,
+                  "phone": null
+                }
+              ],
+              "unknowns": [
+                "Operating scale not established"
+              ],
+              "pages": [
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "text": "Contact Review Haulage provides commercial transport and delivery services. Contact Review Haulage reports delayed deliveries and manual route planning. Contact Review Haulage is seeking a new transport scheduling system. Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org. Existing systems remain in place."
+                }
+              ],
+              "industry": {
+                "source_url": "https://contact-review.fixtures.example.org/",
+                "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services.",
+                "category": "INDUSTRY",
+                "statement": "Contact Review Haulage provides commercial transport and delivery services.",
+                "confidence": 90,
+                "kind": "OBSERVED"
+              },
+              "coverage": {
+                "pages_attempted": 1,
+                "unavailable_pages": 0
+              }
+            },
+            "CONTACT_SEARCH": {
+              "people": [
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                  "name": "Casey Sample",
+                  "role": "Operations Director",
+                  "email": null,
+                  "phone": null,
+                  "profiles": [],
+                  "profile_candidates": [
+                    {
+                      "url": "https://www.linkedin.com/in/casey-synthetic-1",
+                      "platform": "linkedin.com",
+                      "source_url": "https://www.linkedin.com/in/casey-synthetic-1",
+                      "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+                      "basis": "PUBLIC_NAME_COMPANY_MATCH"
+                    },
+                    {
+                      "url": "https://www.linkedin.com/in/casey-synthetic-2",
+                      "platform": "linkedin.com",
+                      "source_url": "https://www.linkedin.com/in/casey-synthetic-2",
+                      "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+                      "basis": "PUBLIC_NAME_COMPANY_MATCH"
+                    }
+                  ]
+                }
+              ],
+              "selected_contact": {
+                "source_url": "https://contact-review.fixtures.example.org/",
+                "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+                "name": "Casey Sample",
+                "role": "Operations Director",
+                "email": null,
+                "phone": null,
+                "profiles": [
+                  {
+                    "url": "https://www.linkedin.com/in/casey-synthetic-1",
+                    "platform": "linkedin.com",
+                    "source_url": "https://www.linkedin.com/in/casey-synthetic-1",
+                    "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+                    "basis": "PUBLIC_NAME_COMPANY_MATCH"
+                  }
+                ],
+                "profile_candidates": [
+                  {
+                    "url": "https://www.linkedin.com/in/casey-synthetic-1",
+                    "platform": "linkedin.com",
+                    "source_url": "https://www.linkedin.com/in/casey-synthetic-1",
+                    "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+                    "basis": "PUBLIC_NAME_COMPANY_MATCH"
+                  },
+                  {
+                    "url": "https://www.linkedin.com/in/casey-synthetic-2",
+                    "platform": "linkedin.com",
+                    "source_url": "https://www.linkedin.com/in/casey-synthetic-2",
+                    "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+                    "basis": "PUBLIC_NAME_COMPANY_MATCH"
+                  }
+                ],
+                "human_review": {
+                  "actor_id": "00000000-0000-0000-0000-000000000001",
+                  "at": "2026-10-11T12:00:00Z"
+                }
+              },
+              "unavailable_queries": 0,
+              "stop_reason": null
+            },
+            "SCORING": {
+              "criteria": [
+                {
+                  "criterion": "icp_fit",
+                  "points": 40,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "operational_need",
+                  "points": 30,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage reports delayed deliveries and manual route planning."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "operating_scale",
+                  "points": 0,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "buying_signals",
+                  "points": 10,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage is seeking a new transport scheduling system."
+                    }
+                  ]
+                },
+                {
+                  "criterion": "evidence_quality",
+                  "points": 5,
+                  "rationale": "Supported by saved synthetic evidence",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                }
+              ],
+              "unknowns": [],
+              "score": 85,
+              "relevance": 45,
+              "opportunity": 40,
+              "adjustments": [],
+              "stop_reason": null
+            },
+            "MATCHING": {
+              "matches": [
+                {
+                  "product_code": "OFFER",
+                  "fit": 85,
+                  "rationale": "Matches documented catalog capabilities",
+                  "evidence": [
+                    {
+                      "source_url": "https://contact-review.fixtures.example.org/",
+                      "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services."
+                    }
+                  ]
+                }
+              ],
+              "selected_product": "OFFER",
+              "stop_reason": null
+            },
+            "DRAFTING": {
+              "subject": "A conversation about transport scheduling",
+              "body": "Hello Casey, your public site describes Contact Review Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?",
+              "evidence": [
+                {
+                  "source_url": "https://contact-review.fixtures.example.org/",
+                  "evidence_quote": "Contact Review Haulage provides commercial transport and delivery services."
+                }
+              ],
+              "channel": "LINKEDIN",
+              "recipient": "https://www.linkedin.com/in/casey-synthetic-1",
+              "product_code": "OFFER",
+              "status": "PENDING_APPROVAL"
+            }
+          },
+          "created_at": "2026-10-11T12:00:00Z"
+        },
+        "primary_contact": {
+          "source_url": "https://contact-review.fixtures.example.org/",
+          "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+          "name": "Casey Sample",
+          "role": "Operations Director",
+          "email": null,
+          "phone": null,
+          "profiles": [
+            {
+              "url": "https://www.linkedin.com/in/casey-synthetic-1",
+              "platform": "linkedin.com",
+              "source_url": "https://www.linkedin.com/in/casey-synthetic-1",
+              "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+              "basis": "PUBLIC_NAME_COMPANY_MATCH"
+            }
+          ],
+          "profile_candidates": [
+            {
+              "url": "https://www.linkedin.com/in/casey-synthetic-1",
+              "platform": "linkedin.com",
+              "source_url": "https://www.linkedin.com/in/casey-synthetic-1",
+              "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+              "basis": "PUBLIC_NAME_COMPANY_MATCH"
+            },
+            {
+              "url": "https://www.linkedin.com/in/casey-synthetic-2",
+              "platform": "linkedin.com",
+              "source_url": "https://www.linkedin.com/in/casey-synthetic-2",
+              "evidence_quote": "Casey Sample \u2014 Contact Review Haulage Operations Director",
+              "basis": "PUBLIC_NAME_COMPANY_MATCH"
+            }
+          ],
+          "human_review": {
+            "actor_id": "00000000-0000-0000-0000-000000000001",
+            "at": "2026-10-11T12:00:00Z"
+          }
+        }
+      }
+    ],
+    "total": 3,
+    "limit": 2,
+    "next_cursor": "example-opaque-cursor-redacted",
+    "as_of": "2026-10-11T12:00:00Z"
+  },
+  "approval": {
+    "id": "00000000-0000-0000-0000-00000000000a",
+    "run_id": "00000000-0000-0000-0000-000000000007",
+    "snapshot": {
+      "context_hash": "3023abcf4240947fa38ca7337c857bbebeb257c6657275c224f1c4a0a710b5e2",
+      "inputs": {
+        "catalog": [
+          {
+            "code": "ICP",
+            "kind": "ICP",
+            "name": "Transport operators",
+            "rules": {},
+            "version": 1,
+            "description": "Companies with publicly documented relevant business operations"
+          },
+          {
+            "code": "OFFER",
+            "kind": "PRODUCT",
+            "name": "Transport Scheduling",
+            "rules": {},
+            "version": 1,
+            "description": "Commercial transport scheduling and delivery operations"
+          }
+        ],
+        "preferences": {
+          "country": "MY",
+          "language": "English",
+          "batch_size": 1,
+          "brand_voice": "Professional and concise",
+          "discovery_query": "Commercial transport businesses",
+          "target_customers": "",
+          "product_description": "Commercial transport scheduling and delivery operations"
+        },
+        "company": {
+          "id": "00000000-0000-0000-0000-000000000006",
+          "website": "https://provider-failure.fixtures.example.org/",
+          "company_name": "Provider Failure Haulage"
+        }
+      },
+      "results": {
+        "RESEARCH": {
+          "facts": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "category": "INDUSTRY",
+              "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "category": "SERVICES",
+              "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+              "category": "PAIN_POINT",
+              "statement": "Provider Failure Haulage reports delayed deliveries and manual route planning.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            },
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system.",
+              "category": "SIGNAL",
+              "statement": "Provider Failure Haulage is seeking a new transport scheduling system.",
+              "confidence": 90,
+              "kind": "OBSERVED"
+            }
+          ],
+          "people": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+              "name": "Casey Sample",
+              "role": "Operations Director",
+              "email": "casey@fixtures.example.org",
+              "phone": null
+            }
+          ],
+          "unknowns": [
+            "Operating scale not established"
+          ],
+          "pages": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "text": "Provider Failure Haulage provides commercial transport and delivery services. Provider Failure Haulage reports delayed deliveries and manual route planning. Provider Failure Haulage is seeking a new transport scheduling system. Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org. Existing systems remain in place."
+            }
+          ],
+          "industry": {
+            "source_url": "https://provider-failure.fixtures.example.org/",
+            "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services.",
+            "category": "INDUSTRY",
+            "statement": "Provider Failure Haulage provides commercial transport and delivery services.",
+            "confidence": 90,
+            "kind": "OBSERVED"
+          },
+          "coverage": {
+            "pages_attempted": 1,
+            "unavailable_pages": 0
+          }
+        },
+        "CONTACT_SEARCH": {
+          "people": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+              "name": "Casey Sample",
+              "role": "Operations Director",
+              "email": "casey@fixtures.example.org",
+              "phone": null,
+              "profiles": [],
+              "profile_candidates": []
+            }
+          ],
+          "selected_contact": {
+            "source_url": "https://provider-failure.fixtures.example.org/",
+            "evidence_quote": "Casey Sample is Operations Director. Contact Casey Sample at casey@fixtures.example.org.",
+            "name": "Casey Sample",
+            "role": "Operations Director",
+            "email": "casey@fixtures.example.org",
+            "phone": null,
+            "profiles": [],
+            "profile_candidates": []
+          },
+          "unavailable_queries": 0,
+          "stop_reason": null
+        },
+        "SCORING": {
+          "criteria": [
+            {
+              "criterion": "icp_fit",
+              "points": 40,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            },
+            {
+              "criterion": "operational_need",
+              "points": 30,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage reports delayed deliveries and manual route planning."
+                }
+              ]
+            },
+            {
+              "criterion": "operating_scale",
+              "points": 0,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            },
+            {
+              "criterion": "buying_signals",
+              "points": 10,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage is seeking a new transport scheduling system."
+                }
+              ]
+            },
+            {
+              "criterion": "evidence_quality",
+              "points": 5,
+              "rationale": "Supported by saved synthetic evidence",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            }
+          ],
+          "unknowns": [],
+          "score": 85,
+          "relevance": 45,
+          "opportunity": 40,
+          "adjustments": [],
+          "stop_reason": null
+        },
+        "MATCHING": {
+          "matches": [
+            {
+              "product_code": "OFFER",
+              "fit": 85,
+              "rationale": "Matches documented catalog capabilities",
+              "evidence": [
+                {
+                  "source_url": "https://provider-failure.fixtures.example.org/",
+                  "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+                }
+              ]
+            }
+          ],
+          "selected_product": "OFFER",
+          "stop_reason": null
+        },
+        "DRAFTING": {
+          "subject": "A brief capability discussion",
+          "body": "Hello Casey, your public site describes Provider Failure Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?\n\nHappy to share the documented capabilities.",
+          "evidence": [
+            {
+              "source_url": "https://provider-failure.fixtures.example.org/",
+              "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+            }
+          ],
+          "channel": "EMAIL",
+          "recipient": "casey@fixtures.example.org",
+          "product_code": "OFFER",
+          "status": "PENDING_APPROVAL"
+        }
+      },
+      "draft": {
+        "subject": "A brief capability discussion",
+        "body": "Hello Casey, your public site describes Provider Failure Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?\n\nHappy to share the documented capabilities.",
+        "evidence": [
+          {
+            "source_url": "https://provider-failure.fixtures.example.org/",
+            "evidence_quote": "Provider Failure Haulage provides commercial transport and delivery services."
+          }
+        ],
+        "channel": "EMAIL",
+        "recipient": "casey@fixtures.example.org",
+        "product_code": "OFFER",
+        "status": "PENDING_APPROVAL"
+      },
+      "revision": {
+        "at": "2026-10-11T12:00:00Z",
+        "note": "Updated the wording following the reviewer note",
+        "version": 2,
+        "editor_id": "00000000-0000-0000-0000-000000000001",
+        "reviewer_note": "Please keep the opening concise and sourced",
+        "parent_approval_id": "00000000-0000-0000-0000-00000000000b"
+      }
+    },
+    "status": "APPROVED",
+    "decision": {
+      "actor_id": "00000000-0000-0000-0000-00000000000c",
+      "at": "2026-10-11T12:00:00Z",
+      "note": "Reviewed the saved revised draft and recipient"
+    },
+    "created_at": "2026-10-11T12:00:00Z",
+    "stale": true,
+    "version": 2
+  },
+  "job": {
+    "id": "00000000-0000-0000-0000-00000000000d",
+    "workspace_id": "00000000-0000-0000-0000-000000000003",
+    "lead_id": "00000000-0000-0000-0000-00000000000e",
+    "kind": "DRAFTING",
+    "run_id": "00000000-0000-0000-0000-00000000000f",
+    "managed": true,
+    "status": "COMPLETED",
+    "attempts": 1,
+    "max_attempts": 3,
+    "result": {
+      "body": "Hello Casey, your public site describes Synthetic Haulage provides commercial transport and delivery services.\n\nWould a conversation about the documented product capabilities alongside your existing systems be useful?",
+      "status": "PENDING_APPROVAL",
+      "channel": "EMAIL",
+      "subject": "A conversation about transport scheduling",
+      "evidence": [
+        {
+          "source_url": "https://haulage.fixtures.example.org/",
+          "evidence_quote": "Synthetic Haulage provides commercial transport and delivery services."
+        }
+      ],
+      "recipient": "casey@fixtures.example.org",
+      "product_code": "OFFER"
+    },
+    "failure_code": null,
+    "history": [
+      {
+        "at": "2026-10-11T12:00:00Z",
+        "code": "STAGE_STARTED",
+        "attempt": 1
+      },
+      {
+        "at": "2026-10-11T12:00:00Z",
+        "code": "STAGE_COMPLETED"
+      }
+    ],
+    "created_at": "2026-10-11T12:00:00Z",
+    "available_at": "2026-10-11T12:00:00Z",
+    "lease_until": null
+  }
+}

@@ -55,3 +55,9 @@ The implementation order, acceptance criteria and cutover boundaries are defined
 4. Controlled data/account/credential migration, executor ownership and rollback validation before disabling n8n.
 
 This is a local backend foundation, not a complete replacement release or production cutover.
+
+## Native frontend support update
+
+BE-01–BE-06 backend support is implemented and tested locally: typed responses/current-user capabilities, lead detail/keyset pagination, immutable human draft revisions with a different reviewer, soft catalog lifecycle and persistent context versions. Product setup keeps explicit partial-save semantics. The worker loop now checks due discovery continuously. Migrations006/007 belong to this independent database.
+
+The separate `compose.native-integration.yml` runs actual native API/workers/PostgreSQL with the frontend owner's checkout and guarded synthetic providers. Thirty-seven database tests, real HTTP/BFF two-product acceptance, actual headless Edge preparation/approval and restricted API revision/lifecycle checks pass. See [integration setup and frontend adaptations](../docs/native-frontend-backend-support.md). New BFF endpoint adapters remain frontend work. Windows host forwarding has a tested local gateway fallback; no DEV/n8n cutover or real sending/provider test is implied.

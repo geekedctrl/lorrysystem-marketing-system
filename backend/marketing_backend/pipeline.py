@@ -33,6 +33,7 @@ def context(db, wid, lead_id=None):
             name=c.name,
             description=c.description,
             rules=c.rules,
+            version=c.context_version,
         )
         for c in db.scalars(
             select(Catalog)

@@ -83,6 +83,7 @@ class Catalog(Base):
     description: Mapped[str] = mapped_column(Text)
     rules: Mapped[dict] = mapped_column(JSONB, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    context_version: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class Lead(Base):
@@ -97,6 +98,7 @@ class Lead(Base):
     )
     company_name: Mapped[str] = mapped_column(String(200))
     website: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class Job(Base):
@@ -232,6 +234,13 @@ class Approval(Base):
     __tablename__ = "approvals"
     __table_args__ = (
         UniqueConstraint("run_id"),
+        UniqueConstraint("workspace_id", "id"),
+        UniqueConstraint("workspace_id", "idempotency_key"),
+        UniqueConstraint("parent_approval_id"),
+        ForeignKeyConstraint(
+            ["workspace_id", "parent_approval_id"],
+            ["approvals.workspace_id", "approvals.id"],
+        ),
         ForeignKeyConstraint(
             ["workspace_id", "run_id"],
             ["preparation_runs.workspace_id", "preparation_runs.id"],
@@ -247,3 +256,8 @@ class Approval(Base):
     status: Mapped[str] = mapped_column(String(24), default="PENDING")
     decision: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    parent_approval_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    idempotency_key: Mapped[str | None] = mapped_column(String(120))
+    revision_hash: Mapped[str | None] = mapped_column(String(64))
+    editor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))

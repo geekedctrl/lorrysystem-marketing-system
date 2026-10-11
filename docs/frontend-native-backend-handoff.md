@@ -2,6 +2,8 @@
 
 Prepared 11 October 2026. This brief is for the developer rebuilding the frontend alongside the native Python backend.
 
+Update: BE-01 through BE-06 backend support is implemented locally on `rebuild/native-frontend-support`. Read [the verified integration and API update](native-frontend-backend-support.md) first: it supersedes the missing-API and untyped-contract notes below. The frontend owner has a separate native UI and same-origin bridge, tested against the real disposable backend. New endpoint adapters remain frontend work.
+
 ## Objective and current state
 
 Build a professional multi-product marketing application that ordinary workers can use without opening n8n, editing workflows or entering provider API keys. An administrator describes a product and enters its actual catalog through forms. Shared backend workers handle targeting, discovery, research, contacts, qualification, product matching and draft preparation. Human approval is the stopping point; sending is a separate future action.
@@ -15,9 +17,9 @@ The deployed system still uses the original `api/`, `dashboard/` and n8n. Its ex
 ## Technology and source of truth
 
 - Replacement backend: FastAPI JSON API, Pydantic, SQLAlchemy, PostgreSQL and native Python workers. No frontend-to-n8n calls are needed.
-- Existing frontend: FastAPI/Jinja2 templates, custom CSS and vanilla JavaScript. React/Next.js has not been selected for the rebuild; a new frontend can consume the same API. Agree the frontend framework and browser authentication approach before integration.
+- Existing frontend: FastAPI/Jinja2 templates, custom CSS and vanilla JavaScript. The frontend owner has implemented a separate native FastAPI/Jinja2/vanilla-JavaScript UI with a same-origin server bridge; its actual backend integration now passes locally. React/Next.js is not the implemented frontend.
 - API contracts: [OpenAPI snapshot](contracts/native-backend-openapi.json), [core routes](../backend/marketing_backend/api.py), [preparation routes](../backend/marketing_backend/native_api.py) and [stage result definitions](../backend/marketing_backend/stages.py).
-- The OpenAPI snapshot was exported from the running native API on 11 October. It describes requests and routes; many response schemas are currently untyped dictionaries. Use the response map below and source functions for response types. Regenerate the snapshot after backend changes.
+- The OpenAPI snapshot is refreshed from the native API with typed public response and progressive stage-result models. Job result JSON remains polymorphic; use its stage handler definitions for individual result shapes. Normalized synthetic examples accompany the contract. Regenerate the snapshot after backend changes.
 - Latest native behavior overrides historical n8n routes, role assumptions and qualification thresholds in older documentation.
 
 ## Screens to implement
@@ -129,7 +131,7 @@ Preparation `results` is keyed by stage: `RESEARCH`, `CONTACT_SEARCH`, `SCORING`
 
 | Result | Important fields / interpretation |
 | --- | --- |
-| Research | `facts[]`: category, statement, source_url, evidence_quote, confidence 0–100, kind OBSERVED/INFERRED; `people[]`; `unknowns[]`; saved `pages[]`; optional `industry`, `coverage`. Industry is sourced when supported, otherwise show “Not established from available sources”. Fleet is product-specific and optional. Do not derive a fake fleet number from prose. |
+| Research | `facts[]`: category, statement, source_url, evidence_quote, confidence 0–100, kind OBSERVED/INFERRED; `people[]`; `unknowns[]`; saved `pages[]`; optional `industry` (a sourced Finding object), `coverage`. Industry is sourced when supported, otherwise show “Not established from available sources”. Fleet is product-specific and optional. Do not derive a fake fleet number from prose. |
 | Contacts | `people[]` with profiles and profile_candidates; `selected_contact`; unavailable_queries; stop_reason. Matching public name/company evidence is not proof of current employment. A business email without a supported name must not become an invented person. |
 | Scoring | `criteria[]` with points, rationale and evidence; total `score`, `relevance`, `opportunity`, adjustments, unknowns and stop_reason. Relevance/opportunity are components of the total, not separately normalized 0–100 scores. Default rubric: ICP40, need30, scale15, signals10, evidence5. Automatic qualification needs total60 plus positive ICP fit. Do not represent score as purchase probability. |
 | Matching | `matches[]` with product_code, fit, rationale and evidence; `selected_product`; stop_reason. Resolve catalog codes to real names. Default eligible fit is at least60. |
@@ -162,16 +164,11 @@ Handle 401 by returning to login, 403 with a permission explanation, 404 as unav
 
 Existing backend verification: 30 PostgreSQL integration tests and running restricted-role API/worker smoke passed. Those are backend/synthetic checks, not browser acceptance or evidence of real-provider quality.
 
-## Backend dependencies to raise rather than fake
+## Backend dependencies and newly available support
 
-1. Browser session/CORS or same-origin proxy integration; current-user and platform capability discovery.
-2. Single-lead detail, server-side pagination/search/filtering and reliable list ordering for larger datasets.
-3. Web team provisioning/invitations, account settings/recovery, catalog deletion/deactivation and atomic product setup if required by the UI.
-4. Draft editing/revision and resubmission. Request changes currently requires a fresh preparation run; notes are not consumed by an editing handler.
-5. Encrypted shared provider connection management and rotation; richer evidence upload/contact override controls if desired.
-6. Candidate review controls if a separate accept/reject discovery queue is required. Native discovery currently accepts supported companies automatically.
-7. Separate native sending and per-workspace SMTP configuration, suppression and uncertain-handoff safeguards. Legacy sending exists, but the replacement has no sending endpoint.
-8. Data/accounts/approval migration and tested executor cutover. Existing and native record IDs are not interchangeable.
+Current-user capabilities, lead detail/ordered pagination, immutable human draft revisions, inactive catalog listing and soft lifecycle controls are now implemented. See [native frontend backend support](native-frontend-backend-support.md) for exact routes, permissions, migration impact and required BFF adapters. Product setup remains separate upsert/activation transactions; safe no-op retries and partial-save behavior are supported. The same-origin bridge is implemented by the frontend owner; shared production session storage remains joint work.
+
+Still separate: team/account management and recovery; encrypted provider connections; imports; broader evidence upload/manual overrides; job/approval/history pagination; optional candidate-review controls; native sending/SMTP parity; data/accounts/approval migration and controlled executor cutover. Do not present unavailable controls as functional. Existing n8n remains active until cutover acceptance.
 
 ## File map: where to look
 
