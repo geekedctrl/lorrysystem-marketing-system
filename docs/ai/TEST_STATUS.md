@@ -27,3 +27,22 @@ Executed:
 
 api/scripts/validate_campaign_http.py —62 checks passed against running API/dashboard in final lead rerun. CI executes the new suites; remote CI pending PR. No live model/search/SMTP calls. No viewport/browser visual check yet. Runtime AI quality, provider terms/pricing and production deployment remain unverified.
 
+
+## Native worker acceptance — 11 October 2026
+
+Independent Docker project `marketing-rebuild`, PostgreSQL17 `marketing_rebuild_test`, native migrations through005_job_run_ownership. Thirty integration tests passed with synthetic providers, including six companies across transport/accounting catalogs, actual restricted worker role, source-backed contact continuation, contact-search refresh, atomic rollback/idempotency, pause/context/ownership guards, conservative provider reservations and provider error handling. No paid provider calls or outbound messages.
+
+Command: `docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml --profile test run --rm --build backend-test`. Running HTTP API/worker smoke command uses the same Compose invocation with backend-smoke. Its missing-provider checks verify both manual and native queues using their actual restricted database roles, removing only the explicit smoke fixtures.
+
+Synthetic results do not validate real provider prose/coverage, dashboard migration, sending or DEV cutover. Legacy test records remain historical.
+
+## Native frontend support acceptance — 11 October 2026
+
+- `docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml --profile test run --rm --build backend-test`: 37 tests passed in 19.589s, isolated marketing_rebuild_test.
+- `docker compose --env-file .env.native-integration-local -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check`: actual restricted HTTP API/BFF/DB/worker acceptance passed for two products, contacts, retry, pause and isolation. External providers/evidence synthetic, reservation cost0.
+- `tmp/native-browser-venv/Scripts/python.exe backend/scripts/validate_native_browser.py --fixtures tmp/native-acceptance-accounts.json`: actual headless Edge acceptance passed through localhost8095 gateway and real native backend; four roles and tablet/mobile. Earlier test failures were resolved: idle scheduling, fixture volume ownership, synthetic failure replay, async browser wait and Windows console ASCII output.
+- `... native-check python -m tests.native_support_check`: actual restricted API capabilities/paging/revision/lifecycle passed; separate reviewer and sent:false verified.
+- OpenAPI refreshed from native-acceptance-backend-api-1. Normalized examples contain synthetic records only, no credentials. Frontend source mounted read-only from C:/Users/pkart/orca/workspaces/marketing-system/redesign-frontend. Its own mock tests are separate from these real-stack checks.
+- Direct localhost8094 remains refused with mirrored WSL; optional loopback gateway health8095 returned200. No deployed environments, provider spend or outbound messages touched.
+
+Final rebuild runtime smoke passed for manual and native routes with actual restricted roles and no provider calls. CI-style OpenAPI comparison against the running rebuilt API passed. Document links and response-example secret-field checks passed. Exported examples validate against their public response models. A targeted seven-test frontend-support rerun verifies the final resume scheduling restoration.
