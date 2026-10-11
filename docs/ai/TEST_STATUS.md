@@ -110,3 +110,6 @@ Acceptance: 50 PostgreSQL/backend tests, including actual Chromium network isola
 
 
 Release checkpoint: implementation commit `bec7684`, integrated latest develop `9e74818` with merge `cf90bb9`; pushed branch `rebuild/manual-discovery`. Draft PR #36 targets develop: https://github.com/geekedctrl/lorrysystem-marketing-system/pull/36 . Keep draft until coordinated legacy guard/API publication or native cutover is ready; DEV has not been changed. GitHub CI is running. Local fixture projects `discovery-review-test` and `discovery-legacy-test`, their disposable volumes and the port 8098 gateway were removed after verification; pre-existing local stacks remain untouched. User-owned root compose/gitignore hashes remain unchanged and those edits are excluded.
+
+
+Final legacy regression: the six-company fleet/accounting quality fixture explicitly accepts review candidates before processing research. Confirmed documented need reaches pending approval, existing-system/no-need stays below the opportunity threshold, missing contacts stop for review, and unsupported promises/cross-product access are refused. Mock SMTP regression passes using test transport only. Native discovery and backend checks passed on GitHub; the broader CI suite is rerunning with this corrected manual-acceptance fixture.
