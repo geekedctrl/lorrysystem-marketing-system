@@ -52,6 +52,7 @@ app.add_middleware(WorkspaceDashboardMiddleware, api=api)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
+    session_cookie="marketing_dashboard_session",
     same_site="lax",
     https_only=os.getenv("DASHBOARD_SECURE_COOKIES", "false").lower() == "true",
     max_age=43200,

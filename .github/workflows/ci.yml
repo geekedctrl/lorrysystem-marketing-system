@@ -43,6 +43,7 @@ jobs:
         run: |
           python3 -m pip install -r dashboard/requirements.txt
           python3 dashboard/scripts/validate_campaign_proposals.py
+          python3 dashboard/scripts/validate_login_sessions.py
 
       - name: Test native frontend and synthetic browser journey
         run: |

@@ -141,8 +141,13 @@ def page(request, template, status_code=200, **context):
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    return page(request, "login.html")
+async def login_page(request: Request, notice: str = ""):
+    error = (
+        "Your sign-in session expired. Please try again using this refreshed form."
+        if notice == "session-expired"
+        else None
+    )
+    return page(request, "login.html", error=error)
 
 
 @router.post("/login")
@@ -150,10 +155,12 @@ async def login(
     request: Request,
     email: str = Form(...),
     password: str = Form(...),
-    csrf_token: str = Form(...),
+    csrf_token: str = Form(""),
 ):
     if not valid_csrf(request, csrf_token):
-        return HTMLResponse("Invalid form token. Reload the page.", status_code=403)
+        # A 303 loads a new GET form; reloading a failed POST only resubmits
+        # the same stale token. Never authenticate the rejected submission.
+        return RedirectResponse("/login?notice=session-expired", status_code=303)
     try:
         result = await request.app.state.api.post(
             "/api/auth/login",

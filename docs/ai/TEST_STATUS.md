@@ -50,3 +50,9 @@ Final rebuild runtime smoke passed for manual and native routes with actual rest
 ## Authorized real DEV discovery — 11 October 2026
 
 User explicitly requested real discovery against the DEV dashboard. Actual deployed dashboard forms/API/n8n/Brave/xKiro ran through an SSH loopback forward after public HTTP returned403 and no GUI browser was available. Original zero-lead results were traced to strict name/quote mismatches, incomplete HTML entity decoding and zeroed usage counters. Patched DEV discovery Code nodes and matching repository generator; 73 n8n JavaScript tests pass. Final job90c1b0da-3bbc-4b06-bf3c-fb509bb03796 accepted Soon Lee Transport Sdn Bhd; rendered Leads/detail and Discovered Leads → All verified, research queued automatically. Execution retention restored to none. No sending, app deployment or native cutover. See ../dev-discovery-acceptance.md for evidence and public-ingress limitations.
+
+## DEV login recovery — 11 October 2026
+
+Current work: fix/login-session-recovery, based on develop8c62de7 (user merged/deployed PR32). Stale login POSTs previously returned a bare403 and reloading repeated the invalid submission. Login now redirects303 to a fresh GET form; invalid/missing CSRF cannot reach the account API. A dedicated host-only marketing_dashboard_session cookie prevents generic-session conflicts; existing users sign in once. Initial browser mismatch cause remains unconfirmed. Public DEV GETs returned stable fresh tokens, no-store and Cloudflare DYNAMIC. See ../dashboard-login-recovery.md.
+
+Local acceptance: ten synthetic HTTP session/login regressions, eight campaign dashboard, eight research presentation and five UX tests pass. CI includes the new login suite. User-owned .gitignore/docker-compose.yml edits are preserved. DEV deployment is authorized by the user's existing request; production and outbound sending remain outside scope. Remote CI/deployment acceptance is pending.
