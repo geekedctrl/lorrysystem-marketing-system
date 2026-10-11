@@ -1,75 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Add Lead · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
-
+{% block title %}Add lead · {{ current_workspace.name if current_workspace else "Marketing" }}{% endblock %}
 {% block page_heading %}
-<h1>Add Lead</h1>
-<p>Choose how you would like to add Leads.</p>
+<h1>Add lead</h1>
+<p>Bring a new contact or a list of prospects into your workspace.</p>
 {% endblock %}
-
-{% block content %}<div class="breadcrumbs"><a href="/leads">← Back to leads</a></div>
-
-
-<div class="import-grid add-lead-grid">
-
-  <div class="card import-card">
-    <div class="import-icon">1</div>
-    <h2>Manual Entry</h2>
-
-    <p>
-      Add a single Lead by selecting or creating a
-      company, contact and ICP.
-    </p>
-
-    <div class="button-row">
-      <a
-        class="button primary"
-        href="/leads/new/manual"
-      >
-        Add Manually
-      </a>
-    </div>
+{% block content %}
+<div class="breadcrumbs"><a href="/leads">← Back to leads</a></div>
+<section class="lead-entry" aria-labelledby="lead-entry-heading">
+  <div class="lead-entry-heading">
+    <h2 id="lead-entry-heading">How would you like to add leads?</h2>
+    <p>Choose the option that matches what you have. You can review the details before saving.</p>
   </div>
-
-
-  <div class="card import-card">
-    <div class="import-icon">2</div>
-    <h2>Business Card</h2>
-
-    <p>
-      Upload a business card and review the extracted
-      details before creating the Lead.
-    </p>
-
-    <div class="button-row">
-      <a
-        class="button primary"
-        href="/leads/import#business-card"
-      >
-        Upload Business Card
-      </a>
-    </div>
+  <div class="lead-entry-grid">
+    <article class="lead-entry-option">
+      <div class="lead-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20H4V4h10M16 3l5 5-9 9-5 1 1-5z"/></svg></div>
+      <div class="lead-entry-copy"><span class="lead-entry-label">One lead</span><h3>Manual entry</h3><p>Enter company and contact details, then choose the ideal customer profile.</p></div>
+      <a class="button primary" href="/leads/new/manual">Add manually <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="lead-entry-option">
+      <div class="lead-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><circle cx="8" cy="10" r="2"/><path d="M5 16v-1a3 3 0 0 1 6 0v1m3-6h5m-5 4h5"/></svg></div>
+      <div class="lead-entry-copy"><span class="lead-entry-label">From a photo</span><h3>Business card</h3><p>Upload a card image and check the extracted details before creating your lead.</p></div>
+      <a class="button primary" href="/leads/import#business-card">Upload business card <span aria-hidden="true">→</span></a>
+    </article>
+    <article class="lead-entry-option">
+      <div class="lead-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></div>
+      <div class="lead-entry-copy"><span class="lead-entry-label">Multiple leads</span><h3>CSV import</h3><p>Upload a spreadsheet in CSV format, validate the rows and preview your import.</p></div>
+      <a class="button primary" href="/leads/import#csv-import">Import CSV <span aria-hidden="true">→</span></a>
+    </article>
   </div>
-
-
-  <div class="card import-card">
-    <div class="import-icon">3</div>
-    <h2>CSV Import</h2>
-
-    <p>
-      Import multiple Leads using the existing CSV
-      validation and preview workflow.
-    </p>
-
-    <div class="button-row">
-      <a
-        class="button primary"
-        href="/leads/import#csv-import"
-      >
-        Import CSV
-      </a>
-    </div>
-  </div>
-
-</div>
-
+</section>
 {% endblock %}

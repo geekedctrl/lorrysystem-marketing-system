@@ -931,6 +931,64 @@ dialog::backdrop {
 .import-grid.add-lead-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+.lead-entry {
+  max-width: 1120px;
+  margin: 24px auto 0;
+}
+.lead-entry-heading { margin-bottom: 24px; }
+.lead-entry-heading h2 { margin: 0 0 8px; font-size: 22px; }
+.lead-entry-heading p { margin: 0; color: var(--muted); line-height: 1.6; }
+.lead-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.lead-entry-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.lead-entry-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.lead-entry-icon svg { width: 24px; height: 24px; }
+.lead-entry-copy { flex: 1; }
+.lead-entry-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.lead-entry-copy h3 { margin: 8px 0 12px; font-size: 20px; }
+.lead-entry-copy p { margin: 0; color: var(--muted); line-height: 1.65; }
+.lead-entry-option .button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  white-space: normal;
+}
+@media (max-width: 1100px) {
+  .lead-entry-grid { grid-template-columns: 1fr; }
+  .lead-entry-option { display: grid; grid-template-columns: 48px minmax(0, 1fr); }
+  .lead-entry-option .button { grid-column: 2; width: fit-content; margin-top: 0; }
+}
+@media (max-width: 480px) {
+  .lead-entry { margin-top: 20px; }
+  .lead-entry-heading h2 { font-size: 20px; }
+  .lead-entry-option { padding: 20px; gap: 16px; }
+  .lead-entry-option .button { grid-column: 1 / -1; width: 100%; }
+}
 .form-actions {
   position: sticky;
   bottom: 0;
