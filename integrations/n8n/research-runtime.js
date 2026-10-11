@@ -88,7 +88,9 @@ function selectResearchUrls(seed, searches, limit) {
 }
 
 function decodeResearchText(value) {
-  return value.replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"')
+  const named={rsquo:'\u2019',lsquo:'\u2018',rdquo:'\u201d',ldquo:'\u201c',ndash:'\u2013',mdash:'\u2014',hellip:'\u2026',bull:'\u2022',copy:'\u00a9',reg:'\u00ae',trade:'\u2122',ensp:' ',emsp:' ',thinsp:' '};
+  return value.replace(/&(rsquo|lsquo|rdquo|ldquo|ndash|mdash|hellip|bull|copy|reg|trade|ensp|emsp|thinsp);/gi,(_,name)=>named[name.toLowerCase()])
+    .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"')
     .replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
     .replace(/&#(x[0-9a-f]+|\d+);/gi,(_,code)=>{
       const n=code[0].toLowerCase()==='x'?parseInt(code.slice(1),16):parseInt(code,10);

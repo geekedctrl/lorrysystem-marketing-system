@@ -46,3 +46,7 @@ Synthetic results do not validate real provider prose/coverage, dashboard migrat
 - Direct localhost8094 remains refused with mirrored WSL; optional loopback gateway health8095 returned200. No deployed environments, provider spend or outbound messages touched.
 
 Final rebuild runtime smoke passed for manual and native routes with actual restricted roles and no provider calls. CI-style OpenAPI comparison against the running rebuilt API passed. Document links and response-example secret-field checks passed. Exported examples validate against their public response models. A targeted seven-test frontend-support rerun verifies the final resume scheduling restoration.
+
+## Authorized real DEV discovery — 11 October 2026
+
+User explicitly requested real discovery against the DEV dashboard. Actual deployed dashboard forms/API/n8n/Brave/xKiro ran through an SSH loopback forward after public HTTP returned403 and no GUI browser was available. Original zero-lead results were traced to strict name/quote mismatches, incomplete HTML entity decoding and zeroed usage counters. Patched DEV discovery Code nodes and matching repository generator; 73 n8n JavaScript tests pass. Final job90c1b0da-3bbc-4b06-bf3c-fb509bb03796 accepted Soon Lee Transport Sdn Bhd; rendered Leads/detail and Discovered Leads → All verified, research queued automatically. Execution retention restored to none. No sending, app deployment or native cutover. See ../dev-discovery-acceptance.md for evidence and public-ingress limitations.

@@ -87,7 +87,7 @@ function sharedChildren(input){
   const children={setup:setupChild(input),discovery:discoveryChild(input),research:dynamic({...researchChild(b),name:'Shared Company and People Research'},b,'Research Job Input'),pipeline:dynamic({...pipelineChild(b),name:'Shared Qualification and Outreach Preparation'},b,'Stage Job Input')};
   const results={setup:['Product Targeting Result'],discovery:['Discovery Batch Result','Empty Discovery Result','Discovery Validation Result'],research:['Research Result','Research Failure Result','No Research Evidence'],pipeline:['Stage Result','Stage Validation Failed']};
   for(const [key,workflow] of Object.entries(children))for(const node of workflow.nodes)if(results[key].includes(node.name)) {
-    node.parameters.jsCode=`${usage}\nconst result=(function(){${node.parameters.jsCode}\n})();return result.map(item=>({...item,json:{...item.json,usage:workflowUsage($)}}));`;
+    node.parameters.jsCode=`${usage}\nconst result=(function(){${node.parameters.jsCode}\n})();return result.map(item=>({...item,json:{...item.json,usage:capturedWorkflowUsage()}}));`;
   }
   return children;
 }

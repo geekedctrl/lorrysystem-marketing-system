@@ -21,3 +21,14 @@ test('dispatcher sends usage only when the deployed API supports metrics',()=>{
   assert.equal(run(undefined).usage,undefined);
   assert.equal(run(1).usage.search_requests,1);
 });
+
+test('generated result code declares literal dependencies and counts executed provider nodes',()=>{
+  const {sharedChildren}=require('./shared-workflows');
+  const binding=JSON.parse(fs.readFileSync(require.resolve('./shared-binding.example.json'),'utf8'));
+  const source=sharedChildren(binding).discovery.nodes.find(n=>n.name==='Empty Discovery Result').parameters.jsCode;
+  assert.match(source,/\$\('Search New Companies'\)\.all\(\)/);
+  const result=vm.runInNewContext(`(function(){${source}})()`,{$json:{no_fetch:true},$:node({'Search New Companies':[{statusCode:200,body:{web:{results:[]}}}]})})[0].json;
+  assert.equal(result.usage.search_requests,1);
+  assert.equal(result.usage.search_status,'OK');
+  assert.equal(result.usage.model_status,'NOT_USED');
+});
