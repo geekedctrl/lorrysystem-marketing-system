@@ -25,6 +25,8 @@ python -m uvicorn app.native:app --host 127.0.0.1 --port 8093
 
 Open `http://127.0.0.1:8093`. Sign in with an account provisioned in the **native** backend; legacy accounts/IDs cannot be substituted. The frontend server calls native `/auth` and `/workspaces/{wid}` routes; the browser only calls its own origin. No CORS or browser bearer-token storage is needed. The existing `app.main:app` dashboard remains independently available.
 
+For the merged DEV deployment, Compose starts this entry point as the primary `dashboard-dev` service on loopback port 8081, connected to `backend-api:8000`. The legacy dashboard stays available on loopback port 8082 for rollback. See [native dashboard DEV setup](native-dashboard-dev.md) for catalog restoration, provider settings and health checks.
+
 The native frontend needs no provider keys, database credentials, or dashboard signing secret. Its browser cookie contains a random opaque session identifier, with HttpOnly and SameSite Strict. Bearer tokens and CSRF tokens are kept on the frontend server. Sessions expire after 12 hours; logout revokes the native session. Set `DASHBOARD_SECURE_COOKIES=true` when running behind HTTPS.
 
 Session storage is currently process-local and intentionally suited to a **single local frontend process**. Restart signs users out. A shared expiring session store, hosting policy and authentication architecture review are release dependencies before multiple workers/production. Do not deploy this entry point as an automatic replacement for the existing dashboard.

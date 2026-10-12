@@ -1,4 +1,4 @@
-# Disposable acceptance only. The frontend source is mounted read-only from its owner's checkout.
+# Disposable acceptance only. The native dashboard runs from the checked-in Dockerfile.
 services:
   native-db:
     image: postgres:17-alpine
@@ -52,20 +52,12 @@ services:
       backend-api: {condition: service_healthy}
   native-frontend:
     build:
-      context: ${NATIVE_FRONTEND_PATH:?Set the frontend owner checkout path}
-      dockerfile_inline: |
-        FROM python:3.13-slim
-        WORKDIR /frontend
-        COPY dashboard/requirements.txt ./requirements.txt
-        RUN pip install --no-cache-dir -r requirements.txt
-        RUN useradd --create-home frontend
-        USER frontend
-    working_dir: /frontend
+      context: ./dashboard
+      dockerfile: Dockerfile.native
     command: [python, -m, uvicorn, app.native:app, --host, 0.0.0.0, --port, '8080']
     environment:
       NATIVE_API_BASE_URL: http://backend-api:8000
       DASHBOARD_SECURE_COOKIES: 'false'
-    volumes: ['${NATIVE_FRONTEND_PATH}/dashboard:/frontend:ro']
     ports: ['127.0.0.1:${NATIVE_FRONTEND_PORT:-8094}:8080']
     depends_on:
       backend-api: {condition: service_healthy}

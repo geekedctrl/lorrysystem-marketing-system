@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -96,7 +96,11 @@ def create_app(transport=None):
     async def health():
         return {"status": "ok", "frontend": "native"}
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/")
+    async def root():
+        return RedirectResponse("/dashboard", status_code=302)
+
+    @app.get("/dashboard", response_class=HTMLResponse)
     async def shell():
         return templates.get_template("native.html").render()
 

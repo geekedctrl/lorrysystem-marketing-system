@@ -26,6 +26,7 @@ from marketing_backend.api import app
 from marketing_backend import queue
 from marketing_backend.worker import execute
 from marketing_backend.research import validate_brief, ProviderFailure
+from marketing_backend.catalog_seed import ITEMS, restore_catalog
 
 if os.getenv("APP_ENV") != "test" or engine.url.database != "marketing_rebuild_test":
     raise RuntimeError("Tests require the dedicated marketing_rebuild_test database")
@@ -114,6 +115,24 @@ class BackendFixtures(unittest.TestCase):
 
 
 class BackendTests(BackendFixtures):
+    def test_documented_lorrysystem_catalog_restore_is_additive_and_idempotent(self):
+        with Session() as db:
+            workspace = db.get(Workspace, self.wid)
+            self.assertEqual(restore_catalog(db, workspace), (len(ITEMS), 0))
+            self.assertEqual(restore_catalog(db, workspace), (0, len(ITEMS)))
+            restored = list(
+                db.scalars(
+                    select(Catalog).where(
+                        Catalog.workspace_id == self.wid,
+                        Catalog.code.in_([item["code"] for item in ITEMS]),
+                    )
+                )
+            )
+            self.assertEqual(len(restored), len(ITEMS))
+            self.assertEqual(sum(item.kind == "PRODUCT" for item in restored), 9)
+            self.assertEqual(sum(item.kind == "ICP" for item in restored), 7)
+            self.assertTrue({"AI_DASHCAM", "GPS", "MDVR", "TMS"}.issubset({item.code for item in restored}))
+
     def test_database_isolation_and_worker_permissions(self):
         self.enqueue()
         with Session() as db:

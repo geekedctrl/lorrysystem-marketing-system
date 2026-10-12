@@ -16,7 +16,7 @@ Use the separate `compose.backend.yml` project and volume. Copy `backend/.env.ex
 docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml up --build -d backend-api backend-worker
 ```
 
-API mapping: `127.0.0.1:8020`; OpenAPI: `/docs`. Bootstrap the first administrator on the empty database through the migration service. The password is entered at a hidden prompt:
+API mapping: `127.0.0.1:8020`; native dashboard mapping: `127.0.0.1:8093` when `NATIVE_DASHBOARD_HOST_PORT=8093`; OpenAPI: `/docs`. Bootstrap the first administrator on the empty database through the migration service. The password is entered at a hidden prompt:
 
 ```powershell
 docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml run --rm backend-migrate python -m marketing_backend.cli bootstrap --email your-email@example.com --workspace LorrySystem

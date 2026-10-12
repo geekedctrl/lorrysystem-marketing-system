@@ -126,6 +126,7 @@ jobs:
           BACKEND_WORKER_DB_PASSWORD=${BACKEND_WORKER_DB_PASSWORD}
           BACKEND_PROVIDER_MONTHLY_BUDGET_USD=50
           NATIVE_DASHBOARD_SECURE_COOKIES=false
+          NATIVE_API_HOST_PORT=8020
           EOF
 
           cat > dashboard/.env <<EOF
@@ -148,7 +149,7 @@ jobs:
 
       - name: Build legacy and native API and Dashboard images
         run: |
-          docker compose build marketing-api-dev dashboard-dev backend-api backend-worker native-dashboard
+          docker compose build marketing-api-dev dashboard-dev dashboard-legacy-dev backend-api backend-worker
 
       - name: Start PostgreSQL and API
         run: |
@@ -365,7 +366,7 @@ jobs:
 
       - name: Start Dashboard
         run: |
-          docker compose up -d dashboard-dev
+          docker compose up -d dashboard-dev dashboard-legacy-dev
           docker compose ps
 
       - name: Test Dashboard
@@ -407,15 +408,15 @@ jobs:
 
       - name: Start native API, worker and dashboard alongside legacy DEV
         run: |
-          docker compose up -d backend-api backend-worker native-dashboard
-          docker compose ps backend-db backend-api backend-worker native-dashboard
+          docker compose up -d backend-api backend-worker dashboard-dev
+          docker compose ps backend-db backend-api backend-worker dashboard-dev
 
       - name: Verify native API and dashboard health
         shell: bash
         run: |
           set -euo pipefail
 
-          for url in http://127.0.0.1:8020/health http://127.0.0.1:8093/health; do
+          for url in http://127.0.0.1:8020/health http://127.0.0.1:8081/health; do
             READY=0
             for attempt in {1..45}; do
               STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${url}" || true)"
@@ -437,21 +438,21 @@ jobs:
           docker exec \
             -e APP_ENV=ci \
             -e EXPORT_TEST_LOGIN=true \
-            -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+            -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
             lorrysystem-dev-marketing-api \
             python scripts/validate_workspaces.py
 
       - name: Test business-card OCR and CSV import regression
         run: |
           docker cp lorrysystem-dev-marketing-api:/tmp/workspace-validation-account.json /tmp/workspace-validation-account.json
-          docker exec -i lorrysystem-dev-dashboard python -c \
+          docker exec -i lorrysystem-dev-dashboard-legacy python -c \
             "import json,os,runpy,sys; account=json.load(sys.stdin); os.environ['DASHBOARD_TEST_EMAIL']=account['email']; os.environ['DASHBOARD_TEST_PASSWORD']=account['password']; runpy.run_path('scripts/validate_lead_imports.py',run_name='__main__')" \
             < /tmp/workspace-validation-account.json
           rm -f /tmp/workspace-validation-account.json
 
       - name: Test dashboard discovery runs and workspace boundaries
         run: |
-          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
             lorrysystem-dev-marketing-api python scripts/validate_discovery_runs.py
 
       - name: Test workspace migration and guarded rollback
@@ -463,19 +464,19 @@ jobs:
 
       - name: Test workspace research queue and dashboard
         run: |
-          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
             lorrysystem-dev-marketing-api python scripts/validate_workspace_research.py
 
       - name: Test reviewed contact, scoring, matching, drafts and approval pipeline
         run: |
-          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
             lorrysystem-dev-marketing-api python scripts/validate_lead_pipeline.py
 
       - name: Test mock campaign strategy, tenancy and human review
         run: |
           docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/test_campaign_strategist.py
           docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_campaign_strategist.py
-          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-dev:8080 \
+          docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
             lorrysystem-dev-marketing-api python scripts/validate_campaign_http.py
 
       - name: Test shared product onboarding and automatic preparation
@@ -490,7 +491,7 @@ jobs:
 
       - name: Verify Dashboard to API connectivity
         run: |
-          docker exec lorrysystem-dev-dashboard \
+          docker exec lorrysystem-dev-dashboard-legacy \
             python -c \
             "import httpx; r=httpx.get('http://lorrysystem-dev-marketing-api:8000/health'); r.raise_for_status(); print(r.status_code, r.text)"
 
@@ -505,8 +506,11 @@ jobs:
           docker logs --tail 200 lorrysystem-dev-marketing-api || true
 
           echo
-          echo "=== DASHBOARD LOGS ==="
-          docker logs --tail 200 lorrysystem-dev-dashboard || true
+          echo "=== NATIVE DASHBOARD LOGS ==="
+          docker compose logs --tail 200 dashboard-dev || true
+
+          echo "=== LEGACY DASHBOARD LOGS ==="
+          docker logs --tail 200 lorrysystem-dev-dashboard-legacy || true
 
           echo
           echo "=== POSTGRES LOGS ==="
