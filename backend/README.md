@@ -6,6 +6,8 @@ Implemented: password login, hashed expiring bearer sessions, login throttling, 
 
 Workers use `FOR UPDATE SKIP LOCKED`, renewable leases and persisted checkpoints. Transient model errors have bounded backoff; configuration and citation failures stop immediately. Expired workers cannot save results. Provider requests may repeat after uncertain transport failures; exactly-once provider billing is not promised. This milestone has no sending executor.
 
+Model calls use xKiro's JSON response mode and validate every result before use. Discovery reports malformed JSON, truncation, incomplete responses and schema mismatch separately, and permits one additional budget-reserved correction call for an invalid company assessment. Website fetch failures are independent and may require a later reassessment.
+
 The shared pipeline advances eligible leads to a draft `PENDING_APPROVAL`. Evidence/contact/qualification gaps stop with explicit review reasons. Administrator/Reviewer approval is separate and never sends. Manual homepage-only research remains available. See [native preparation workers](../docs/native-preparation-workers.md) for policies, APIs, reservations and remaining cutover work.
 
 ## Local setup

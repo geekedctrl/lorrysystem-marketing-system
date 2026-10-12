@@ -838,6 +838,10 @@ class NativeTests(BackendFixtures):
                 {"ok": True},
             )
             self.assertEqual(request.call_count, 1)
+            self.assertEqual(
+                request.call_args.kwargs["json"]["response_format"],
+                {"type": "json_object"},
+            )
         with Session() as db:
             row = db.scalar(select(ProviderUsage))
             self.assertEqual(row.status, "SUCCESS")
