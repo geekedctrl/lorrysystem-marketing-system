@@ -412,20 +412,27 @@
           "No leads yet. Find companies or add a company to start preparation.",
         );
   }
+  function candidateRow(c) {
+    const reviewable = c.status === "READY_FOR_REVIEW" && canReviewCandidate();
+    const retryable = !["ACCEPTED", "REJECTED", "KNOWN", "RETRY_PENDING"].includes(c.status) && canReviewCandidate();
+    const tone = c.stale ? "attention" : c.status === "ACCEPTED" ? "success" : ["ASSESSMENT_FAILED", "FETCH_UNAVAILABLE"].includes(c.status) ? "attention" : "";
+    return `<article class="discovery-row">
+      <div class="discovery-row-main">
+        <div class="discovery-company"><h3>${esc(c.company_name || c.domain)}</h3>${link(c.website || c.source_url, c.domain || "Company website")}</div>
+        <div class="discovery-fit"><span class="discovery-cell-label">Customer fit</span><strong>${c.icp_code ? esc(productName(c.icp_code)) : "Not established"}</strong>${c.icp_code && c.confidence != null ? `<span class="muted">${esc(c.confidence)}% confidence</span>` : ""}${c.industry ? `<span class="muted">${esc(c.industry)}</span>` : ""}</div>
+        <div class="discovery-status"><span class="discovery-cell-label">Status</span><span class="badge ${tone}">${esc(label(c.status))}</span>${c.stale ? badge("STALE") : ""}${c.failure_reason ? `<p class="discovery-issue">${esc(label(c.failure_reason))}. Retry available.</p>` : ""}${c.stale ? '<p class="discovery-issue">Targeting changed. Reassess before accepting.</p>' : ""}</div>
+        <div class="discovery-row-actions">${reviewable ? command(`candidates/${c.id}/accept`, "Accept & start research", {note: ""}, c.stale || !state.data.operations.enabled) : ""}${retryable ? command(`candidates/${c.id}/retry`, "Reassess company", {}, !state.data.operations.enabled) : ""}${c.accepted_lead_id ? `<button data-lead="${esc(c.accepted_lead_id)}">Open accepted lead</button>` : ""}${!["ACCEPTED", "REJECTED"].includes(c.status) && !reviewable && !retryable ? '<span class="muted">Awaiting assessment</span>' : ""}</div>
+      </div>
+      <details class="discovery-row-details"><summary>Review details & evidence</summary><div class="discovery-detail-body">${c.reasoning ? `<p>${esc(c.reasoning)}</p>` : '<p class="muted">No assessment reasoning is available yet.</p>'}${c.evidence_quote ? evidence([{ source_url: c.source_url, evidence_quote: c.evidence_quote }]) : ""}${c.unknowns?.length ? `<p class="muted">Not established: ${esc(c.unknowns.join(" · "))}</p>` : ""}${c.review_note ? `<p><strong>Review note:</strong> ${esc(c.review_note)}</p>` : ""}${reviewable ? `<form data-command="candidates/${esc(c.id)}/reject">${field("note", "Reason for rejection", "", "required minlength=5 maxlength=1000")}<button>Reject candidate</button><div class="error" hidden role="alert"></div></form>` : ""}</div></details>
+    </article>`;
+  }
   function candidateInbox(page) {
-    return `<form id="candidate-filters"><label for="candidate-status">Discovery status</label><select id="candidate-status" name="status">${[
-      ["READY_FOR_REVIEW", "Awaiting your review"],
-      ["", "All discoveries"],
-      ["ACCEPTED", "Accepted"],
-      ["REJECTED", "Rejected"],
-    ]
-      .map(
-        ([s, t]) =>
-          `<option value="${s}" ${state.candidateFilters.status === s ? "selected" : ""}>${t}</option>`,
-      )
-      .join(
-        "",
-      )}</select><button>Apply filter</button></form><p class="muted">${page.total} ${page.total === 1 ? "discovery" : "discoveries"} in this view</p>${page.items.length ? page.items.map((c) => card(c.company_name || c.domain, `<div class="actions">${badge(c.status)}${c.stale ? badge("STALE") : ""}${link(c.website || c.source_url, "Company website")}</div>${c.industry ? `<p><strong>Suggested industry:</strong> ${esc(c.industry)}</p>` : ""}${c.icp_code ? `<p><strong>Customer fit:</strong> ${esc(productName(c.icp_code))} · ${esc(c.confidence)}% confidence</p>` : ""}${c.reasoning ? `<p>${esc(c.reasoning)}</p>` : ""}${c.evidence_quote ? evidence([{ source_url: c.source_url, evidence_quote: c.evidence_quote }]) : ""}${c.unknowns?.length ? `<p class="muted">Not established: ${esc(c.unknowns.join(" · "))}</p>` : ""}${c.failure_reason ? `<p class="error">${esc(label(c.failure_reason))}. You can retry this company.</p>` : ""}${c.stale ? `<p class="muted">The catalog or targeting changed. Reassess before accepting.</p>` : ""}${c.status === "READY_FOR_REVIEW" && canReviewCandidate() ? `<div class="actions">${command(`candidates/${c.id}/accept`, "Accept & start research", {note: ""}, c.stale || !state.data.operations.enabled)}<form data-command="candidates/${esc(c.id)}/reject">${field("note", "Reason for rejection", "", "required minlength=5 maxlength=1000")}<button>Reject candidate</button><div class="error" hidden role="alert"></div></form></div>` : ""}${!["ACCEPTED", "REJECTED", "KNOWN", "RETRY_PENDING"].includes(c.status) && canReviewCandidate() ? command(`candidates/${c.id}/retry`, "Reassess company", {}, !state.data.operations.enabled) : ""}${c.accepted_lead_id ? `<button data-lead="${esc(c.accepted_lead_id)}">Open accepted lead</button>` : ""}${c.review_note ? `<p class="muted">Review note: ${esc(c.review_note)}</p>` : ""}`)).join("") : empty("No candidates in this view. Find leads to collect companies for review, or select All discoveries to inspect stopped assessments.")}<div class="actions"><button data-candidates-prev ${state.candidateFilters.offset ? "" : "disabled"}>Previous</button><button data-candidates-next ${state.candidateFilters.offset + 25 < page.total ? "" : "disabled"}>Next</button></div>`;
+    const first = page.total ? state.candidateFilters.offset + 1 : 0;
+    return `<div class="discovery-toolbar"><form id="candidate-filters"><label for="candidate-status">Discovery status</label><div class="discovery-filter-controls"><select id="candidate-status" name="status">${[
+      ["READY_FOR_REVIEW", "Awaiting your review"], ["", "All discoveries"], ["ACCEPTED", "Accepted"], ["REJECTED", "Rejected"],
+    ].map(([s, t]) => `<option value="${s}" ${state.candidateFilters.status === s ? "selected" : ""}>${t}</option>`).join("")}</select><button>Apply filter</button></div></form><p class="muted">${page.total} ${page.total === 1 ? "discovery" : "discoveries"} in this view</p></div>
+    ${page.items.length ? `<div class="discovery-list"><div class="discovery-list-heading" aria-hidden="true"><span>Company</span><span>Customer fit</span><span>Status</span><span>Actions</span></div>${page.items.map(candidateRow).join("")}</div>` : empty("No candidates in this view. Find leads to collect companies for review, or select All discoveries to inspect stopped assessments.")}
+    <div class="discovery-pagination"><span class="muted">${first}–${Math.min(state.candidateFilters.offset + page.items.length, page.total)} of ${page.total}</span><div><button data-candidates-prev ${state.candidateFilters.offset ? "" : "disabled"}>Previous</button><button data-candidates-next ${state.candidateFilters.offset + 25 < page.total ? "" : "disabled"}>Next</button></div></div>`;
   }
   function render() {
     const d = state.data,
