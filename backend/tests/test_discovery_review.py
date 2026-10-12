@@ -17,7 +17,13 @@ from marketing_backend.models import (
     now,
 )
 from marketing_backend.pipeline import fingerprint, context
-from marketing_backend.discovery import assess, excerpts, search_query, excluded
+from marketing_backend.discovery import (
+    assess,
+    excerpts,
+    search_query,
+    discovery_queries,
+    excluded,
+)
 from marketing_backend.research import ProviderFailure
 
 
@@ -64,6 +70,7 @@ class DiscoveryTests(fixtures.BackendFixtures):
                     source_url="https://candidate.example.com/",
                     evidence_quote=name
                     + " provides commercial transport and delivery services.",
+                    prospect_type="FLEET_OPERATOR",
                     icp_code="ICP",
                     confidence=80,
                     industry="Logistics",
@@ -256,6 +263,7 @@ class DiscoveryTests(fixtures.BackendFixtures):
                 return {"invented": True}
             return dict(
                 suitable=True,
+                prospect_type="FLEET_OPERATOR",
                 company_name="Good Company",
                 icp_code="ICP",
                 confidence=85,
@@ -284,6 +292,9 @@ class DiscoveryTests(fixtures.BackendFixtures):
         self.assertEqual(page["total"], 2)
         by_domain = {r["domain"]: r for r in page["items"]}
         self.assertEqual(by_domain["good.example.com"]["status"], "READY_FOR_REVIEW")
+        self.assertEqual(
+            by_domain["good.example.com"]["prospect_type"], "FLEET_OPERATOR"
+        )
         self.assertEqual(
             by_domain["bad.example.com"]["failure_reason"], "MODEL_OUTPUT_INVALID"
         )
@@ -356,6 +367,7 @@ class DiscoveryTests(fixtures.BackendFixtures):
         )
         raw = dict(
             suitable=True,
+            prospect_type="FLEET_OPERATOR",
             company_name="Operator Company",
             icp_code="ICP",
             confidence=80,
@@ -367,6 +379,19 @@ class DiscoveryTests(fixtures.BackendFixtures):
         )
         candidate = assess(raw, sources, {"ICP"}, "operator.com")
         self.assertEqual(candidate["evidence_quote"], sources[0]["text"])
+        self.assertEqual(candidate["prospect_type"], "FLEET_OPERATOR")
+        self.assertIsNone(
+            assess(
+                {
+                    **raw,
+                    "prospect_type": "SOFTWARE_VENDOR",
+                    "reasoning": "Provides a transit software platform for bus operators.",
+                },
+                sources,
+                {"ICP"},
+                "operator.com",
+            )
+        )
         for field, value in [
             ("excerpt_id", "invented"),
             ("company_name", "Unrelated Company"),
@@ -381,3 +406,43 @@ class DiscoveryTests(fixtures.BackendFixtures):
         self.assertLessEqual(len(query), 400)
         self.assertLessEqual(len(query.split()), 50)
         self.assertNotIn("OR secret", query)
+        operator_queries = discovery_queries(
+            "Malaysian commercial transport",
+            [
+                {"kind": "ICP", "name": "Passenger Transport Operators"},
+                {"kind": "PRODUCT", "name": "Fleet GPS"},
+            ],
+            "MY",
+            {"operator.com"},
+        )
+        self.assertEqual(len(operator_queries), 2)
+        self.assertTrue(
+            all("operator" in q.lower() and "MY" in q for q in operator_queries)
+        )
+
+    def test_assessment_requires_a_buyer_or_operator_type(self):
+        from marketing_backend.discovery import assess
+
+        source = {
+            "excerpt_id": "P1_E1",
+            "source_url": "https://optibus.com/",
+            "text": "Optibus provides a software platform for public transportation operators.",
+        }
+        common = dict(
+            suitable=True,
+            company_name="Optibus",
+            icp_code="PASSENGER_TRANSPORT",
+            confidence=95,
+            official_company=True,
+            excerpt_id="P1_E1",
+            industry="Public Transportation",
+            reasoning="The product serves bus and passenger transport operators.",
+            unknowns=[],
+        )
+        result = assess(
+            {**common, "prospect_type": "SOFTWARE_VENDOR"},
+            [source],
+            {"PASSENGER_TRANSPORT"},
+            "optibus.com",
+        )
+        self.assertIsNone(result)

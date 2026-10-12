@@ -83,6 +83,7 @@ class FixtureProviders:
         if operation.startswith("discovery:"):
             return dict(
                 suitable=True,
+                prospect_type="FLEET_OPERATOR",
                 company_name="Example Logistics",
                 icp_code="ICP",
                 confidence=90,

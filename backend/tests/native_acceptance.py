@@ -157,6 +157,7 @@ class SyntheticProviders(Providers):
                 )
                 value = dict(
                     suitable=True,
+                    prospect_type="FLEET_OPERATOR",
                     company_name=name,
                     icp_code=icp,
                     confidence=90,

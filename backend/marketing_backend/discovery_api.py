@@ -40,6 +40,7 @@ def public(row, current_hash):
             "company_name",
             "website",
             "industry",
+            "prospect_type",
             "confidence",
             "icp_code",
             "reasoning",
