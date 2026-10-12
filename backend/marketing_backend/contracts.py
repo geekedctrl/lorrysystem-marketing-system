@@ -90,6 +90,7 @@ class DiscoveryCandidate(Public):
     company_name: str | None = None
     website: str | None = None
     industry: str | None = None
+    prospect_type: str | None = None
     confidence: int | None = None
     icp_code: str | None = None
     reasoning: str | None = None

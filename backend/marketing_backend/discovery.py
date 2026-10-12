@@ -2,6 +2,7 @@
 
 import re
 from urllib.parse import urljoin, urlsplit, urlunsplit
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from .db import Session
@@ -69,6 +70,18 @@ def search_query(query, known):
     return query
 
 
+def discovery_queries(original, catalog, country, known):
+    raw = [
+        f"{original} transport fleet operator company {country}",
+        *[
+            f"{item['name']} operator logistics fleet company {country}"
+            for item in catalog
+            if item["kind"] == "ICP"
+        ],
+    ]
+    return list(dict.fromkeys(search_query(query, known) for query in raw))[:3]
+
+
 def excluded(memory, context_hash):
     if memory.outcome in {"KNOWN", "ACCEPTED", "REJECTED"}:
         return True
@@ -82,6 +95,15 @@ def excluded(memory, context_hash):
 class Assessment(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     suitable: bool = Field(strict=True)
+    prospect_type: Literal[
+        "FLEET_OPERATOR",
+        "LOGISTICS_PROVIDER",
+        "TRANSPORT_BUYER",
+        "SOFTWARE_VENDOR",
+        "CONSULTANT",
+        "OTHER",
+        "UNKNOWN",
+    ]
     company_name: str = Field(min_length=2, max_length=200)
     icp_code: str = Field(min_length=1, max_length=80)
     confidence: int = Field(ge=0, le=100, strict=True)
@@ -124,6 +146,14 @@ def assess(raw, sources, icps, host):
         or not value["official_company"]
     ):
         raise ProviderFailure("CANDIDATE_NOT_SUPPORTED")
+    # ICP similarity alone is not enough: discovery is for potential buyers of
+    # LorrySystem, not companies selling competing software to those buyers.
+    if value["prospect_type"] not in {
+        "FLEET_OPERATOR",
+        "LOGISTICS_PROVIDER",
+        "TRANSPORT_BUYER",
+    }:
+        return None
     if not value["suitable"] or value["confidence"] < 50:
         return None
     return {
@@ -160,15 +190,10 @@ def discover(job, providers):
                 select(Lead).where(Lead.workspace_id == job.workspace_id)
             )
         )
-    queries = [
-        original,
-        *[
-            f"{c['name']} {ctx['preferences'].get('country', 'MY')}"
-            for c in ctx["catalog"]
-            if c["kind"] == "ICP"
-        ],
-    ]
-    queries = list(dict.fromkeys(search_query(q, known) for q in queries))[:3]
+    country = ctx["preferences"].get("country", "MY")
+    # Search for actual operators/buyers instead of broadly searching a
+    # vertical, which otherwise returns the software vendors serving it.
+    queries = discovery_queries(original, ctx["catalog"], country, known)
     rows, search_errors = [], []
     if job.payload.get("retry_domain"):
         queries = []
@@ -287,7 +312,7 @@ def discover(job, providers):
         try:
             raw = providers.model(
                 "discovery:" + host,
-                "Assess ONE company's public evidence against the actual catalog and ICPs. Return suitable boolean, company_name, icp_code, confidence integer0-100, official_company boolean, excerpt_id, industry, reasoning and unknowns. Select an existing excerpt_id containing the exact company name and supporting its identity. Never write a quote or invent capabilities, contacts or buying intent. Assess customer relevance, not proof of purchase interest. These are recommendations for human review only.",
+                "Assess ONE company's public evidence against the actual catalog and ICPs as a potential customer. Return exactly one JSON object with every key: suitable (boolean), prospect_type (string), company_name (string), icp_code (string), confidence (integer 0-100), official_company (boolean), excerpt_id (string), industry (string), reasoning (string), unknowns (array of strings). Do not omit keys or use markdown. prospect_type must be one of FLEET_OPERATOR, LOGISTICS_PROVIDER, TRANSPORT_BUYER, SOFTWARE_VENDOR, CONSULTANT, OTHER, UNKNOWN. FLEET_OPERATOR means it operates/owns/manages vehicles to sell transport or passenger services. LOGISTICS_PROVIDER means it provides transport/3PL/haulage services itself, not software for providers. TRANSPORT_BUYER means a manufacturer, distributor, retailer or other business whose own evidence shows it operates or manages delivery/transport. SOFTWARE_VENDOR means it sells software, platforms, telematics, fleet technology or consulting to transport operators; never recommend this type as a LorrySystem lead. A company merely describing software for bus operators (such as a transit-management SaaS) is a vendor, not a bus operator. If direct evidence does not establish an operator/buyer role, use UNKNOWN or OTHER and set suitable=false. Select an existing excerpt_id containing the exact company name and supporting both its identity and buyer/operator role. Never write a quote or invent capabilities, contacts or buying intent. Assess customer relevance, not proof of purchase interest. These are recommendations for human review only.",
                 {"context": ctx, "excerpts": sources},
             )
             candidate = assess(

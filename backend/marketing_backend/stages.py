@@ -181,7 +181,7 @@ def setup(job, providers):
         SetupOutput,
         providers.model(
             "setup",
-            "Prepare targeting from the real catalog and product description. Never invent capabilities. Search observable customer business types and geography, not software vendors or hypothetical buying needs. Return discovery_query and icps (code,name,description), at most five. Preserve existing ICPs by returning an empty icps array when ICPs already exist.",
+            "Prepare targeting from the real catalog and product description. Never invent capabilities. Search for companies that could buy the product: actual fleet operators, logistics/transport service providers, or businesses that operate/manage transport. Exclude software/platform vendors, consultants and technology suppliers that sell to those companies. Search observable customer business types and geography, not hypothetical buying needs. Return discovery_query and icps (code,name,description), at most five. Preserve existing ICPs by returning an empty icps array when ICPs already exist.",
             job.payload["context"],
         ),
     )

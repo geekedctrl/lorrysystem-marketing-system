@@ -2982,6 +2982,17 @@
             ],
             "title": "Industry"
           },
+          "prospect_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prospect Type"
+          },
           "confidence": {
             "anyOf": [
               {
