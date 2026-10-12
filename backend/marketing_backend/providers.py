@@ -142,6 +142,7 @@ class Providers:
                     "model": os.getenv("MODEL_NAME", "mistralai/mistral-large-2512"),
                     "temperature": 0,
                     "max_tokens": 6000,
+                    "response_format": {"type": "json_object"},
                     "messages": [
                         {
                             "role": "system",
@@ -170,11 +171,23 @@ class Providers:
         try:
             envelope = response.json()
             answer = envelope["choices"][0]
-            if answer.get("finish_reason") not in ("stop", None):
-                raise ValueError()
-            content = re.sub(
-                r"^```(?:json)?\s*|\s*```$", "", answer["message"]["content"].strip()
-            )
+            finish_reason = answer.get("finish_reason")
+            if finish_reason == "length":
+                self.record(uid, "INVALID_OUTPUT")
+                raise ProviderFailure("MODEL_OUTPUT_TRUNCATED")
+            if finish_reason not in ("stop", None):
+                self.record(uid, "INVALID_OUTPUT")
+                raise ProviderFailure("MODEL_OUTPUT_INCOMPLETE")
+            content = answer["message"]["content"]
+            if isinstance(content, list):
+                content = "".join(
+                    item.get("text", "")
+                    for item in content
+                    if isinstance(item, dict) and isinstance(item.get("text"), str)
+                )
+            if not isinstance(content, str):
+                raise TypeError()
+            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
             value = json.loads(content)
             usage = {
                 k: v
@@ -183,9 +196,11 @@ class Providers:
                 and isinstance(v, int)
                 and v >= 0
             }
+        except ProviderFailure:
+            raise
         except (ValueError, KeyError, IndexError, TypeError):
             self.record(uid, "INVALID_OUTPUT")
-            raise ProviderFailure("MODEL_OUTPUT_INVALID") from None
+            raise ProviderFailure("MODEL_OUTPUT_INVALID_JSON") from None
         self.record(uid, "SUCCESS", usage)
         return self.remember(cache_key, value)
 

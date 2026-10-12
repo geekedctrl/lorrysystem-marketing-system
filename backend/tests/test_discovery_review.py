@@ -296,13 +296,69 @@ class DiscoveryTests(fixtures.BackendFixtures):
             by_domain["good.example.com"]["prospect_type"], "FLEET_OPERATOR"
         )
         self.assertEqual(
-            by_domain["bad.example.com"]["failure_reason"], "MODEL_OUTPUT_INVALID"
+            by_domain["bad.example.com"]["failure_reason"],
+            "MODEL_OUTPUT_SCHEMA_INVALID",
         )
         with Session() as db:
             self.assertEqual(len(list(db.scalars(select(Lead)))), 1)
             job = db.scalar(select(Job))
             self.assertEqual(job.status, "COMPLETED")
             self.assertEqual(job.result["counts"]["candidates_ready"], 1)
+
+    def test_invalid_assessment_gets_one_repair_attempt(self):
+        url = "https://retry.example.com/"
+        search = lambda *args, **kwargs: [
+            {"url": url, "title": "Retry Transport", "text": ""}
+        ]
+
+        def fetch(_url):
+            return {
+                "fetch_status": "SUCCESS",
+                "final_url": url,
+                "body": "<p>Retry Transport provides commercial transport and delivery services. "
+                "Its company website describes logistics operations across Malaysia.</p>",
+            }
+
+        calls = []
+
+        def model(provider, operation, instructions, data):
+            calls.append(operation)
+            if operation.startswith("discovery:"):
+                return {"missing": "required assessment fields"}
+            return dict(
+                suitable=True,
+                prospect_type="LOGISTICS_PROVIDER",
+                company_name="Retry Transport",
+                icp_code="ICP",
+                confidence=80,
+                official_company=True,
+                excerpt_id=data["excerpts"][0]["excerpt_id"],
+                industry="Logistics",
+                reasoning="Official company evidence establishes commercial transport services.",
+                unknowns=["Buying intent unknown"],
+            )
+
+        with patch.object(
+            fixtures.FixtureProviders, "search", side_effect=search
+        ), patch.object(fixtures.FixtureProviders, "model", model), patch(
+            "marketing_backend.stages.fetch_public", side_effect=fetch
+        ):
+            response = self.client.post(
+                f"/workspaces/{self.wid}/discovery",
+                headers=self.headers,
+                json={"idempotency_key": "assessment-repair-test"},
+            )
+            self.assertEqual(response.status_code, 202)
+            self.assertEqual(self.drain(), ["DISCOVERY"])
+
+        self.assertEqual(
+            calls, ["discovery:retry.example.com", "discovery-repair:retry.example.com"]
+        )
+        candidates = self.client.get(
+            f"/workspaces/{self.wid}/candidates", headers=self.headers
+        ).json()
+        self.assertEqual(candidates["total"], 1)
+        self.assertEqual(candidates["items"][0]["domain"], "retry.example.com")
 
     def test_worker_role_cannot_create_leads(self):
         with Session() as db:

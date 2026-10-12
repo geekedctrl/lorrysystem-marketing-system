@@ -135,7 +135,7 @@ def assess(raw, sources, icps, host):
     try:
         value = Assessment.model_validate(raw).model_dump()
     except (ValueError, TypeError):
-        raise ProviderFailure("MODEL_OUTPUT_INVALID") from None
+        raise ProviderFailure("MODEL_OUTPUT_SCHEMA_INVALID") from None
     source = next((s for s in sources if s["excerpt_id"] == value["excerpt_id"]), None)
     if (
         not source
@@ -309,21 +309,41 @@ def discover(job, providers):
             )
             continue
         counters["assessments_attempted"] += 1
+        instructions = "Assess ONE company's public evidence against the actual catalog and ICPs as a potential customer. Return exactly one JSON object with every key: suitable (boolean), prospect_type (string), company_name (string), icp_code (string), confidence (integer 0-100), official_company (boolean), excerpt_id (string), industry (string), reasoning (string), unknowns (array of strings). Do not omit keys or use markdown. prospect_type must be one of FLEET_OPERATOR, LOGISTICS_PROVIDER, TRANSPORT_BUYER, SOFTWARE_VENDOR, CONSULTANT, OTHER, UNKNOWN. FLEET_OPERATOR means it operates/owns/manages vehicles to sell transport or passenger services. LOGISTICS_PROVIDER means it provides transport/3PL/haulage services itself, not software for providers. TRANSPORT_BUYER means a manufacturer, distributor, retailer or other business whose own evidence shows it operates or manages delivery/transport. SOFTWARE_VENDOR means it sells software, platforms, telematics, fleet technology or consulting to transport operators; never recommend this type as a LorrySystem lead. A company merely describing software for bus operators (such as a transit-management SaaS) is a vendor, not a bus operator. If direct evidence does not establish an operator/buyer role, use UNKNOWN or OTHER and set suitable=false. Select an existing excerpt_id containing the exact company name and supporting both its identity and buyer/operator role. Never write a quote or invent capabilities, contacts or buying intent. Assess customer relevance, not proof of purchase interest. These are recommendations for human review only."
+        assessment_data = {"context": ctx, "excerpts": sources}
+        icps = {c["code"] for c in ctx["catalog"] if c["kind"] == "ICP"}
         try:
-            raw = providers.model(
-                "discovery:" + host,
-                "Assess ONE company's public evidence against the actual catalog and ICPs as a potential customer. Return exactly one JSON object with every key: suitable (boolean), prospect_type (string), company_name (string), icp_code (string), confidence (integer 0-100), official_company (boolean), excerpt_id (string), industry (string), reasoning (string), unknowns (array of strings). Do not omit keys or use markdown. prospect_type must be one of FLEET_OPERATOR, LOGISTICS_PROVIDER, TRANSPORT_BUYER, SOFTWARE_VENDOR, CONSULTANT, OTHER, UNKNOWN. FLEET_OPERATOR means it operates/owns/manages vehicles to sell transport or passenger services. LOGISTICS_PROVIDER means it provides transport/3PL/haulage services itself, not software for providers. TRANSPORT_BUYER means a manufacturer, distributor, retailer or other business whose own evidence shows it operates or manages delivery/transport. SOFTWARE_VENDOR means it sells software, platforms, telematics, fleet technology or consulting to transport operators; never recommend this type as a LorrySystem lead. A company merely describing software for bus operators (such as a transit-management SaaS) is a vendor, not a bus operator. If direct evidence does not establish an operator/buyer role, use UNKNOWN or OTHER and set suitable=false. Select an existing excerpt_id containing the exact company name and supporting both its identity and buyer/operator role. Never write a quote or invent capabilities, contacts or buying intent. Assess customer relevance, not proof of purchase interest. These are recommendations for human review only.",
-                {"context": ctx, "excerpts": sources},
-            )
-            candidate = assess(
-                raw,
-                sources,
-                {c["code"] for c in ctx["catalog"] if c["kind"] == "ICP"},
-                host,
-            )
+            try:
+                raw = providers.model("discovery:" + host, instructions, assessment_data)
+                candidate = assess(raw, sources, icps, host)
+            except ProviderFailure as exc:
+                if exc.code not in {
+                    "MODEL_OUTPUT_INVALID_JSON",
+                    "MODEL_OUTPUT_TRUNCATED",
+                    "MODEL_OUTPUT_INCOMPLETE",
+                    "MODEL_OUTPUT_SCHEMA_INVALID",
+                }:
+                    raise
+                # A single separately-accounted correction attempt handles occasional
+                # model formatting/schema misses without hiding recurring failures.
+                repair_instructions = (
+                    instructions
+                    + " Your previous response did not satisfy the required JSON contract. "
+                    + "Return one compact valid JSON object now. Include every required key, "
+                    + "use exact boolean/integer/array types, and use UNKNOWN with suitable=false "
+                    + "when the evidence does not prove an operator or buyer role."
+                )
+                raw = providers.model(
+                    "discovery-repair:" + host, repair_instructions, assessment_data
+                )
+                candidate = assess(raw, sources, icps, host)
         except ProviderFailure as exc:
             if exc.code not in {
                 "MODEL_OUTPUT_INVALID",
+                "MODEL_OUTPUT_INVALID_JSON",
+                "MODEL_OUTPUT_TRUNCATED",
+                "MODEL_OUTPUT_INCOMPLETE",
+                "MODEL_OUTPUT_SCHEMA_INVALID",
                 "CANDIDATE_NOT_SUPPORTED",
                 "MODEL_UNAVAILABLE",
                 "MODEL_TRANSPORT_ERROR",
