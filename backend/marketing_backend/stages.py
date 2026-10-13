@@ -51,6 +51,9 @@ class ResearchOutput(Strict):
     unknowns: list[str] = Field(max_length=20)
 
 
+MAX_RESEARCH_PEOPLE = 5
+
+
 class ICPInput(Strict):
     code: str = Field(pattern=r"^[A-Z0-9_]+$", max_length=80)
     name: str = Field(min_length=3, max_length=120)
@@ -106,7 +109,7 @@ def validated(schema, raw):
     try:
         return schema.model_validate(raw).model_dump()
     except (ValueError, TypeError):
-        raise ProviderFailure("MODEL_OUTPUT_INVALID") from None
+        raise ProviderFailure("MODEL_OUTPUT_SCHEMA_INVALID") from None
 
 
 def cite(value, pages):
@@ -251,34 +254,71 @@ def research(job, providers):
             ],
             "stop_reason": "COMPANY_IDENTITY_UNCONFIRMED",
         }
-    value = validated(
-        ResearchOutput,
-        providers.model(
-            "research",
-            "Research only supplied official pages. Return facts(category,statement,source_url,evidence_quote,confidence integer0-100,kind OBSERVED/INFERRED), people(name,role,email optional,phone optional,source_url,evidence_quote), unknowns. Categories COMPANY,INDUSTRY,SERVICES,FLEET,TECHNOLOGY,LOCATION,PAIN_POINT,SIGNAL. Copy exact contiguous quotes. Existing systems are not unmet needs or buying intent. Industry is a concise supported label. Only extract named public business people with a sourced role. Never infer email addresses or phone numbers. Do not invent claims.",
-            {
-                "company": job.payload["company_name"],
-                "context": job.payload["context"],
-                "pages": pages,
-            },
-        ),
+    raw = providers.model(
+        "research",
+        "Research only supplied official pages. Return facts(category,statement,source_url,evidence_quote,confidence integer0-100,kind OBSERVED/INFERRED), people(name,role,email optional,phone optional,source_url,evidence_quote), unknowns. Return at most five people, prioritizing named decision-makers and operational leaders. Categories COMPANY,INDUSTRY,SERVICES,FLEET,TECHNOLOGY,LOCATION,PAIN_POINT,SIGNAL. Copy exact contiguous quotes. Existing systems are not unmet needs or buying intent. Industry is a concise supported label. Only extract named public business people with a sourced role. Never infer email addresses or phone numbers. Do not invent claims.",
+        {
+            "company": job.payload["company_name"],
+            "context": job.payload["context"],
+            "pages": pages,
+        },
     )
-    for item in value["facts"] + value["people"]:
-        cite(item, pages)
+    # Some compatible models return more contacts than requested. Keep the
+    # response bounded before strict schema validation; the model's ordering
+    # prioritizes its strongest public contacts.
+    omitted_people = 0
+    if isinstance(raw, dict) and isinstance(raw.get("people"), list):
+        omitted_people = max(0, len(raw["people"]) - MAX_RESEARCH_PEOPLE)
+        if omitted_people:
+            raw = {**raw, "people": raw["people"][:MAX_RESEARCH_PEOPLE]}
+    value = validated(ResearchOutput, raw)
+
+    # Evidence errors on one generated item must not discard every other
+    # source-backed finding. Drop unsupported facts/people and report the gap.
+    supported_facts = []
+    omitted_facts = 0
+    for fact in value["facts"]:
+        try:
+            cite(fact, pages)
+        except ProviderFailure:
+            omitted_facts += 1
+            continue
+        supported_facts.append(fact)
+    supported_people = []
     for person in value["people"]:
+        try:
+            cite(person, pages)
+        except ProviderFailure:
+            omitted_people += 1
+            continue
         quote = normalize(person["evidence_quote"]).lower()
         if (
             normalize(person["name"]).lower() not in quote
             or normalize(person["role"]).lower() not in quote
         ):
-            raise ProviderFailure("PERSON_AFFILIATION_UNSUPPORTED")
+            omitted_people += 1
+            continue
         for field in ("email", "phone"):
             if person[field] and normalize(person[field]).lower() not in quote:
-                raise ProviderFailure("CONTACT_UNSUPPORTED")
+                person[field] = None
         if person["email"] and not re.fullmatch(
             r"[^\s@]+@[^\s@]+\.[^\s@]+", person["email"]
         ):
-            raise ProviderFailure("CONTACT_UNSUPPORTED")
+            person["email"] = None
+        supported_people.append(person)
+    value["facts"] = supported_facts
+    value["people"] = supported_people
+    omissions = []
+    if omitted_facts:
+        omissions.append(
+            "Some generated company facts were omitted because their exact source text could not be verified."
+        )
+    if omitted_people:
+        omissions.append(
+            "Some generated contacts were omitted or capped because their source, name, role, or contact details could not be verified."
+        )
+    if omissions:
+        value["unknowns"] = [*value["unknowns"][:18], *omissions]
     value["pages"] = pages
     value["industry"] = next(
         (
