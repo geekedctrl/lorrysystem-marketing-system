@@ -6,7 +6,7 @@ Implemented: password login, hashed expiring bearer sessions, login throttling, 
 
 Workers use `FOR UPDATE SKIP LOCKED`, renewable leases and persisted checkpoints. Transient model errors have bounded backoff; configuration and citation failures stop immediately. Expired workers cannot save results. Provider requests may repeat after uncertain transport failures; exactly-once provider billing is not promised. This milestone has no sending executor.
 
-Model calls use xKiro's JSON response mode and validate every result before use. Discovery reports malformed JSON, truncation, incomplete responses and schema mismatch separately, and permits one additional budget-reserved correction call for an invalid company assessment. Website fetch failures are independent and may require a later reassessment.
+Model calls use xKiro's JSON response mode and validate every result before use. Discovery reports malformed JSON, truncation, incomplete responses and schema mismatch separately, and permits one additional budget-reserved correction call for an invalid company assessment. Research bounds model-returned contacts to five and drops individual unsupported facts or contacts with an explicit coverage note, preserving other verified evidence. Other stage schema failures are reported as `MODEL_OUTPUT_SCHEMA_INVALID`. Website fetch failures are independent and may require a later reassessment.
 
 The shared pipeline advances eligible leads to a draft `PENDING_APPROVAL`. Evidence/contact/qualification gaps stop with explicit review reasons. Administrator/Reviewer approval is separate and never sends. Manual homepage-only research remains available. See [native preparation workers](../docs/native-preparation-workers.md) for policies, APIs, reservations and remaining cutover work.
 
@@ -37,7 +37,7 @@ docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.bac
 docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml --profile test run --rm --build backend-test
 ```
 
-Thirty integration tests cover authentication, roles, database isolation, worker permissions, concurrent claims, idempotency, lease expiry, bounded retries, checkpoint recovery, provider contracts, reservations, configuration stops, citation/private-target rejection, all native stages, contact resolution, stale approvals and six synthetic companies across two unrelated catalogs.
+Fifty-four PostgreSQL-backed tests cover authentication, roles, database isolation, worker permissions, concurrent claims, idempotency, lease expiry, bounded retries, checkpoint recovery, provider contracts, reservations, configuration stops, citation/private-target rejection, all native stages, contact resolution, stale approvals and six synthetic companies across two unrelated catalogs. A regression verifies that excess model-returned contacts are capped and unsupported individual findings are omitted without blocking valid research.
 
 A separate smoke test exercises the running API and worker with their actual restricted roles. It creates and removes only its explicitly identified synthetic fixtures. Run it with the model key empty:
 

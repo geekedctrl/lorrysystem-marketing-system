@@ -365,6 +365,67 @@ class NativeTests(BackendFixtures):
                 sum(k.startswith("page:") for k in db.get(Job, job.id).checkpoint), 3
             )
 
+    def test_research_bounds_extra_contacts_and_drops_unsupported_facts(self):
+        rid = self.prepare()
+
+        class NoisyResearchProviders(FixtureProviders):
+            def model(provider, operation, instructions, data):
+                value = super(NoisyResearchProviders, provider).model(
+                    operation, instructions, data
+                )
+                if operation == "research":
+                    value["people"] = value["people"] * 6
+                    value["people"][1] = {
+                        **value["people"][1],
+                        "evidence_quote": "This person's name and role are not sourced.",
+                    }
+                    value["people"][2] = {
+                        **value["people"][2],
+                        "email": "unverified@example.com",
+                    }
+                    value["facts"].append(
+                        {
+                            "category": "SERVICES",
+                            "statement": "An unsupported service claim.",
+                            "kind": "OBSERVED",
+                            "confidence": 95,
+                            **citation("This quote is not on the company website."),
+                        }
+                    )
+                return value
+
+        def fetched(url):
+            return {
+                "fetch_status": "SUCCESS",
+                "final_url": url,
+                "body": "<p>" + PAGE + "</p>",
+            }
+
+        with patch(
+            "marketing_backend.stages.Providers", NoisyResearchProviders
+        ), patch("marketing_backend.stages.fetch_public", side_effect=fetched):
+            with Session() as db:
+                job = queue.claim(db)
+            execute(job)
+
+        with Session() as db:
+            run = db.get(PreparationRun, rid)
+            research = run.results["RESEARCH"]
+            self.assertEqual(run.status, "PREPARING")
+            self.assertEqual(len(research["people"]), 4)
+            self.assertIsNone(research["people"][1]["email"])
+            self.assertEqual(len(research["facts"]), 3)
+            self.assertTrue(
+                any("omitted" in value for value in research["unknowns"])
+            )
+            contact_job = db.scalar(
+                select(Job).where(
+                    Job.run_id == rid,
+                    Job.kind == "CONTACT_SEARCH",
+                )
+            )
+            self.assertEqual(contact_job.status, "PENDING")
+
     def test_stale_context_cannot_save_or_approve(self):
         rid = self.prepare()
         with Session() as db:
