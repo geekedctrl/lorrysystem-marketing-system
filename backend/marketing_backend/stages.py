@@ -476,21 +476,49 @@ def rubric(job):
         raise ProviderFailure("SCORING_RUBRIC_INVALID") from None
 
 
+def normalize_score_output(raw, limits):
+    """Accept the keyed score object some OpenAI-compatible models emit.
+
+    Keep validation strict: the only alternate top-level shape is exactly one
+    object per configured rubric criterion, with an optional ``unknowns`` list.
+    Criterion contents still pass the same Pydantic and citation checks below.
+    """
+    if not isinstance(raw, dict) or "criteria" in raw:
+        return raw
+    criterion_keys = set(raw) - {"unknowns"}
+    if criterion_keys != set(limits):
+        return raw
+    criteria = []
+    for criterion in limits:
+        item = raw[criterion]
+        if not isinstance(item, dict):
+            return raw
+        criteria.append({"criterion": criterion, **item})
+    return {"criteria": criteria, "unknowns": raw.get("unknowns", [])}
+
+
 def scoring(job, providers):
     research = result(job, "RESEARCH")
     limits = rubric(job)
+    raw = providers.model(
+        "scoring",
+        "Score against the supplied rubric and ICPs. Return JSON with this exact shape: "
+        '{"criteria":[{"criterion":"icp_fit","points":0,"rationale":"...",'
+        '"evidence":[]}],"unknowns":[]}. Include one criteria array item per rubric '
+        "criterion and use its exact code. Do not return criterion codes as object keys. "
+        "Every positive component requires exact saved citations. Operational need requires "
+        "an observed PAIN_POINT; buying signals require an observed SIGNAL. Existing "
+        "technology and capabilities are not unmet needs or buying intent. Unknown evidence earns zero.",
+        {
+            "context": job.payload["context"],
+            "selected_icp": job.payload["icp_code"],
+            "rubric": limits,
+            "research": research,
+        },
+    )
     value = validated(
         ScoreOutput,
-        providers.model(
-            "scoring",
-            "Score against supplied rubric and ICPs. Return criteria(criterion,points integer,rationale,evidence array of source_url/evidence_quote), unknowns. Every positive component requires exact saved citations. Operational need requires an observed PAIN_POINT; buying signals require an observed SIGNAL. Existing technology and capabilities are not unmet needs or buying intent. Unknown evidence earns zero.",
-            {
-                "context": job.payload["context"],
-                "selected_icp": job.payload["icp_code"],
-                "rubric": limits,
-                "research": research,
-            },
-        ),
+        normalize_score_output(raw, limits),
     )
     if len(value["criteria"]) != len(limits) or {
         v["criterion"] for v in value["criteria"]
