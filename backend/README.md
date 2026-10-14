@@ -37,7 +37,7 @@ docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.bac
 docker compose --env-file .env.backend-local -p marketing-rebuild -f compose.backend.yml --profile test run --rm --build backend-test
 ```
 
-Fifty-five PostgreSQL-backed tests cover authentication, roles, database isolation, worker permissions, concurrent claims, idempotency, lease expiry, bounded retries, checkpoint recovery, provider contracts, reservations, configuration stops, citation/private-target rejection, all native stages, contact resolution, stale approvals and six synthetic companies across two unrelated catalogs. Regressions verify that excess model-returned contacts are capped, unsupported individual findings are omitted without blocking valid research, and keyed xKiro scoring output is safely normalized to the rubric contract.
+Fifty-six PostgreSQL-backed tests cover authentication, roles, database isolation, worker permissions, concurrent claims, idempotency, lease expiry, bounded retries, checkpoint recovery, provider contracts, reservations, configuration stops, citation/private-target rejection, all native stages, contact resolution, stale approvals and six synthetic companies across two unrelated catalogs. Regressions verify that excess model-returned contacts are capped, unsupported individual findings are omitted without blocking valid research, and keyed scoring/citation aliases from compatible models are safely normalized to the rubric contract.
 
 A separate smoke test exercises the running API and worker with their actual restricted roles. It creates and removes only its explicitly identified synthetic fixtures. Run it with the model key empty:
 

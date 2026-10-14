@@ -49,6 +49,7 @@ class FixtureProviders:
     opportunity = True
     ambiguous = False
     keyed_scoring = False
+    quote_alias_scoring = False
 
     def __init__(self, job, save):
         self.job, self.save, self.cache = job, save, dict(job.checkpoint)
@@ -152,6 +153,12 @@ class FixtureProviders:
                     }
                     for item in criteria
                 }
+            if self.quote_alias_scoring:
+                for item in criteria:
+                    item["evidence"] = [
+                        {"source_url": e["source_url"], "quote": e["evidence_quote"]}
+                        for e in item["evidence"]
+                    ]
             return {
                 "criteria": criteria,
                 "unknowns": ["Operating scale not established"],
@@ -211,7 +218,8 @@ class NativeTests(BackendFixtures):
             FixtureProviders.opportunity,
             FixtureProviders.ambiguous,
             FixtureProviders.keyed_scoring,
-        ) = (True, True, False, False)
+            FixtureProviders.quote_alias_scoring,
+        ) = (True, True, False, False, False)
         self.provider.start()
         self.fetcher.start()
         self.addCleanup(self.provider.stop)
@@ -287,6 +295,19 @@ class NativeTests(BackendFixtures):
             )
             self.assertEqual(score["score"], 85)
             self.assertEqual(score["unknowns"], [])
+
+    def test_scoring_citation_quote_alias_is_normalized(self):
+        FixtureProviders.quote_alias_scoring = True
+        rid = self.prepare("quote-alias-scoring-output")
+        self.assertEqual(self.drain(), list(pipeline.STAGES))
+        with Session() as db:
+            run = db.get(PreparationRun, rid)
+            self.assertEqual(run.status, "PENDING_APPROVAL")
+            score = run.results["SCORING"]
+            self.assertEqual(score["score"], 85)
+            self.assertEqual(
+                score["criteria"][0]["evidence"][0]["evidence_quote"], SERVICE
+            )
 
     def test_capability_does_not_create_opportunity(self):
         FixtureProviders.opportunity = False
