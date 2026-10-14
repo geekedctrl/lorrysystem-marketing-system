@@ -291,7 +291,10 @@ def run(mode):
                 differences.extend(sender_differences)
             status = "DIFFERENCES" if differences else "COMPLETED"
         elif mode in ("reconcile", "final-delta"):
-            for entity, table in (("workspaces", "workspaces"), ("catalog", "catalog"), ("leads", "leads")):
+            for entity, table in (("users", "users"), ("workspaces", "workspaces"),
+                                  ("memberships", "memberships"), ("catalog", "catalog"),
+                                  ("leads", "leads"), ("preparation_runs", "preparation_runs"),
+                                  ("approvals", "approvals")):
                 native_count = db.scalar(text(f"SELECT count(*) FROM {table}")) or 0
                 if counts.get(entity) is not None and native_count != counts[entity]:
                     differences.append({"entity": entity, "source": counts[entity], "native": native_count})
