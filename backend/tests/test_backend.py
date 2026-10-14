@@ -20,6 +20,11 @@ from marketing_backend.models import (
     ProviderUsage,
     PreparationRun,
     DiscoveryMemory,
+    ExecutorOwnership,
+    Delivery,
+    DeliveryAttempt,
+    SenderConnection,
+    EmailSuppression,
 )
 from marketing_backend.auth import hash_password
 from marketing_backend.api import app
@@ -36,6 +41,10 @@ class BackendFixtures(unittest.TestCase):
     def setUp(self):
         with Session() as db:
             for model in (
+                DeliveryAttempt,
+                Delivery,
+                EmailSuppression,
+                SenderConnection,
                 Approval,
                 ProviderUsage,
                 DiscoveryMemory,
@@ -44,6 +53,7 @@ class BackendFixtures(unittest.TestCase):
                 Lead,
                 Catalog,
                 Membership,
+                ExecutorOwnership,
                 LoginSession,
                 LoginAttempt,
                 Workspace,
@@ -64,6 +74,7 @@ class BackendFixtures(unittest.TestCase):
             db.add_all([a, b, w, other])
             db.flush()
             self.uid, self.wid, self.other = a.id, w.id, other.id
+            db.query(ExecutorOwnership).filter(ExecutorOwnership.workspace_id.in_([w.id, other.id])).update({ExecutorOwnership.owner: "PYTHON"}, synchronize_session=False)
             db.add_all(
                 [
                     Membership(user_id=a.id, workspace_id=w.id, role="ADMIN"),

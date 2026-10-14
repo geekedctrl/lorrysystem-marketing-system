@@ -54,7 +54,9 @@ def claim(db):
             ExecutorOwnership.owner == 'PYTHON', ExecutorOwnership.state == 'ACTIVE',
         )
         .order_by(Job.created_at, Job.id)
-        .with_for_update(of=(Job, ExecutorOwnership), skip_locked=True)
+        # Lock the claimable job; ownership is read-only for workers and must
+        # not grant them transition privileges merely to inspect it.
+        .with_for_update(of=Job, skip_locked=True)
         .limit(1)
     )
     if job:

@@ -13,6 +13,7 @@ from marketing_backend.models import (
     Approval, Catalog, Delivery, DeliveryAttempt, DiscoveryMemory, EmailSuppression,
     Job, Lead, LoginAttempt, LoginSession, Membership, PreparationRun, ProviderUsage,
     SenderConnection, User, Workspace, now,
+    ExecutorOwnership,
 )
 from marketing_backend.sending import HandoffError, claim_attempt, encrypt_secret, execute_attempt, recover_expired
 
@@ -23,12 +24,13 @@ if os.getenv("APP_ENV") != "test" or engine.url.database != "marketing_rebuild_t
 class NativeSendingTests(unittest.TestCase):
     def setUp(self):
         with Session() as db:
-            for model in (DeliveryAttempt, Delivery, EmailSuppression, SenderConnection, Approval, ProviderUsage, DiscoveryMemory, Job, PreparationRun, Lead, Catalog, Membership, LoginSession, LoginAttempt, Workspace, User):
+            for model in (DeliveryAttempt, Delivery, EmailSuppression, SenderConnection, Approval, ProviderUsage, DiscoveryMemory, Job, PreparationRun, Lead, Catalog, Membership, LoginSession, LoginAttempt, ExecutorOwnership, Workspace, User):
                 db.execute(delete(model))
             self.password = secrets.token_urlsafe(20)
             actor = User(email="sender@example.test", password_hash=hash_password(self.password))
             workspace = Workspace(name="Delivery tests")
             db.add_all([actor, workspace]); db.flush()
+            db.query(ExecutorOwnership).filter(ExecutorOwnership.workspace_id == workspace.id).update({ExecutorOwnership.owner: "PYTHON"}, synchronize_session=False)
             db.add(Membership(workspace_id=workspace.id, user_id=actor.id, role="ADMIN"))
             run = PreparationRun(workspace_id=workspace.id, lead_id=None, context_hash="a" * 64, snapshot={}, status="APPROVED", results={})
             # The model requires a lead FK in normal operation. Build the fixture with SQL after IDs exist below.
