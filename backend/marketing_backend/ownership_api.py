@@ -62,6 +62,10 @@ def preflight(wid: UUID, capability: str, x_ownership_token: str = Header(defaul
     token = os.environ.get("OWNERSHIP_PREFLIGHT_TOKEN", "")
     if not token or not secrets.compare_digest(x_ownership_token, token):
         raise HTTPException(401, "Internal authentication required")
+    if capability == "ALL":
+        rows = db.scalars(select(ExecutorOwnership).where(ExecutorOwnership.workspace_id == wid)).all()
+        return {"allow_new_legacy_claim": any(r.owner == "N8N" and r.state == "ACTIVE" for r in rows),
+                "owner": "MIXED", "state": "ACTIVE", "version": max((r.version for r in rows), default=0)}
     if capability not in CAPABILITIES:
         raise HTTPException(404, "Unknown capability")
     row = db.get(ExecutorOwnership, (wid, capability))
