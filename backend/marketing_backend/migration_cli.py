@@ -27,7 +27,11 @@ def legacy_engine():
 
 def snapshot(conn):
     counts = {}
+    available = set(inspect(conn).get_table_names())
     for table in ENTITY_TABLES:
+        if table not in available:
+            counts[table] = None
+            continue
         try:
             counts[table] = conn.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
         except Exception:
