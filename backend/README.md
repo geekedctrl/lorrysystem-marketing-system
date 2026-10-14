@@ -58,6 +58,10 @@ The implementation order, acceptance criteria and cutover boundaries are defined
 
 This is a local backend foundation, not a complete replacement release or production cutover.
 
+Migration control runs from the administrative migration service with a read-only legacy URL:
+`python -m marketing_backend.cli migration export|dry-run|apply|reconcile|final-delta`.
+Apply copies compatible workspace identities and records `legacy_identity_map`; reconciliation differences keep Python activation blocked.
+
 ## Native frontend support update
 
 BE-01–BE-06 backend support is implemented and tested locally: typed responses/current-user capabilities, lead detail/keyset pagination, immutable human draft revisions with a different reviewer, soft catalog lifecycle and persistent context versions. Product setup keeps explicit partial-save semantics. The worker loop now checks due discovery continuously. Migrations006/007 belong to this independent database.
