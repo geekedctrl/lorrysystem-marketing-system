@@ -17,6 +17,7 @@ from marketing_backend.models import (
     ProviderUsage,
     DiscoveryMemory,
     PreparationRun,
+    ExecutorOwnership,
 )
 from marketing_backend.auth import hash_password
 
@@ -72,26 +73,29 @@ try:
             if job["status"] == "FAILED":
                 break
             time.sleep(0.25)
+        # Coexistence safety: native work must remain unclaimed while the
+        # default ownership rows are N8N/ACTIVE. If ownership is already
+        # delegated in a synthetic environment, provider absence is the
+        # expected terminal result instead.
         assert (
-            job["status"] == "FAILED"
-            and job["failure_code"] == "PROVIDER_NOT_CONFIGURED"
+            job["status"] == "PENDING"
+            or (job["status"] == "FAILED" and job["failure_code"] == "PROVIDER_NOT_CONFIGURED")
         ), job["status"]
         print(
             "PASS running restricted-role API login/catalog/lead/queue and Python worker; no provider calls"
         )
-        r = client.post(
-            f"/workspaces/{wid}/automation/activate",
-            json={
-                "idempotency_key": "smoke-native-activation",
-                "product_description": "Explicit synthetic smoke test product description",
-            },
-        )
+        operations = client.get(f"/workspaces/{wid}/operations")
+        operations.raise_for_status()
+        assert all(row["owner"] == "N8N" and row["state"] == "ACTIVE" for row in operations.json()["ownership"])
+        blocked = client.post(f"/workspaces/{wid}/leads/{lid}/prepare", json={"idempotency_key": "smoke-native-preparation"})
+        assert blocked.status_code == 409, blocked.text
+        print("PASS native claims remain blocked while ownership is N8N; no provider calls")
+        if os.getenv("RUN_NATIVE_ACTIVE_SMOKE") != "true":
+            raise SystemExit(0)
+        r = client.post(f"/workspaces/{wid}/automation/activate", json={"idempotency_key": "smoke-native-activation", "product_description": "Explicit synthetic smoke test product description"})
         r.raise_for_status()
         setup_id = r.json()["job_id"]
-        r = client.post(
-            f"/workspaces/{wid}/leads/{lid}/prepare",
-            json={"idempotency_key": "smoke-native-preparation"},
-        )
+        r = client.post(f"/workspaces/{wid}/leads/{lid}/prepare", json={"idempotency_key": "smoke-native-preparation"})
         r.raise_for_status()
         run_id = r.json()["run_id"]
         deadline = time.monotonic() + 15
@@ -126,6 +130,7 @@ finally:
             db.execute(delete(model).where(model.workspace_id == wid))
         db.execute(delete(Membership).where(Membership.workspace_id == wid))
         db.execute(delete(LoginSession).where(LoginSession.user_id == uid))
+        db.execute(delete(ExecutorOwnership).where(ExecutorOwnership.workspace_id == wid))
         db.execute(delete(Workspace).where(Workspace.id == wid))
         db.execute(delete(User).where(User.id == uid))
         db.commit()
