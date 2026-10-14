@@ -36,6 +36,15 @@ def snapshot(conn):
     return counts, hashlib.sha256(raw).hexdigest()
 
 
+def status_counts(conn, table):
+    if "status" not in table_columns(conn, table):
+        return None
+    try:
+        return {str(row[0]): int(row[1]) for row in conn.execute(text(f"SELECT status,count(*) FROM {table} GROUP BY status"))}
+    except Exception:
+        return None
+
+
 def source_rows(conn, table):
     try:
         columns = {c["name"] for c in inspect(conn).get_columns(table)}
@@ -298,6 +307,14 @@ def run(mode):
                 native_count = db.scalar(text(f"SELECT count(*) FROM {table}")) or 0
                 if counts.get(entity) is not None and native_count != counts[entity]:
                     differences.append({"entity": entity, "source": counts[entity], "native": native_count})
+            with legacy_engine().connect() as source:
+                for entity, table in (("preparation_runs", "preparation_runs"), ("approvals", "approvals")):
+                    source_status = status_counts(source, table)
+                    if source_status is None:
+                        continue
+                    native_status = {str(row[0]): int(row[1]) for row in db.execute(text(f"SELECT status,count(*) FROM {table} GROUP BY status"))}
+                    if source_status != native_status:
+                        differences.append({"entity": entity, "code": "STATUS_DISTRIBUTION_MISMATCH", "source": source_status, "native": native_status})
             status = "COMPLETED" if not differences else "DIFFERENCES"
         elif mode == "dry-run":
             differences = [{"code": "WORKSPACE_IDENTITY_WILL_MIGRATE", "count": counts.get("workspaces") or 0}]
