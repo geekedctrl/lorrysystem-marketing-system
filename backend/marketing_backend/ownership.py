@@ -49,6 +49,8 @@ def transition(db, workspace_id, capability, action, expected_version, actor_id)
     before_owner, before_state, owner, state = allowed[action]
     if (row.owner, row.state) != (before_owner, before_state):
         raise HTTPException(409, "Invalid ownership transition")
+    if action == "rollback-n8n" and row.rollback_deadline and row.rollback_deadline < now():
+        raise HTTPException(409, "Rollback window has expired")
     if action != "drain" and active_leases(db, workspace_id, capability):
         raise HTTPException(409, "Active leases must drain first")
     if action == "activate-python":
