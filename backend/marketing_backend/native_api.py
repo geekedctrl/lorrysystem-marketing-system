@@ -578,6 +578,8 @@ def decide(
     "/operations", response_model=out.Operations, response_model_exclude_unset=True
 )
 def operations(wid: UUID, actor=Depends(user), db=Depends(session)):
+    from .models import ExecutorOwnership, DeliveryAttempt
+    from sqlalchemy import func, text
     scope(wid, actor, db)
     usage = list(
         db.scalars(
@@ -629,6 +631,12 @@ def operations(wid: UUID, actor=Depends(user), db=Depends(session)):
             row["provider"],
             {"last_request_status": row["status"], "at": row["created_at"]},
         )
+    ownership = [{"capability": row.capability, "owner": row.owner, "state": row.state,
+                  "version": row.version, "rollback_deadline": row.rollback_deadline}
+                 for row in db.scalars(select(ExecutorOwnership).where(ExecutorOwnership.workspace_id == wid))]
+    active_leases = db.scalar(select(func.count()).select_from(Job).where(Job.workspace_id == wid, Job.status == "RUNNING")) or 0
+    active_send_leases = db.scalar(select(func.count()).select_from(DeliveryAttempt).where(DeliveryAttempt.workspace_id == wid, DeliveryAttempt.status == "SENDING")) or 0
+    migration_row = db.execute(text("SELECT status,source_fingerprint,differences,completed_at FROM migration_runs ORDER BY completed_at DESC NULLS LAST LIMIT 1")).mappings().first()
     waiting = (
         list(
             db.scalars(
@@ -652,4 +660,8 @@ def operations(wid: UUID, actor=Depends(user), db=Depends(session)):
         "provider_health": provider_health,
         "recent_provider_usage": rows,
         "cost_basis": "Conservative reservations, not reconciled provider billing.",
+        "ownership": ownership,
+        "migration_status": dict(migration_row) if migration_row else None,
+        "active_leases": active_leases,
+        "active_send_leases": active_send_leases,
     }

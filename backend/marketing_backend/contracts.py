@@ -331,6 +331,10 @@ class Operations(Public):
     provider_health: dict[str, ProviderHealth]
     recent_provider_usage: list[Usage]
     cost_basis: str
+    ownership: list[dict[str, Any]] = []
+    migration_status: dict[str, Any] | None = None
+    active_leases: int = 0
+    active_send_leases: int = 0
 
 
 class LeadDetail(LeadResponse):
