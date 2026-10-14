@@ -15,7 +15,7 @@ const gate=(name,expr)=>({id:name,name,type:'n8n-nodes-base.if',typeVersion:2.2,
 function binding(input){
   for(const key of ['api_credential','brave_credential'])if(!input[key] || !/^[a-zA-Z0-9_-]+$/.test(input[key].id||'') || !input[key].name || Object.keys(input[key]).some(k=>!['id','name'].includes(k)))throw new Error('Use named n8n credential references');
   if(!input.llm?.credential || !/^[a-zA-Z0-9_-]+$/.test(input.llm.credential.id||'') || !input.llm.credential.name || Object.keys(input.llm.credential).some(k=>!['id','name'].includes(k)))throw new Error('Use a named model credential reference');
-  return {...input,workspace_id:placeholder,llm:{...modelSettings(input.llm),credential:input.llm.credential},require_catalog:true};
+  return {...input,workspace_id:input.workspace_id||placeholder,llm:{...modelSettings(input.llm),credential:input.llm.credential},require_catalog:true};
 }
 function dynamic(workflow,b,trigger,setup=false){
   const configuration=workflow.nodes.find(n=>n.name==='Workspace Configuration');
@@ -95,18 +95,26 @@ function sharedChildren(input){
 function sharedWorker(input,ids){
   const b=binding(input);for(const key of ['setup','discovery','research','pipeline'])if(!/^[a-zA-Z0-9_-]+$/.test(ids[key]||''))throw new Error('Set all four fixed shared child IDs');
   const control=(name,endpoint,options={})=>http(b,name,endpoint,{...options,url:b.api_base_url.replace(/\/$/,'')+endpoint});
+  const ownership= b.ownership_api_base_url ? [
+    {id:'ownership-preflight',name:'Executor Ownership Preflight',type:'n8n-nodes-base.httpRequest',typeVersion:4.2,position:[0,0],credentials:{httpHeaderAuth:b.ownership_credential},parameters:{method:'GET',url:`${b.ownership_api_base_url.replace(/\/$/,'')}/internal/executor-ownership/${b.workspace_id}/{{ $json.kind === 'SETUP' ? 'SETUP' : ($json.kind === 'DISCOVERY' ? 'DISCOVERY' : 'PREPARATION') }}/preflight`,authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',sendHeaders:true,headerParameters:{parameters:[]},options:{timeout:5000,response:{response:{responseFormat:'json'}}}}},
+    gate('Executor Ownership Allows Legacy?','={{ $json.allow_new_legacy_claim === true }}'),
+  ] : [];
   const nodes=[{id:'schedule',name:'Shared Worker Schedule',type:'n8n-nodes-base.scheduleTrigger',typeVersion:1.2,position:[0,0],parameters:{rule:{interval:[{field:'minutes',minutesInterval:1}]}}},
     control('Shared API Health','/api/automation/worker/health',{soft:true}),gate('Shared API Ready?','={{ $json.statusCode === 200 && $json.body?.shared_automation_version === 1 }}'),
     code('Shared Worker Waiting',"if(![404,405].includes($json.statusCode))throw new Error('Shared worker credential rejected');return [{json:{worker_status:'WAITING_API_DEPLOYMENT'}}];"),
     control('Claim Shared Job','/api/automation/worker/claim',{method:'POST'}),gate('Shared Job Claimed?','={{ !!$json.job_id }}'),code('Validate Claimed Job',`${runtime}\nreturn [{json:sharedJob($json)}];`),
     gate('Is Product Setup?','={{ $json.kind === "SETUP" }}'),gate('Is Discovery?','={{ $json.kind === "DISCOVERY" }}'),gate('Is Research?','={{ $json.kind === "RESEARCH" }}')];
+  nodes.splice(3,0,...ownership);
   for(const key of Object.keys(ids))nodes.push({id:'run-'+key,name:'Run Shared '+key,type:'n8n-nodes-base.executeWorkflow',typeVersion:1.3,position:[0,0],parameters:{source:'database',workflowId:{__rl:true,mode:'id',value:ids[key]},options:{waitForSubWorkflow:true}},onError:'continueRegularOutput',alwaysOutputData:true});
   nodes.push(code('Finish Shared Job Input',`const job=$('Validate Claimed Job').first().json;const results=$input.all().map(i=>i.json);const result=results.find(r=>r.shared_outcome || (r.research_id===job.input.research_id && r.lead_id===job.input.lead_id && ['COMPLETED','PARTIAL','FAILED'].includes(r.research_outcome)) || (r.id===job.input.id && r.lead_id===job.input.lead_id && ['COMPLETED','FAILED'].includes(r.pipeline_outcome)));const outcome=result?.shared_outcome||result?.research_outcome||result?.pipeline_outcome;const failed=!['COMPLETED','PARTIAL'].includes(outcome);return [{json:{job_id:job.job_id,lease_token:job.lease_token,output:result?.output||{},...(failed?{failure_reason:/^[A-Z0-9_]{1,80}$/.test(result?.failure_reason||'')?result.failure_reason:'SHARED_WORKFLOW_FAILED'}:{})}}];`),
     control('Finish Shared Job','/api/automation/worker/finish',{method:'POST',body:'={{ JSON.stringify($json) }}',timeout:60000}));
   const finisher=nodes.find(node=>node.name==='Finish Shared Job Input');
   finisher.parameters.jsCode=finisher.parameters.jsCode.replace('output:result?.output||{},',"output:result?.output||{},...($('Shared API Health').first().json.body?.automation_metrics_version===1 && result?.usage ? {usage:result.usage}:{}),");
-  return graph('Shared Product Automation Queue',nodes,[['Shared Worker Schedule','Shared API Health','Shared API Ready?'],['Claim Shared Job','Shared Job Claimed?'],['Validate Claimed Job','Is Product Setup?'],...Object.keys(ids).map(key=>['Run Shared '+key,'Finish Shared Job Input','Finish Shared Job'])],
-    {'Shared API Ready?':[['Claim Shared Job'],['Shared Worker Waiting']],'Shared Job Claimed?':[['Validate Claimed Job'],[]],'Is Product Setup?':[['Run Shared setup'],['Is Discovery?']],'Is Discovery?':[['Run Shared discovery'],['Is Research?']],'Is Research?':[['Run Shared research'],['Run Shared pipeline']]});
+  const chains=[['Shared Worker Schedule','Shared API Health','Shared API Ready?'],['Claim Shared Job','Shared Job Claimed?'],['Validate Claimed Job','Is Product Setup?'],...Object.keys(ids).map(key=>['Run Shared '+key,'Finish Shared Job Input','Finish Shared Job'])];
+  const branches={'Shared API Ready?':[[...(ownership.length?['Executor Ownership Preflight','Executor Ownership Allows Legacy?']:[]),...(ownership.length?['Claim Shared Job']:['Claim Shared Job'])],['Shared Worker Waiting']]};
+  if(ownership.length) branches['Executor Ownership Allows Legacy?']=[['Claim Shared Job'],['Shared Worker Waiting']];
+  Object.assign(branches,{'Shared Job Claimed?':[['Validate Claimed Job'],[]],'Is Product Setup?':[['Run Shared setup'],['Is Discovery?']],'Is Discovery?':[['Run Shared discovery'],['Is Research?']],'Is Research?':[['Run Shared research'],['Run Shared pipeline']]});
+  return graph('Shared Product Automation Queue',nodes,chains,branches);
 }
 module.exports={sharedChildren,sharedWorker};
 if(require.main===module){try{const [mode,source,out,ids]=process.argv.slice(2);const input=JSON.parse(fs.readFileSync(source,'utf8'));const result=mode==='children'?sharedChildren(input):mode==='worker'?sharedWorker(input,JSON.parse(fs.readFileSync(ids,'utf8'))):null;if(!result)throw new Error('Usage: shared-workflows.js children|worker BINDING OUTPUT [CHILD_IDS]');fs.writeFileSync(out,JSON.stringify(result,null,2)+'\n',{flag:'wx'});console.log('Created shared automation workflows without secrets.');}catch(error){console.error(error.message);process.exitCode=1;}}

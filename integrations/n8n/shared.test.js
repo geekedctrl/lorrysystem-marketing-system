@@ -39,6 +39,8 @@ test('every business request has dynamic lease/workspace headers; providers reta
   const worker=sharedWorker(binding,{setup:'s',discovery:'d',research:'r',pipeline:'p'});
   assert.equal(worker.nodes.filter(n=>n.type==='n8n-nodes-base.executeWorkflow').length,4);
   assert.equal(worker.settings.saveDataErrorExecution,'none');
+  const guarded=sharedWorker({...binding,workspace_id:A,ownership_api_base_url:'http://native:8000',ownership_credential:credential},{setup:'s',discovery:'d',research:'r',pipeline:'p'});
+  assert.ok(guarded.nodes.some(n=>n.name==='Executor Ownership Preflight'));
   assert.throws(()=>sharedWorker(binding,{setup:'s'}),/four/);
   assert.throws(()=>sharedChildren({...binding,api_credential:{...credential,value:'secret'}}),/references/);
 });
