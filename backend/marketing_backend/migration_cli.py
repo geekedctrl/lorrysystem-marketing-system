@@ -190,6 +190,32 @@ def migrate_preparation(source, db, fingerprint):
     return moved, differences
 
 
+def migrate_approvals(source, db, fingerprint):
+    cols = table_columns(source, "approvals")
+    required = {"id", "workspace_id", "run_id", "snapshot", "status"}
+    if not required.issubset(cols):
+        return 0, [{"entity": "approvals", "code": "UNSUPPORTED_SOURCE_SCHEMA"}]
+    rows = source.execute(text("SELECT id::text,workspace_id::text,run_id::text,snapshot,status FROM approvals ORDER BY id")).mappings().all()
+    differences = []
+    moved = 0
+    for row in rows:
+        workspace = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"), {"id": row["workspace_id"]}).scalar()
+        run = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='preparation_run' AND legacy_id=:id"), {"id": row["run_id"]}).scalar()
+        if not workspace or not run:
+            differences.append({"entity": "approvals", "legacy_id": row["id"], "code": "UNRESOLVED_IDENTITY"})
+            continue
+        native_id = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='approval' AND legacy_id=:id"), {"id": row["id"]}).scalar() or uuid.uuid4()
+        db.execute(text("""INSERT INTO approvals(id,workspace_id,run_id,snapshot,status,decision,idempotency_key)
+          VALUES (:id,:workspace,:run,:snapshot,:status,'{}'::jsonb,:key) ON CONFLICT (id) DO NOTHING"""),
+          {"id": native_id, "workspace": workspace, "run": run, "snapshot": json.dumps(row["snapshot"] or {}),
+           "status": row["status"], "key": f"migrated:{row['id']}"})
+        db.execute(text("""INSERT INTO legacy_identity_map(source_system,entity_type,legacy_id,native_id,source_fingerprint)
+          VALUES ('legacy-postgres','approval',:legacy,:native,:fp) ON CONFLICT DO NOTHING"""),
+          {"legacy": row["id"], "native": native_id, "fp": fingerprint})
+        moved += 1
+    return moved, differences
+
+
 def run(mode):
     with legacy_engine().connect() as source:
         counts, fingerprint = snapshot(source)
@@ -211,6 +237,9 @@ def run(mode):
                 preparation_moved, preparation_differences = migrate_preparation(source, db, fingerprint)
                 migrated += preparation_moved
                 differences.extend(preparation_differences)
+                approval_moved, approval_differences = migrate_approvals(source, db, fingerprint)
+                migrated += approval_moved
+                differences.extend(approval_differences)
             status = "DIFFERENCES" if differences else "COMPLETED"
         elif mode in ("reconcile", "final-delta"):
             for entity, table in (("workspaces", "workspaces"), ("catalog", "catalog"), ("leads", "leads")):
