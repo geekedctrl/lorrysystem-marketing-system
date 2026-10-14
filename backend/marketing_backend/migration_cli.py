@@ -160,6 +160,36 @@ def migrate_leads(source, db, fingerprint):
     return moved, None
 
 
+def migrate_preparation(source, db, fingerprint):
+    cols = table_columns(source, "preparation_runs")
+    required = {"id", "workspace_id", "lead_id", "context_hash", "snapshot", "status"}
+    if not required.issubset(cols):
+        return 0, [{"entity": "preparation_runs", "code": "UNSUPPORTED_SOURCE_SCHEMA"}]
+    rows = source.execute(text("""SELECT id::text,workspace_id::text,lead_id::text,context_hash,snapshot,status
+      FROM preparation_runs ORDER BY id""")).mappings().all()
+    differences = []
+    moved = 0
+    for row in rows:
+        workspace = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"), {"id": row["workspace_id"]}).scalar()
+        lead = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='lead' AND legacy_id=:id"), {"id": row["lead_id"]}).scalar()
+        if not workspace or not lead:
+            differences.append({"entity": "preparation_runs", "legacy_id": row["id"], "code": "UNRESOLVED_IDENTITY"})
+            continue
+        native_id = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='preparation_run' AND legacy_id=:id"), {"id": row["id"]}).scalar() or uuid.uuid4()
+        complete = row["status"] in ("PENDING_APPROVAL", "APPROVED", "REJECTED", "CHANGES_REQUESTED")
+        status = row["status"] if complete else "NEEDS_REVIEW"
+        db.execute(text("""INSERT INTO preparation_runs(id,workspace_id,lead_id,context_hash,snapshot,status,stop_reason,results)
+          VALUES (:id,:workspace,:lead,:hash,:snapshot,:status,:reason,'{}'::jsonb) ON CONFLICT (id) DO NOTHING"""),
+          {"id": native_id, "workspace": workspace, "lead": lead, "hash": row["context_hash"],
+           "snapshot": json.dumps(row["snapshot"] or {}), "status": status,
+           "reason": None if complete else "MIGRATED_INCOMPLETE"})
+        db.execute(text("""INSERT INTO legacy_identity_map(source_system,entity_type,legacy_id,native_id,source_fingerprint)
+          VALUES ('legacy-postgres','preparation_run',:legacy,:native,:fp) ON CONFLICT DO NOTHING"""),
+          {"legacy": row["id"], "native": native_id, "fp": fingerprint})
+        moved += 1
+    return moved, differences
+
+
 def run(mode):
     with legacy_engine().connect() as source:
         counts, fingerprint = snapshot(source)
@@ -178,6 +208,9 @@ def run(mode):
                 lead_moved, lead_difference = migrate_leads(source, db, fingerprint)
                 migrated += catalog_moved + lead_moved
                 differences.extend(x for x in (catalog_difference, lead_difference) if x)
+                preparation_moved, preparation_differences = migrate_preparation(source, db, fingerprint)
+                migrated += preparation_moved
+                differences.extend(preparation_differences)
             status = "DIFFERENCES" if differences else "COMPLETED"
         elif mode in ("reconcile", "final-delta"):
             for entity, table in (("workspaces", "workspaces"), ("catalog", "catalog"), ("leads", "leads")):
