@@ -50,6 +50,7 @@ class FixtureProviders:
     ambiguous = False
     keyed_scoring = False
     quote_alias_scoring = False
+    invalid_contact_roles = False
 
     def __init__(self, job, save):
         self.job, self.save, self.cache = job, save, dict(job.checkpoint)
@@ -120,7 +121,11 @@ class FixtureProviders:
                 [
                     dict(
                         name="Alex Worker",
-                        role="Operations Director",
+                        role=(
+                            None
+                            if self.invalid_contact_roles
+                            else "Operations Director"
+                        ),
                         email=None if self.ambiguous else "alex@example.com",
                         phone=None,
                         **citation(PERSON),
@@ -219,7 +224,8 @@ class NativeTests(BackendFixtures):
             FixtureProviders.ambiguous,
             FixtureProviders.keyed_scoring,
             FixtureProviders.quote_alias_scoring,
-        ) = (True, True, False, False, False)
+            FixtureProviders.invalid_contact_roles,
+        ) = (True, True, False, False, False, False)
         self.provider.start()
         self.fetcher.start()
         self.addCleanup(self.provider.stop)
@@ -391,6 +397,20 @@ class NativeTests(BackendFixtures):
                 db.get(PreparationRun, rid).stop_reason, "SUPPORTED_CONTACT_REQUIRED"
             )
             self.assertEqual(list(db.scalars(select(Approval))), [])
+
+    def test_unqualified_model_contacts_do_not_discard_research(self):
+        FixtureProviders.invalid_contact_roles = True
+        rid = self.prepare("invalid-contact-role")
+        self.assertEqual(self.drain(), ["RESEARCH", "CONTACT_SEARCH"])
+        with Session() as db:
+            run = db.get(PreparationRun, rid)
+            research = run.results["RESEARCH"]
+            self.assertTrue(research["facts"])
+            self.assertEqual(research["people"], [])
+            self.assertTrue(
+                any("contacts were omitted" in note for note in research["unknowns"])
+            )
+            self.assertEqual(run.stop_reason, "SUPPORTED_CONTACT_REQUIRED")
 
     def test_manual_source_backed_contact_resumes_existing_research(self):
         FixtureProviders.people = False
