@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import Session
 from .db import engine as native_engine
 
-ENTITY_TABLES = ("users", "workspaces", "memberships", "catalog", "leads")
+ENTITY_TABLES = ("users", "workspaces", "memberships", "catalog", "leads", "preparation_runs", "approvals", "jobs")
 
 
 def legacy_engine():
@@ -249,6 +249,13 @@ def run(mode):
             status = "COMPLETED" if not differences else "DIFFERENCES"
         elif mode == "dry-run":
             differences = [{"code": "WORKSPACE_IDENTITY_WILL_MIGRATE", "count": counts.get("workspaces") or 0}]
+            if counts.get("jobs"):
+                with legacy_engine().connect() as pending_source:
+                    job_cols = table_columns(pending_source, "jobs")
+                    pending = None
+                    if "status" in job_cols:
+                        pending = pending_source.execute(text("SELECT count(*) FROM jobs WHERE status IN ('PENDING','QUEUED','RUNNING')")).scalar_one()
+                differences.append({"entity": "jobs", "code": "PENDING_LEGACY_JOBS_RECORDED_FOR_FINAL_DELTA", "count": pending if pending is not None else counts["jobs"]})
         db.execute(text("""INSERT INTO migration_runs
           (id,mode,status,source_fingerprint,counts,differences,completed_at)
           VALUES (:id,:mode,:status,:fp,:counts,:diff,:done)"""), {
