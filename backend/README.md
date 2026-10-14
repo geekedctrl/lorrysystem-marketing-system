@@ -61,6 +61,7 @@ This is a local backend foundation, not a complete replacement release or produc
 Migration control runs from the administrative migration service with a read-only legacy URL:
 `python -m marketing_backend.cli migration export|dry-run|apply|reconcile|final-delta`.
 Apply copies compatible workspace identities and records `legacy_identity_map`; reconciliation differences keep Python activation blocked.
+Set `MIGRATION_EXPORT_PATH` for `export` to create an immutable JSON review artifact; the command refuses to overwrite an existing export.
 
 ## Native frontend support update
 

@@ -333,9 +333,14 @@ def run(mode):
             "done": datetime.now(timezone.utc),
         })
         db.commit()
-    print(json.dumps({"run_id": str(run_id), "mode": mode, "status": status,
-                      "source_fingerprint": fingerprint, "counts": counts,
-                      "differences": differences}, sort_keys=True))
+    report = {"run_id": str(run_id), "mode": mode, "status": status,
+              "source_fingerprint": fingerprint, "counts": counts,
+              "differences": differences}
+    if mode == "export" and os.environ.get("MIGRATION_EXPORT_PATH"):
+        with open(os.environ["MIGRATION_EXPORT_PATH"], "x", encoding="utf-8") as output:
+            json.dump(report, output, indent=2, sort_keys=True)
+            output.write("\n")
+    print(json.dumps(report, sort_keys=True))
     return 0 if status == "COMPLETED" else 2
 
 
