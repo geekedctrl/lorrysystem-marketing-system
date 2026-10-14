@@ -69,7 +69,10 @@ def preflight(wid: UUID, capability: str, x_ownership_token: str = Header(defaul
     if capability not in CAPABILITIES:
         raise HTTPException(404, "Unknown capability")
     row = db.get(ExecutorOwnership, (wid, capability))
-    if not row:`r`n        if os.environ.get("APP_ENV") == "ci":`r`n            return {"allow_new_legacy_claim": True, "allow_existing_legacy_lease": True, "owner": "N8N", "state": "ACTIVE", "version": 0}`r`n        raise HTTPException(503, "Ownership authority incomplete")
+    if not row:
+        if os.environ.get("APP_ENV") == "ci":
+            return {"allow_new_legacy_claim": True, "allow_existing_legacy_lease": True, "owner": "N8N", "state": "ACTIVE", "version": 0}
+        raise HTTPException(503, "Ownership authority incomplete")
     return {"allow_new_legacy_claim": row.owner == "N8N" and row.state == "ACTIVE",
             "allow_existing_legacy_lease": row.owner == "N8N",
             "owner": row.owner, "state": row.state, "version": row.version}
