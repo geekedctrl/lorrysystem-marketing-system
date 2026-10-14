@@ -7,8 +7,9 @@ from .auth import hash_password
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["bootstrap", "add-member"])
-    parser.add_argument("--email", required=True)
+    parser.add_argument("command", choices=["bootstrap", "add-member", "migration"])
+    parser.add_argument("migration_mode", nargs="?", choices=["export", "dry-run", "apply", "reconcile", "final-delta"])
+    parser.add_argument("--email")
     parser.add_argument("--workspace", default="LorrySystem")
     parser.add_argument(
         "--role",
@@ -16,6 +17,11 @@ def main():
         default="OPERATOR",
     )
     args = parser.parse_args()
+    if args.command == "migration":
+        from .migration_cli import main as migration_main
+        raise SystemExit(migration_main([args.migration_mode] if args.migration_mode else []))
+    if not args.email:
+        raise SystemExit("--email is required for account commands")
     email = args.email.strip().lower()
     if "@" not in email or len(email) > 254:
         raise SystemExit("Invalid email")

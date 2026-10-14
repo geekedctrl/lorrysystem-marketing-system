@@ -93,6 +93,24 @@ def health(db=Depends(session)):
     return {"status": "ok", "backend": "python-workers"}
 
 
+@app.get("/health/operations")
+def operations_health(db=Depends(session)):
+    from sqlalchemy import func
+    from .models import ExecutorOwnership, Job, DeliveryAttempt
+    ownership = [
+        {"workspace_id": str(row.workspace_id), "capability": row.capability,
+         "owner": row.owner, "state": row.state, "version": row.version,
+         "rollback_deadline": row.rollback_deadline}
+        for row in db.scalars(select(ExecutorOwnership))
+    ]
+    running_jobs = db.scalar(select(func.count()).select_from(Job).where(Job.status == "RUNNING")) or 0
+    active_sends = db.scalar(select(func.count()).select_from(DeliveryAttempt).where(DeliveryAttempt.status == "SENDING")) or 0
+    migration = db.execute(text("""SELECT id,status,source_fingerprint,differences,completed_at
+      FROM migration_runs ORDER BY completed_at DESC NULLS LAST LIMIT 1""")).mappings().first()
+    return {"status": "ok", "ownership": ownership, "active_leases": running_jobs,
+            "active_send_leases": active_sends, "migration": dict(migration) if migration else None}
+
+
 @app.post("/auth/login", response_model=out.LoginResponse)
 def login(data: Login, db=Depends(session)):
     identity = digest(data.email.lower())
