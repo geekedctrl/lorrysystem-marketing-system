@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import uuid
+from cryptography.fernet import Fernet, InvalidToken
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import Session
@@ -216,6 +217,48 @@ def migrate_approvals(source, db, fingerprint):
     return moved, differences
 
 
+def migrate_senders(source, db, fingerprint):
+    cols = table_columns(source, "sender_accounts")
+    required = {"id", "workspace_id", "name", "from_email", "from_name", "host", "port", "security", "username", "password_ciphertext"}
+    if not required.issubset(cols):
+        return 0, []
+    old_key = os.environ.get("LEGACY_SMTP_CREDENTIAL_ENCRYPTION_KEY", "").encode()
+    new_key = os.environ.get("SENDER_CREDENTIAL_ENCRYPTION_KEY", "").encode()
+    if not old_key or not new_key:
+        return 0, [{"entity": "sender_accounts", "code": "ENCRYPTION_KEYS_REQUIRED"}]
+    try:
+        old_vault, new_vault = Fernet(old_key), Fernet(new_key)
+    except (ValueError, TypeError):
+        return 0, [{"entity": "sender_accounts", "code": "INVALID_ENCRYPTION_KEY"}]
+    rows = source.execute(text("""SELECT id::text,workspace_id::text,name,from_email,from_name,host,port,security,username,password_ciphertext
+      FROM sender_accounts ORDER BY id""")).mappings().all()
+    differences = []
+    moved = 0
+    for row in rows:
+        workspace = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"), {"id": row["workspace_id"]}).scalar()
+        if not workspace:
+            differences.append({"entity": "sender_accounts", "legacy_id": row["id"], "code": "UNRESOLVED_IDENTITY"})
+            continue
+        try:
+            payload = json.loads(old_vault.decrypt(row["password_ciphertext"].encode()))
+            password = payload.get("password")
+            if not isinstance(password, str) or not password:
+                raise ValueError
+            ciphertext = new_vault.encrypt(json.dumps({"workspace_id": str(workspace), "password": password}).encode()).decode()
+        except (InvalidToken, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            differences.append({"entity": "sender_accounts", "legacy_id": row["id"], "code": "CREDENTIAL_REENCRYPT_FAILED"})
+            continue
+        native_id = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='sender' AND legacy_id=:id"), {"id": row["id"]}).scalar() or uuid.uuid4()
+        db.execute(text("""INSERT INTO sender_connections(id,workspace_id,name,from_email,from_name,host,port,security,username,secret_ciphertext,enabled,verified_at)
+          VALUES (:id,:workspace,:name,:email,:from_name,:host,:port,:security,:username,:secret,false,NULL) ON CONFLICT (id) DO NOTHING"""),
+          {"id": native_id, "workspace": workspace, "name": row["name"], "email": row["from_email"], "from_name": row["from_name"],
+           "host": row["host"], "port": row["port"], "security": row["security"], "username": row["username"], "secret": ciphertext})
+        db.execute(text("""INSERT INTO legacy_identity_map(source_system,entity_type,legacy_id,native_id,source_fingerprint)
+          VALUES ('legacy-postgres','sender',:legacy,:native,:fp) ON CONFLICT DO NOTHING"""), {"legacy": row["id"], "native": native_id, "fp": fingerprint})
+        moved += 1
+    return moved, differences
+
+
 def run(mode):
     with legacy_engine().connect() as source:
         counts, fingerprint = snapshot(source)
@@ -240,6 +283,9 @@ def run(mode):
                 approval_moved, approval_differences = migrate_approvals(source, db, fingerprint)
                 migrated += approval_moved
                 differences.extend(approval_differences)
+                sender_moved, sender_differences = migrate_senders(source, db, fingerprint)
+                migrated += sender_moved
+                differences.extend(sender_differences)
             status = "DIFFERENCES" if differences else "COMPLETED"
         elif mode in ("reconcile", "final-delta"):
             for entity, table in (("workspaces", "workspaces"), ("catalog", "catalog"), ("leads", "leads")):
