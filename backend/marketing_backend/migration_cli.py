@@ -85,6 +85,9 @@ def migrate_accounts(source, db, fingerprint):
             continue
         native_id = db.execute(text("""SELECT native_id FROM legacy_identity_map WHERE
           source_system='legacy-postgres' AND entity_type='user' AND legacy_id=:id"""), {"id": row["id"]}).scalar() or uuid.uuid4()
+        existing_email = db.execute(text("SELECT id FROM users WHERE email=:email"), {"email": row["email"].lower()}).scalar()
+        if existing_email:
+            native_id = existing_email
         db.execute(text("""INSERT INTO users(id,email,password_hash,active,platform_admin)
           VALUES (:id,:email,:hash,true,false) ON CONFLICT (id) DO NOTHING"""),
           {"id": native_id, "email": row["email"].lower(), "hash": row["password_hash"]})
