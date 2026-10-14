@@ -31,6 +31,18 @@ SOCIAL = {
     "x.com",
     "youtube.com",
 }
+COUNTRY_NAMES = {
+    "MY": "Malaysia",
+    "SG": "Singapore",
+    "ID": "Indonesia",
+    "TH": "Thailand",
+    "PH": "Philippines",
+    "VN": "Vietnam",
+    "BN": "Brunei",
+    "US": "United States",
+    "GB": "United Kingdom",
+    "AU": "Australia",
+}
 
 
 def blocked(host):
@@ -71,14 +83,21 @@ def search_query(query, known):
 
 
 def discovery_queries(original, catalog, country, known):
-    raw = [
-        f"{original} transport fleet operator company {country}",
-        *[
-            f"{item['name']} operator logistics fleet company {country}"
-            for item in catalog
-            if item["kind"] == "ICP"
-        ],
-    ]
+    country_name = COUNTRY_NAMES.get(country.upper(), country)
+    profiles = [item for item in catalog if item["kind"] == "ICP"]
+    # Keep the search geography explicit in the text as well as Brave's region
+    # parameter. Region bias alone still returns international directories and
+    # companies with no evidence of a local presence.
+    raw = [f"{original} {country_name} local transport fleet operator company"]
+    if profiles:
+        midpoint = (len(profiles) + 1) // 2
+        groups = (profiles[:midpoint], profiles[midpoint:])
+        for group in groups:
+            if group:
+                labels = " OR ".join(item["name"] for item in group)
+                raw.append(
+                    f"{country_name} ({labels}) transport fleet operator company"
+                )
     return list(dict.fromkeys(search_query(query, known) for query in raw))[:3]
 
 

@@ -234,6 +234,35 @@ class NativeTests(BackendFixtures):
         self.assertEqual(r.status_code, 202, r.text)
         return uuid.UUID(r.json()["run_id"])
 
+    def test_prepare_inherits_icp_from_accepted_discovery(self):
+        with Session() as db:
+            db.add(
+                Catalog(
+                    workspace_id=self.wid,
+                    kind="ICP",
+                    code="AAA_FIRST_ALPHABETICALLY",
+                    name="A different segment",
+                    description="Another documented customer segment",
+                    rules={},
+                    active=True,
+                )
+            )
+            db.add(
+                DiscoveryMemory(
+                    workspace_id=self.wid,
+                    domain="its4logistics.com",
+                    candidate={"icp_code": "ICP", "prospect_type": "LOGISTICS_PROVIDER"},
+                    outcome="ACCEPTED",
+                    accepted_lead_id=self.lid,
+                )
+            )
+            db.flush()
+            run = pipeline.start(db, db.get(Lead, self.lid), "accepted-icp-test")
+            research = db.scalar(
+                select(Job).where(Job.run_id == run.id, Job.kind == "RESEARCH")
+            )
+            self.assertEqual(research.payload["icp_code"], "ICP")
+
     def drain(self, maximum=12):
         completed = []
         for _ in range(maximum):

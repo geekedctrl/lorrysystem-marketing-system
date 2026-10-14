@@ -69,7 +69,25 @@ def start(db, lead, key, icp_code=None):
     ):
         raise ProviderFailure("CATALOG_NOT_READY")
     icps = [c["code"] for c in snapshot["catalog"] if c["kind"] == "ICP"]
-    icp_code = icp_code or icps[0]
+    if icp_code is None:
+        # Discovery acceptance records the ICP selected for this lead. Fresh
+        # preparation should carry that decision forward rather than silently
+        # assigning the alphabetically first ICP in the catalog.
+        memory = db.scalar(
+            select(DiscoveryMemory)
+            .where(
+                DiscoveryMemory.workspace_id == lead.workspace_id,
+                DiscoveryMemory.accepted_lead_id == lead.id,
+                DiscoveryMemory.outcome == "ACCEPTED",
+            )
+            .order_by(DiscoveryMemory.reviewed_at.desc().nullslast())
+        )
+        candidate = (
+            memory.candidate
+            if memory and isinstance(memory.candidate, dict)
+            else {}
+        )
+        icp_code = candidate.get("icp_code") or icps[0]
     if icp_code not in icps:
         raise ProviderFailure("ICP_NOT_SUPPORTED")
     run = PreparationRun(

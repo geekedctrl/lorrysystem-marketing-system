@@ -473,7 +473,7 @@ class DiscoveryTests(fixtures.BackendFixtures):
         )
         self.assertEqual(len(operator_queries), 2)
         self.assertTrue(
-            all("operator" in q.lower() and "MY" in q for q in operator_queries)
+            all("operator" in q.lower() and "Malaysia" in q for q in operator_queries)
         )
 
     def test_assessment_requires_a_buyer_or_operator_type(self):
