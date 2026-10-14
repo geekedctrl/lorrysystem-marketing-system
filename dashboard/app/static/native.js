@@ -483,8 +483,10 @@
       view.innerHTML =
         card(
           "Automation",
-          `<p>${d.operations.enabled ? "Active" : "Paused"} · Next discovery: ${esc(d.operations.next_discovery_at || "Not scheduled")}</p><p>Stalled jobs: ${d.operations.stalled_jobs.length} · Delayed pending jobs: ${d.operations.delayed_pending_jobs.length}</p>`,
+          `<p>${d.operations.enabled ? "Active" : "Paused"} · Next discovery: ${esc(d.operations.next_discovery_at || "Not scheduled")}</p><p>Stalled jobs: ${d.operations.stalled_jobs.length} · Delayed pending jobs: ${d.operations.delayed_pending_jobs.length}</p><p>Active leases: ${esc(d.operations.active_leases ?? 0)} · Sending leases: ${esc(d.operations.active_send_leases ?? 0)}</p>`,
         ) +
+        card("Executor ownership", (d.operations.ownership || []).map((o) => `<p><strong>${esc(o.capability)}</strong> · ${badge(o.owner)} / ${badge(o.state)} · version ${esc(o.version)}${o.rollback_deadline ? ` · rollback until ${esc(o.rollback_deadline)}` : ""}</p>`).join("") || empty("Ownership status unavailable.")) +
+        card("Migration reconciliation", d.operations.migration_status ? `<p>${badge(d.operations.migration_status.status)} · source ${esc(d.operations.migration_status.source_fingerprint || "unknown")}</p><details><summary>Differences</summary><pre>${esc(JSON.stringify(d.operations.migration_status.differences || [], null, 2))}</pre></details>` : empty("No migration run recorded.")) +
         card("Jobs & history", jobCards(d.jobs)) +
         card(
           "Providers: last observed requests",
