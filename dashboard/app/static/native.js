@@ -190,7 +190,7 @@
     };
   }
   function shell() {
-    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(label(state.workspace?.role))}</p></div><nav>${[["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["operations", "Activity & operations"], ...(isAdmin() ? [["setup", "Product setup"]] : [])].map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${esc(t)}</a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Platform administrator" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><div class="page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false">Menu</button></div><div id="view" aria-live="polite"></div></main></div>`;
+    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(label(state.workspace?.role))}</p></div><nav>${[["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["sending", "Sending"], ["operations", "Activity & operations"], ...(isAdmin() ? [["setup", "Product setup"]] : [])].map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${esc(t)}</a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Platform administrator" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><div class="page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false">Menu</button></div><div id="view" aria-live="polite"></div></main></div>`;
     document.querySelector("#workspace").onchange = async (e) => {
       const previous = state.workspace.id;
       if (
@@ -338,7 +338,7 @@
       if (filters.q) query.set("q", filters.q);
       if (filters.status) query.set("status", filters.status);
       if (filters.cursor) query.set("cursor", filters.cursor);
-      const [operations, leadPage, approvals, jobs, catalog, allCatalog] =
+      const [operations, leadPage, approvals, jobs, catalog, allCatalog, senders, deliveries, suppressions] =
         await Promise.all([
           request("operations"),
           request(`leads/page?${query}`),
@@ -346,6 +346,9 @@
           request("jobs"),
           request("catalog"),
           isAdmin() ? request("catalog/all") : Promise.resolve([]),
+          request("senders"),
+          request("deliveries"),
+          request("email-suppressions"),
         ]);
       let runs = [],
         leadDetail = null;
@@ -372,6 +375,9 @@
         runs,
         leadDetail,
         candidates,
+        senders,
+        deliveries,
+        suppressions,
       };
       if (!state.dirty && !state.busy) {
         const scroll = window.scrollY;
@@ -472,6 +478,7 @@
         "Draft review",
         `<p>Decisions record human review. Approval does not send a message. Requested changes can be edited into a new version by an administrator or operator, then reviewed by another authorized person.</p>${d.approvals.length ? d.approvals.map((a) => approval(a)).join("") : empty("No drafts awaiting review yet.")}`,
       );
+    else if (state.page === "sending") renderSending();
     else if (state.page === "operations")
       view.innerHTML =
         card(
@@ -566,7 +573,29 @@
       controls += `<form data-command="approvals/${esc(a.id)}/decision">${area("note", "Review note (required for every decision)", "", "required minlength=5 maxlength=1000")}<div class="error" hidden role="alert"></div>${selfEdited ? '<p class="muted">You edited this version. Another authorized reviewer must approve it.</p>' : ""}<div class="actions"><button name="decision" value="APPROVED" class="primary" ${a.stale || selfEdited ? "disabled" : ""}>Approve draft</button><button name="decision" value="CHANGES_REQUESTED">Request changes</button><button name="decision" value="REJECTED">Reject</button></div></form>`;
     if (canWork() && a.status === "CHANGES_REQUESTED" && !a.stale)
       controls += `<details><summary>Edit requested changes</summary><p>Creates a new immutable version. Channel, recipient and offering stay fixed. Another authorized person must approve your revision.</p><form data-command="approvals/${esc(a.id)}/revision" data-revision data-version="${version}">${field("subject", "Revised subject", value.subject, "required minlength=3 maxlength=200")}${area("body", "Revised message", value.body, "required minlength=30 maxlength=3000")}<h3>Supporting evidence</h3><p class="muted">Keep exact quotes from the saved official research. Citation validity does not verify every sentence.</p>${(value.evidence || []).map((ev, i) => `<fieldset><legend>Citation ${i + 1}</legend>${field(`source_${i}`, "Saved source URL", ev.source_url, "required maxlength=1500", "url")}${area(`quote_${i}`, "Exact saved evidence quote", ev.evidence_quote, "required minlength=8 maxlength=500")}</fieldset>`).join("")}${area("note", "Revision note", "", "required minlength=5 maxlength=1000")}<div class="error" hidden role="alert"></div><div class="actions"><button class="primary">Submit revision for review</button></div></form></details>`;
+    const delivery = state.data.deliveries?.find((d) => d.approval_id === a.id);
+    if (a.status === "APPROVED" && value.channel === "EMAIL" && canWork()) {
+      if (!delivery && state.data.senders?.some((s) => s.enabled && s.verified_at))
+        controls += `<form data-command="deliveries" data-payload='${esc(JSON.stringify({ approval_id: a.id, idempotency_key: uid() }))}'><label>Verified sender</label><select name="sender_id" required>${state.data.senders.filter((s) => s.enabled && s.verified_at).map((s) => `<option value="${esc(s.id)}">${esc(s.name)} · ${esc(s.from_email)}</option>`).join("")}</select><p class="muted">This freezes the approved recipient and content. It still does not send.</p><div class="error" hidden role="alert"></div><button>Create delivery for send approval</button></form>`;
+      else if (!delivery)
+        controls += `<p class="muted">An administrator must add and verify a sender before delivery can be prepared.</p>`;
+      else controls += deliveryControls(delivery);
+    }
     return `<article class="card">${badge(a.status)} ${a.stale ? badge("STALE") : ""}<p class="muted">Version ${version} · Saved ${esc(a.created_at)}</p><h3>${esc(company.company_name || company.name || "Saved company context")}</h3>${person ? `<p>${esc(person.name)} · ${esc(person.role)}</p>` : ""}${score ? `<p>Saved qualification: ${esc(score.score)}/100 · Selected offering: ${esc(snapshot.inputs?.catalog?.find((p) => p.code === value.product_code)?.name || value.product_code)}</p>` : ""}${draft(value, snapshot.inputs?.catalog || [])}<details><summary>Saved supporting research</summary>${(ctx.RESEARCH?.facts || []).map((f) => `<p>${esc(f.statement)}</p>${evidence([f])}`).join("") || empty("No research included in this snapshot.")}</details>${snapshot.revision ? `<p>Revision note: ${esc(snapshot.revision.note)}<br>Original reviewer note: ${esc(snapshot.revision.reviewer_note)}</p>` : ""}${a.stale ? '<p class="error">This draft is stale. Prepare and review a fresh draft before approving.</p>' : ""}${controls}</article>`;
+  }
+  function deliveryControls(d) {
+    const latest = d.attempts?.at(-1);
+    let action = "";
+    if (d.status === "PENDING_SEND_APPROVAL" && canWork()) action = `<p><strong>Separate send approval required.</strong> Confirming queues this frozen email for SMTP handoff.</p>${command(`deliveries/${d.id}/approve-send`, "Approve and queue this email", { confirmed: true })}`;
+    if (d.status === "FAILED" && canWork() && (d.attempts?.length || 0) < 3) action = command(`deliveries/${d.id}/retry`, "Retry known pre-handoff failure", { confirmed: true });
+    return `<section class="card"><h3>Delivery ${badge(d.status)}</h3><p>${esc(d.snapshot.recipient)} · ${esc(d.snapshot.subject)}</p>${latest ? `<p class="muted">Attempt ${esc(latest.number)} · ${esc(label(latest.status))}${latest.failure_code ? " · " + esc(label(latest.failure_code)) : ""}</p>` : ""}${["SENDING","UNCERTAIN"].includes(d.status) ? '<p class="error">Do not retry. The provider may already have accepted this message.</p>' : ""}${d.status === "ACCEPTED" ? '<p>SMTP accepted the message. Inbox delivery is not confirmed.</p>' : ""}${action}</section>`;
+  }
+  function renderSending() {
+    const d = state.data;
+    const senderSetup = isAdmin() ? `<details><summary>Add SMTP sender</summary><form data-command="senders" data-sender>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label>Security</label><select name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label><input type="checkbox" name="enabled"> Enabled after verification</label><div class="error" hidden role="alert"></div><button>Add sender</button></form></details>` : "";
+    const senderRows = d.senders.map((s) => `<article class="card"><strong>${esc(s.name)}</strong> ${badge(s.enabled ? "ENABLED" : "DISABLED")}<p>${esc(s.from_name)} · ${esc(s.from_email)}<br>${esc(s.host)}:${esc(s.port)} · ${esc(s.security)}</p><p class="muted">${s.verified_at ? "Verified " + esc(s.verified_at) : "Not verified"}. Password is never displayed.</p>${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</article>`).join("") || empty("No sender connections configured.");
+    const suppressionForm = canWork() ? `<form data-command="email-suppressions">${field("email","Email address","","required maxlength=254","email")}<label>Reason</label><select name="reason"><option value="DO_NOT_CONTACT">Do not contact</option><option value="OPT_OUT">Opt out</option><option value="BOUNCE">Bounce</option></select><div class="error" hidden role="alert"></div><button>Add suppression</button></form>` : "";
+    document.querySelector("#view").innerHTML = card("Sender connections", `<p>Credentials are encrypted and redacted. Verification signs in but sends no message.</p>${senderRows}${senderSetup}`) + card("Delivery history", d.deliveries.length ? d.deliveries.map(deliveryControls).join("") : empty("No deliveries prepared.")) + card("Recipient suppressions", `${suppressionForm}${d.suppressions.map((s) => `<p>${esc(s.email)} · ${esc(label(s.reason))}</p>`).join("") || empty("No suppressed recipients.")}`);
   }
   function renderLead() {
     const d = state.data,
@@ -910,6 +939,10 @@
         form.dataset.keyPayload = fingerprint;
       }
       payload.idempotency_key = form.dataset.key;
+    }
+    if (form.hasAttribute("data-sender")) {
+      payload.port = Number(payload.port);
+      payload.enabled = payload.enabled === "on";
     }
     if (/^(discovery|leads\/.+\/prepare)$/.test(form.dataset.command)) {
       form.dataset.key ||= uid();

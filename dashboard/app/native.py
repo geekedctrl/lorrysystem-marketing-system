@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 ROOT = Path(__file__).parent
-READ_ROUTES = re.compile(r"^(catalog|catalog/all|candidates|candidates/[\w-]+|leads|leads/page|leads/[\w-]+|leads/[\w-]+/preparation|preparation/[\w-]+|approvals|jobs|jobs/[\w-]+|operations)$")
+READ_ROUTES = re.compile(r"^(catalog|catalog/all|candidates|candidates/[\w-]+|leads|leads/page|leads/[\w-]+|leads/[\w-]+/preparation|preparation/[\w-]+|approvals|jobs|jobs/[\w-]+|operations|senders|deliveries|deliveries/[\w-]+|email-suppressions)$")
 RUN_STATUSES = {"PREPARING", "NEEDS_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "FAILED", "STALE"}
 WRITE_ROUTES = {
     "PUT": [(r"catalog", {"ADMIN"})],
@@ -31,6 +31,11 @@ WRITE_ROUTES = {
         (r"discovery|leads|leads/[\w-]+/prepare|preparation/[\w-]+/(contact|retry-contact-search)|jobs/[\w-]+/retry", {"ADMIN", "OPERATOR"}),
         (r"approvals/[\w-]+/decision", {"ADMIN", "REVIEWER"}),
         (r"approvals/[\w-]+/revision", {"ADMIN", "OPERATOR"}),
+        (r"senders", {"ADMIN"}),
+        (r"senders/[\w-]+/verify", {"ADMIN"}),
+        (r"deliveries", {"ADMIN", "OPERATOR"}),
+        (r"deliveries/[\w-]+/(approve-send|retry)", {"ADMIN", "OPERATOR"}),
+        (r"email-suppressions", {"ADMIN", "OPERATOR"}),
     ],
 }
 
@@ -204,19 +209,21 @@ def create_app(transport=None):
                     return JSONResponse({"detail": "Your workspace role does not permit this action."}, 403)
             params = None
             if request.query_params:
-                if request.method != "GET" or path not in {"leads/page", "candidates"}:
+                if request.method != "GET" or path not in {"leads/page", "candidates", "deliveries"}:
                     return JSONResponse({"detail": "Query parameters are not supported for this route."}, 422)
                 pairs = list(request.query_params.multi_items())
                 params = dict(pairs)
-                allowed = {"q", "status", "limit", "cursor"} if path == "leads/page" else {"status", "limit", "offset"}
+                allowed = {"q", "status", "limit", "cursor"} if path == "leads/page" else ({"status", "limit", "offset"} if path == "candidates" else {"approval_id"})
                 if len(pairs) != len(params) or set(params) - allowed:
                     return JSONResponse({"detail": "Unsupported lead filters."}, 422)
                 try:
                     valid = (1 <= int(params.get("limit", "25")) <= 100)
                     if path == "leads/page":
                         valid = valid and len(params.get("q", "")) <= 200 and len(params.get("cursor", "")) <= 1500 and ("status" not in params or params["status"] in RUN_STATUSES)
-                    else:
+                    elif path == "candidates":
                         valid = valid and 0 <= int(params.get("offset", "0")) <= 100000 and len(params.get("status", "")) <= 24
+                    else:
+                        valid = len(params.get("approval_id", "")) <= 36
                 except ValueError:
                     valid = False
                 if not valid:

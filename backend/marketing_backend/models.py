@@ -281,3 +281,81 @@ class Approval(Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(120))
     revision_hash: Mapped[str | None] = mapped_column(String(64))
     editor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class SenderConnection(Base):
+    __tablename__ = "sender_connections"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id"),
+        CheckConstraint("security IN ('STARTTLS','TLS')"),
+        CheckConstraint("port IN (465,587)"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    from_email: Mapped[str] = mapped_column(String(254))
+    from_name: Mapped[str] = mapped_column(String(120))
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer)
+    security: Mapped[str] = mapped_column(String(12))
+    username: Mapped[str] = mapped_column(String(254))
+    secret_ciphertext: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id"),
+        UniqueConstraint("workspace_id", "approval_id"),
+        UniqueConstraint("workspace_id", "create_key"),
+        ForeignKeyConstraint(["workspace_id", "approval_id"], ["approvals.workspace_id", "approvals.id"]),
+        ForeignKeyConstraint(["workspace_id", "sender_id"], ["sender_connections.workspace_id", "sender_connections.id"]),
+        CheckConstraint("status IN ('PENDING_SEND_APPROVAL','QUEUED','SENDING','ACCEPTED','FAILED','UNCERTAIN','CANCELLED')"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    approval_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    sender_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    create_key: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(24), default="PENDING_SEND_APPROVAL")
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+    requested_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    send_approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    send_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DeliveryAttempt(Base):
+    __tablename__ = "native_delivery_attempts"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "delivery_id", "attempt_number"),
+        ForeignKeyConstraint(["workspace_id", "delivery_id"], ["deliveries.workspace_id", "deliveries.id"]),
+        CheckConstraint("status IN ('READY','SENDING','ACCEPTED','FAILED','UNCERTAIN')"),
+        CheckConstraint("attempt_number BETWEEN 1 AND 3"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    delivery_id: Mapped[uuid.UUID] = mapped_column(UUID, index=True)
+    attempt_number: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="READY")
+    message_id: Mapped[str] = mapped_column(String(320))
+    failure_code: Mapped[str | None] = mapped_column(String(80))
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    lease_token: Mapped[str | None] = mapped_column(String(64))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EmailSuppression(Base):
+    __tablename__ = "native_email_suppressions"
+    __table_args__ = (UniqueConstraint("workspace_id", "email"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    email: Mapped[str] = mapped_column(String(254))
+    reason: Mapped[str] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

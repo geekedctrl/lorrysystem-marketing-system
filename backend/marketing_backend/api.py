@@ -422,3 +422,7 @@ app.include_router(native_router)
 from .discovery_api import router as discovery_router
 
 app.include_router(discovery_router)
+
+from .sending_api import router as sending_router
+
+app.include_router(sending_router)

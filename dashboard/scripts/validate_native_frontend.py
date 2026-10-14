@@ -26,6 +26,8 @@ RID = "44444444-4444-4444-8444-444444444444"
 AID = "55555555-5555-4555-8555-555555555555"
 JID = "66666666-6666-4666-8666-666666666666"
 CID = "77777777-7777-4777-8777-777777777777"
+SID = "88888888-8888-4888-8888-888888888888"
+DID = "99999999-9999-4999-8999-999999999999"
 NOW = "2026-10-11T10:00:00Z"
 
 
@@ -54,6 +56,9 @@ class NativeFixture:
         self.completed_results = copy.deepcopy(self.results)
         self.revision = None
         self.parent_snapshot = None
+        self.senders = {W1: [{"id":SID,"name":"Synthetic SMTP","from_email":"team@example.test","from_name":"Synthetic Team","host":"smtp.example.test","port":587,"security":"STARTTLS","username":"team@example.test","enabled":True,"verified_at":NOW,"created_at":NOW}], W2: []}
+        self.deliveries = {W1: [], W2: []}
+        self.suppressions = {W1: [], W2: []}
         self.results["DRAFTING"]["evidence"] = [{"source_url":"https://haulage.example.com/team","evidence_quote":self.quote}]
         self.completed_results = copy.deepcopy(self.results)
 
@@ -116,6 +121,30 @@ class NativeFixture:
             return httpx.Response(404,json={"detail":"Candidate not found"})
         if suffix == "operations":
             return httpx.Response(200, json={"enabled": self.enabled[wid], "preferences": {"product_description": "Actual product with documented capabilities", "batch_size": 3}, "next_discovery_at": None, "stalled_jobs": [], "delayed_pending_jobs": [], "current_preparation": [self.run()], "provider_health": {}, "recent_provider_usage": [], "cost_basis": "Conservative reservations"})
+        if suffix == "senders":
+            if request.method == "POST":
+                assert body["password"] and isinstance(body["port"],int) and isinstance(body["enabled"],bool)
+                row={k:v for k,v in body.items() if k!="password"}|{"id":SID,"verified_at":None,"created_at":NOW}
+                self.senders[wid].append(row); return httpx.Response(201,json=row)
+            return httpx.Response(200,json=self.senders[wid])
+        if suffix.startswith("senders/") and suffix.endswith("/verify"):
+            self.senders[wid][0]["verified_at"]=NOW
+            return httpx.Response(200,json={"verified":True,"verified_at":NOW})
+        if suffix == "deliveries":
+            if request.method == "POST":
+                assert set(body)=={"approval_id","sender_id","idempotency_key"}
+                row={"id":DID,"approval_id":body["approval_id"],"sender_id":body["sender_id"],"status":"PENDING_SEND_APPROVAL","snapshot":{"recipient":"morgan@example.com","subject":"An exploratory conversation","body":"Reviewed body"},"requested_by":role,"send_approved_by":None,"send_approved_at":None,"created_at":NOW,"attempts":[]}
+                self.deliveries[wid]=[row]; return httpx.Response(201,json=row)
+            return httpx.Response(200,json=self.deliveries[wid])
+        if suffix.startswith("deliveries/") and suffix.endswith("/approve-send"):
+            assert body=={"confirmed":True}; row=self.deliveries[wid][0]; row["status"]="QUEUED"; row["send_approved_by"]=role; row["send_approved_at"]=NOW; row["attempts"]=[{"id":"attempt","number":1,"status":"READY","message_id":"<synthetic@example.test>","failure_code":None,"created_at":NOW,"finished_at":None}]
+            return httpx.Response(202,json=row)
+        if suffix.startswith("deliveries/") and suffix.endswith("/retry"):
+            assert body=={"confirmed":True}; self.deliveries[wid][0]["status"]="QUEUED"; return httpx.Response(202,json=self.deliveries[wid][0])
+        if suffix == "email-suppressions":
+            if request.method == "POST":
+                row={"id":"suppression","created_at":NOW,**body}; self.suppressions[wid].append(row); return httpx.Response(201,json=row)
+            return httpx.Response(200,json=self.suppressions[wid])
         if suffix == "leads":
             if request.method == "POST":
                 assert set(body) == {"company_name", "website"}
@@ -282,6 +311,23 @@ class BFFAcceptance(unittest.TestCase):
         self.assertEqual(self.client.patch(f"/gateway/{W1}/catalog/catalog",json={"active":True}).status_code,403)
         self.assertEqual(self.client.get(f"/gateway/{W1}/catalog/all").status_code,200)
 
+    def test_sending_gateway_permissions_redaction_and_separate_approval(self):
+        for role in ["admin","operator","reviewer","viewer"]:
+            headers=self.sign_in(role)
+            senders=self.client.get(f"/gateway/{W1}/senders")
+            self.assertEqual(senders.status_code,200)
+            self.assertNotIn("password",json.dumps(senders.json()))
+            create=self.client.post(f"/gateway/{W1}/deliveries",headers=headers,json={"approval_id":AID,"sender_id":SID,"idempotency_key":"synthetic-delivery-key"})
+            self.assertEqual(create.status_code,201 if role in {"admin","operator"} else 403)
+            self.fixture.deliveries[W1]=[]
+        headers=self.sign_in("admin")
+        created=self.client.post(f"/gateway/{W1}/deliveries",headers=headers,json={"approval_id":AID,"sender_id":SID,"idempotency_key":"synthetic-delivery-key"})
+        self.assertEqual(created.json()["status"],"PENDING_SEND_APPROVAL")
+        approved=self.client.post(f"/gateway/{W1}/deliveries/{DID}/approve-send",headers=headers,json={"confirmed":True})
+        self.assertEqual(approved.status_code,202)
+        self.assertEqual(approved.json()["status"],"QUEUED")
+        self.assertEqual(self.client.get(f"/gateway/{W1}/deliveries?secret=bad").status_code,422)
+
 
 def browser_acceptance():
     import uvicorn
@@ -360,6 +406,15 @@ def browser_acceptance():
             page.get_by_label("Review note (required for every decision)").fill("Reviewed the saved evidence and contact")
             page.get_by_role("button",name="Approve draft",exact=True).click()
             page.get_by_text("Decision saved. No message was sent.",exact=True).wait_for()
+            page.get_by_role("link",name="Approvals",exact=True).click()
+            page.get_by_role("button",name="Create delivery for send approval",exact=True).click()
+            page.get_by_role("button",name="Approve and queue this email",exact=True).click()
+            page.get_by_text("Queued",exact=True).wait_for()
+            page.get_by_role("link",name="Sending",exact=True).click()
+            page.get_by_role("heading",name="Delivery history",exact=True).wait_for()
+            page.screenshot(path=str(output/"sending-outbox-synthetic.png"),full_page=True)
+            page.get_by_role("link",name="Leads",exact=True).click()
+            page.get_by_role("row").filter(has_text="Synthetic Haulage").get_by_role("button",name="Open lead",exact=True).click()
             page.get_by_role("tab",name="Activity",exact=True).click();page.get_by_text("Historical",exact=False).wait_for()
             page.get_by_role("tab",name="Activity",exact=True).focus();page.keyboard.press("Home");assert page.get_by_role("tab",name="Overview",exact=True).get_attribute("aria-selected")=="true"
             fixture.status="PENDING_APPROVAL";fixture.stale=True

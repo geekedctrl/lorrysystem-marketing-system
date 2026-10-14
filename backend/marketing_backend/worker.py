@@ -73,9 +73,16 @@ def main():
         try:
             with Session() as db:
                 from .pipeline import schedule
+                from .sending import recover_expired, claim_attempt
                 schedule(db)
+                recover_expired(db)
+                delivery_attempt = claim_attempt(db)
                 job = queue.claim(db)
-            if job:
+            if delivery_attempt:
+                from .sending import execute_attempt
+                with Session() as db:
+                    execute_attempt(db, *delivery_attempt)
+            elif job:
                 execute(job)
             else:
                 stop.wait(2)

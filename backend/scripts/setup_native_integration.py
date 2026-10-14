@@ -1,4 +1,4 @@
-"""Create an ignored acceptance env file, never display or replace credentials."""
+"""Add acceptance-only settings to the ignored root .env without replacing values."""
 
 import argparse
 import secrets
@@ -13,11 +13,13 @@ def main():
     if not (frontend / "dashboard/app/native.py").is_file():
         raise SystemExit("Frontend checkout must contain dashboard/app/native.py")
     root = Path(__file__).resolve().parents[2]
-    target = root / ".env.native-integration-local"
-    if target.exists():
-        raise SystemExit(
-            "Private configuration already exists; retained without replacement"
-        )
+    target = root / ".env"
+    existing = target.read_text(encoding="utf-8").splitlines() if target.exists() else []
+    configured = {
+        line.split("=", 1)[0]
+        for line in existing
+        if "=" in line and not line.lstrip().startswith("#")
+    }
     values = {
         name: secrets.token_hex(24)
         for name in (
@@ -27,14 +29,18 @@ def main():
         )
     }
     values["NATIVE_FRONTEND_PATH"] = frontend.as_posix()
-    # Quotes preserve paths containing spaces; newline paths are never supported.
     if "\n" in values["NATIVE_FRONTEND_PATH"] or '"' in values["NATIVE_FRONTEND_PATH"]:
         raise SystemExit("Unsupported checkout path")
-    target.write_text(
-        "".join(k + '="' + v + '"\n' for k, v in values.items()), encoding="utf-8"
-    )
+    additions = {key: value for key, value in values.items() if key not in configured}
+    if additions:
+        with target.open("a", encoding="utf-8", newline="\n") as env_file:
+            if existing and existing[-1]:
+                env_file.write("\n")
+            env_file.write(
+                "\n".join(k + '=\"' + v + '\"' for k, v in additions.items()) + "\n"
+            )
     target.chmod(0o600)
-    print("Private acceptance configuration created; no credentials displayed")
+    print("Acceptance settings added to root .env where absent; credentials not displayed")
 
 
 if __name__ == "__main__":
