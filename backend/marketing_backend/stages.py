@@ -477,24 +477,53 @@ def rubric(job):
 
 
 def normalize_score_output(raw, limits):
-    """Accept the keyed score object some OpenAI-compatible models emit.
+    """Normalize bounded response-shape variations from compatible models.
 
-    Keep validation strict: the only alternate top-level shape is exactly one
-    object per configured rubric criterion, with an optional ``unknowns`` list.
-    Criterion contents still pass the same Pydantic and citation checks below.
+    Keep validation strict: keyed criteria must exactly match the active rubric;
+    citation ``quote`` is accepted as an alias for ``evidence_quote``. All
+    normalized fields still pass the same Pydantic and citation checks below.
     """
     if not isinstance(raw, dict) or "criteria" in raw:
-        return raw
-    criterion_keys = set(raw) - {"unknowns"}
-    if criterion_keys != set(limits):
-        return raw
-    criteria = []
-    for criterion in limits:
-        item = raw[criterion]
-        if not isinstance(item, dict):
+        candidate = raw
+    else:
+        criterion_keys = set(raw) - {"unknowns"}
+        if criterion_keys != set(limits):
             return raw
-        criteria.append({"criterion": criterion, **item})
-    return {"criteria": criteria, "unknowns": raw.get("unknowns", [])}
+        criteria = []
+        for criterion in limits:
+            item = raw[criterion]
+            if not isinstance(item, dict):
+                return raw
+            criteria.append({"criterion": criterion, **item})
+        candidate = {"criteria": criteria, "unknowns": raw.get("unknowns", [])}
+
+    if not isinstance(candidate, dict) or not isinstance(
+        candidate.get("criteria"), list
+    ):
+        return candidate
+    normalized = []
+    for criterion in candidate["criteria"]:
+        if not isinstance(criterion, dict) or not isinstance(
+            criterion.get("evidence"), list
+        ):
+            normalized.append(criterion)
+            continue
+        citations = []
+        for evidence in criterion["evidence"]:
+            if (
+                isinstance(evidence, dict)
+                and "quote" in evidence
+                and "evidence_quote" not in evidence
+            ):
+                evidence = {**evidence, "evidence_quote": evidence["quote"]}
+                evidence.pop("quote")
+            citations.append(evidence)
+        normalized.append({**criterion, "evidence": citations})
+    return {
+        **candidate,
+        "criteria": normalized,
+        "unknowns": candidate.get("unknowns", []),
+    }
 
 
 def scoring(job, providers):
@@ -504,11 +533,14 @@ def scoring(job, providers):
         "scoring",
         "Score against the supplied rubric and ICPs. Return JSON with this exact shape: "
         '{"criteria":[{"criterion":"icp_fit","points":0,"rationale":"...",'
-        '"evidence":[]}],"unknowns":[]}. Include one criteria array item per rubric '
-        "criterion and use its exact code. Do not return criterion codes as object keys. "
+        '"evidence":[{"source_url":"https://...","evidence_quote":"exact source text"}]}],'
+        '"unknowns":[]}. Include one criteria array item per rubric criterion and use its '
+        "exact code. Citation objects must use source_url and evidence_quote. Do not "
+        "return criterion codes as object keys. "
         "Every positive component requires exact saved citations. Operational need requires "
         "an observed PAIN_POINT; buying signals require an observed SIGNAL. Existing "
-        "technology and capabilities are not unmet needs or buying intent. Unknown evidence earns zero.",
+        "technology and capabilities are not unmet needs or buying intent. Unknown "
+        "evidence earns zero.",
         {
             "context": job.payload["context"],
             "selected_icp": job.payload["icp_code"],
