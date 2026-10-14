@@ -147,6 +147,9 @@ def claim_research_endpoint(
     max_running: int | None = Query(default=None, ge=1, le=10),
     db: Session = Depends(get_db),
 ):
+    from app.workspace_context import current_principal
+    from app.services.executor_ownership import require_legacy_claim
+    require_legacy_claim(current_principal.get().workspace_id, "PREPARATION")
     try:
         return claim_next_research(
             db, max_running=max_running,

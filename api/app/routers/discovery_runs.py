@@ -213,6 +213,8 @@ def verified_run(db, run_id, proof):
 @router.post('/runs/{run_id}/claim')
 def claim(run_id: UUID, data: RunProof, db=Depends(get_db)):
     run, principal = verified_run(db, run_id, data.run_token)
+    from app.services.executor_ownership import require_legacy_claim
+    require_legacy_claim(run.workspace_id, "DISCOVERY")
     if run.status != 'QUEUED' or datetime.now(timezone.utc) - run.created_at > timedelta(minutes=5):
         raise HTTPException(409, 'This discovery run cannot be claimed')
     run.status, run.claimed_by, run.started_at = 'RUNNING', principal.actor, datetime.now(timezone.utc)

@@ -851,6 +851,8 @@ def health(db=Depends(get_db)):
 @router.post("/api/pipeline/claim")
 def claim(db=Depends(get_db)):
     principal = permit("SERVICE")
+    from app.services.executor_ownership import require_legacy_claim
+    require_legacy_claim(principal.workspace_id, "PREPARATION")
     from app.services.product_automation import managed
 
     if managed(db):

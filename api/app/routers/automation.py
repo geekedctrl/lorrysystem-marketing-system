@@ -628,6 +628,7 @@ def health(request: Request):
 
 @router.post("/worker/claim")
 def claim(request: Request):
+    from app.services.executor_ownership import legacy_claim_allowed, require_legacy_claim
     with ControlSession() as control:
         worker = worker_for(control, request.headers.get("X-API-Key", ""))
         worker.last_seen_at = datetime.now(timezone.utc)
@@ -676,6 +677,8 @@ def claim(request: Request):
                 ProductAutomationPlan.next_discovery_at <= now,
             )
         ):
+            if not legacy_claim_allowed(p.workspace_id, "DISCOVERY"):
+                continue
             pending = control.scalar(
                 select(AutomationJob.id).where(
                     AutomationJob.workspace_id == p.workspace_id,
@@ -721,6 +724,7 @@ def claim(request: Request):
         if not job:
             control.commit()
             return None
+        require_legacy_claim(job.workspace_id, job.kind if job.kind in ("SETUP", "DISCOVERY") else "PREPARATION")
         proof = secrets.token_urlsafe(48)
         job.lease_hash = token_hash(proof)
         job.worker_id = worker.id

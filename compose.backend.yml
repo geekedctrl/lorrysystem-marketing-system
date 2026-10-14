@@ -28,6 +28,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://backend_api:${BACKEND_API_DB_PASSWORD}@backend-db:5432/marketing_rebuild
       SENDER_CREDENTIAL_ENCRYPTION_KEY: ${SENDER_CREDENTIAL_ENCRYPTION_KEY:-}
+      OWNERSHIP_PREFLIGHT_TOKEN: ${OWNERSHIP_PREFLIGHT_TOKEN:-}
+      OWNERSHIP_CUTOVER_READY: ${OWNERSHIP_CUTOVER_READY:-false}
     ports: ["127.0.0.1:${NATIVE_API_HOST_PORT:-8020}:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]

@@ -170,6 +170,8 @@ def audit(db, action, kind, **metadata):
 
 def send_approved(db, action_id, sender_id, idempotency_key, transport=None):
     principal = permit_sender()
+    from app.services.executor_ownership import require_legacy_claim
+    require_legacy_claim(principal.workspace_id, "SENDING")
     # Serialize duplicate submissions before committing the durable handoff intent.
     db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
