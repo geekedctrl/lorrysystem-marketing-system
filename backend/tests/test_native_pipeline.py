@@ -48,6 +48,7 @@ class FixtureProviders:
     people = True
     opportunity = True
     ambiguous = False
+    keyed_scoring = False
 
     def __init__(self, job, save):
         self.job, self.save, self.cache = job, save, dict(job.checkpoint)
@@ -129,22 +130,30 @@ class FixtureProviders:
             )
             return {"facts": facts, "people": people, "unknowns": []}
         if operation == "scoring":
+            criteria = [
+                dict(
+                    criterion=c,
+                    points=p,
+                    rationale="Supported by supplied company evidence.",
+                    evidence=[citation(q)] if p else [],
+                )
+                for c, p, q in [
+                    ("icp_fit", 40, SERVICE),
+                    ("operational_need", 30, NEED),
+                    ("operating_scale", 0, SERVICE),
+                    ("buying_signals", 10, SIGNAL),
+                    ("evidence_quality", 5, SERVICE),
+                ]
+            ]
+            if self.keyed_scoring:
+                return {
+                    item["criterion"]: {
+                        key: value for key, value in item.items() if key != "criterion"
+                    }
+                    for item in criteria
+                }
             return {
-                "criteria": [
-                    dict(
-                        criterion=c,
-                        points=p,
-                        rationale="Supported by supplied company evidence.",
-                        evidence=[citation(q)],
-                    )
-                    for c, p, q in [
-                        ("icp_fit", 40, SERVICE),
-                        ("operational_need", 30, NEED),
-                        ("operating_scale", 0, SERVICE),
-                        ("buying_signals", 10, SIGNAL),
-                        ("evidence_quality", 5, SERVICE),
-                    ]
-                ],
+                "criteria": criteria,
                 "unknowns": ["Operating scale not established"],
             }
         if operation == "matching":
@@ -201,7 +210,8 @@ class NativeTests(BackendFixtures):
             FixtureProviders.people,
             FixtureProviders.opportunity,
             FixtureProviders.ambiguous,
-        ) = (True, True, False)
+            FixtureProviders.keyed_scoring,
+        ) = (True, True, False, False)
         self.provider.start()
         self.fetcher.start()
         self.addCleanup(self.provider.stop)
@@ -262,6 +272,21 @@ class NativeTests(BackendFixtures):
                 db.execute(
                     text("UPDATE approvals SET snapshot='{}' WHERE id=:id"), {"id": aid}
                 )
+
+    def test_keyed_model_scoring_output_is_normalized_to_rubric_contract(self):
+        FixtureProviders.keyed_scoring = True
+        rid = self.prepare("keyed-scoring-output")
+        self.assertEqual(self.drain(), list(pipeline.STAGES))
+        with Session() as db:
+            run = db.get(PreparationRun, rid)
+            self.assertEqual(run.status, "PENDING_APPROVAL")
+            score = run.results["SCORING"]
+            self.assertEqual(
+                [item["criterion"] for item in score["criteria"]],
+                ["icp_fit", "operational_need", "operating_scale", "buying_signals", "evidence_quality"],
+            )
+            self.assertEqual(score["score"], 85)
+            self.assertEqual(score["unknowns"], [])
 
     def test_capability_does_not_create_opportunity(self):
         FixtureProviders.opportunity = False
