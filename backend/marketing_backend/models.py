@@ -55,6 +55,18 @@ class Workspace(Base):
     next_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ExecutorOwnership(Base):
+    __tablename__ = "executor_ownership"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), primary_key=True)
+    capability: Mapped[str] = mapped_column(String(16), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(8), default="N8N")
+    state: Mapped[str] = mapped_column(String(8), default="ACTIVE")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    rollback_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Membership(Base):
     __tablename__ = "memberships"
     __table_args__ = (

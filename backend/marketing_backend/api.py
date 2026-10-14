@@ -426,3 +426,6 @@ app.include_router(discovery_router)
 from .sending_api import router as sending_router
 
 app.include_router(sending_router)
+
+from .ownership_api import router as ownership_router
+app.include_router(ownership_router)

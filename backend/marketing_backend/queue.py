@@ -1,7 +1,8 @@
 import secrets
 from datetime import timedelta
-from sqlalchemy import select, or_
-from .models import Job, Workspace, now
+from sqlalchemy import select, or_, case
+from .models import Job, Workspace, ExecutorOwnership, now
+from .ownership import capability_for_job, active_python
 
 LEASE_SECONDS = 180
 
@@ -41,14 +42,19 @@ def claim(db):
     job = db.scalar(
         select(Job)
         .join(Workspace, Workspace.id == Job.workspace_id)
+        .join(ExecutorOwnership, (ExecutorOwnership.workspace_id == Job.workspace_id) &
+              (ExecutorOwnership.capability == case(
+                  (Job.kind == 'SETUP', 'SETUP'), (Job.kind == 'DISCOVERY', 'DISCOVERY'),
+                  else_='PREPARATION')))
         .where(
             Job.status == "PENDING",
             Job.available_at <= instant,
             Workspace.active.is_(True),
             or_(Job.managed.is_(False), Workspace.automation_enabled.is_(True)),
+            ExecutorOwnership.owner == 'PYTHON', ExecutorOwnership.state == 'ACTIVE',
         )
         .order_by(Job.created_at, Job.id)
-        .with_for_update(of=Job, skip_locked=True)
+        .with_for_update(of=(Job, ExecutorOwnership), skip_locked=True)
         .limit(1)
     )
     if job:
@@ -84,6 +90,7 @@ def owned(db, job_id, token):
         not workspace
         or not workspace.active
         or (job.managed and not workspace.automation_enabled)
+        or not active_python(db, job.workspace_id, capability_for_job(job.kind))
     ):
         raise LeaseLost()
     return job

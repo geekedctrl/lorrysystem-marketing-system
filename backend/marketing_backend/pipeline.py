@@ -258,12 +258,16 @@ def finalize(db, job, result):
 
 
 def schedule(db):
+    from .models import ExecutorOwnership
     for workspace in db.scalars(
         select(Workspace)
+        .join(ExecutorOwnership, (ExecutorOwnership.workspace_id == Workspace.id) &
+              (ExecutorOwnership.capability == 'DISCOVERY'))
         .where(
             Workspace.active.is_(True),
             Workspace.automation_enabled.is_(True),
             Workspace.next_discovery_at <= now(),
+            ExecutorOwnership.owner == 'PYTHON', ExecutorOwnership.state == 'ACTIVE',
         )
         .with_for_update(skip_locked=True)
     ):

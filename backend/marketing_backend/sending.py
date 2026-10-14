@@ -107,6 +107,11 @@ def build_message(delivery, sender):
 def claim_attempt(db, lease_seconds=120):
     attempt = db.scalar(select(DeliveryAttempt).where(DeliveryAttempt.status == "READY", DeliveryAttempt.available_at <= now()).order_by(DeliveryAttempt.created_at).with_for_update(skip_locked=True).limit(1))
     if not attempt: return None
+    from .models import ExecutorOwnership
+    authority = db.scalar(select(ExecutorOwnership).where(
+        ExecutorOwnership.workspace_id == attempt.workspace_id,
+        ExecutorOwnership.capability == "SENDING").with_for_update())
+    if not authority or authority.owner != "PYTHON" or authority.state != "ACTIVE": return None
     delivery = db.get(Delivery, attempt.delivery_id)
     if not delivery or delivery.status != "QUEUED": return None
     attempt.status, attempt.lease_token = "SENDING", secrets.token_hex(24)
@@ -119,6 +124,8 @@ def claim_attempt(db, lease_seconds=120):
 def execute_attempt(db, attempt_id, token, transport=None):
     attempt = db.scalar(select(DeliveryAttempt).where(DeliveryAttempt.id == attempt_id, DeliveryAttempt.lease_token == token, DeliveryAttempt.status == "SENDING").with_for_update())
     if not attempt or attempt.lease_until <= now(): return False
+    from .ownership import active_python
+    if not active_python(db, attempt.workspace_id, "SENDING"): return False
     delivery, sender = db.get(Delivery, attempt.delivery_id), None
     if delivery: sender = db.get(SenderConnection, delivery.sender_id)
     if not delivery or not sender:
