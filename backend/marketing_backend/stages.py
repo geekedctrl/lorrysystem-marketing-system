@@ -263,14 +263,22 @@ def research(job, providers):
             "pages": pages,
         },
     )
-    # Some compatible models return more contacts than requested. Keep the
-    # response bounded before strict schema validation; the model's ordering
-    # prioritizes its strongest public contacts.
+    # Contact extraction is advisory. A single incomplete contact (for
+    # example, a null role) must not invalidate otherwise useful company
+    # research. Validate each contact independently, then strictly validate
+    # the remaining response and keep the model's original contact ordering.
     omitted_people = 0
     if isinstance(raw, dict) and isinstance(raw.get("people"), list):
-        omitted_people = max(0, len(raw["people"]) - MAX_RESEARCH_PEOPLE)
-        if omitted_people:
-            raw = {**raw, "people": raw["people"][:MAX_RESEARCH_PEOPLE]}
+        people = []
+        for index, person in enumerate(raw["people"]):
+            if len(people) >= MAX_RESEARCH_PEOPLE:
+                omitted_people += len(raw["people"]) - index
+                break
+            try:
+                people.append(Person.model_validate(person).model_dump())
+            except (ValueError, TypeError):
+                omitted_people += 1
+        raw = {**raw, "people": people}
     value = validated(ResearchOutput, raw)
 
     # Evidence errors on one generated item must not discard every other
