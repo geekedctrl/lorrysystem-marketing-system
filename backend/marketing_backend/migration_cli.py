@@ -10,7 +10,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import Session
 from .db import engine as native_engine
 
@@ -35,18 +35,57 @@ def snapshot(conn):
     return counts, hashlib.sha256(raw).hexdigest()
 
 
+def source_rows(conn, table):
+    try:
+        columns = {c["name"] for c in inspect(conn).get_columns(table)}
+    except Exception:
+        return []
+    if not {"id", "name"}.issubset(columns):
+        return []
+    return conn.execute(text(f"SELECT id::text, name FROM {table} ORDER BY id")).mappings().all()
+
+
+def migrate_workspaces(source, db, fingerprint):
+    """Copy only non-sensitive workspace identity, preserving a source map."""
+    rows = source_rows(source, "workspaces")
+    for row in rows:
+        existing = db.execute(text("""SELECT native_id FROM legacy_identity_map
+          WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"""), {"id": row["id"]}).scalar()
+        native_id = existing or uuid.uuid4()
+        db.execute(text("""INSERT INTO workspaces(id,name,active,automation_enabled)
+          VALUES (:id,:name,true,false) ON CONFLICT (id) DO NOTHING"""), {"id": native_id, "name": row["name"]})
+        db.execute(text("""INSERT INTO legacy_identity_map
+          (source_system,entity_type,legacy_id,native_id,source_fingerprint)
+          VALUES ('legacy-postgres','workspace',:legacy,:native,:fp)
+          ON CONFLICT (source_system,entity_type,legacy_id) DO UPDATE SET
+            native_id=EXCLUDED.native_id, source_fingerprint=EXCLUDED.source_fingerprint"""),
+          {"legacy": row["id"], "native": native_id, "fp": fingerprint})
+    return len(rows)
+
+
 def run(mode):
     with legacy_engine().connect() as source:
         counts, fingerprint = snapshot(source)
     run_id = uuid.uuid4()
-    status = "COMPLETED" if mode in ("export", "dry-run") else "BLOCKED"
-    differences = [] if mode in ("export", "dry-run") else [{"code": "APPLY_REQUIRES_APPROVED_ADAPTERS"}]
     with Session(native_engine) as db:
+        migrated = 0
+        differences = []
+        status = "COMPLETED"
+        if mode == "apply":
+            with legacy_engine().connect() as source:
+                migrated = migrate_workspaces(source, db, fingerprint)
+        elif mode in ("reconcile", "final-delta"):
+            native_count = db.scalar(text("SELECT count(*) FROM workspaces")) or 0
+            if counts.get("workspaces") is not None and native_count != counts["workspaces"]:
+                differences.append({"entity": "workspaces", "source": counts["workspaces"], "native": native_count})
+            status = "COMPLETED" if not differences else "DIFFERENCES"
+        elif mode == "dry-run":
+            differences = [{"code": "WORKSPACE_IDENTITY_WILL_MIGRATE", "count": counts.get("workspaces") or 0}]
         db.execute(text("""INSERT INTO migration_runs
           (id,mode,status,source_fingerprint,counts,differences,completed_at)
           VALUES (:id,:mode,:status,:fp,:counts,:diff,:done)"""), {
             "id": run_id, "mode": mode, "status": status, "fp": fingerprint,
-            "counts": json.dumps(counts), "diff": json.dumps(differences),
+            "counts": json.dumps({**counts, "workspaces_migrated": migrated}), "diff": json.dumps(differences),
             "done": datetime.now(timezone.utc),
         })
         db.commit()
