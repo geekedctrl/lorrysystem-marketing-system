@@ -70,6 +70,43 @@ def migrate_workspaces(source, db, fingerprint):
     return len(rows)
 
 
+def migrate_accounts(source, db, fingerprint):
+    differences = []
+    user_cols = table_columns(source, "users")
+    if not {"id", "email", "password_hash"}.issubset(user_cols):
+        differences.append({"entity": "users", "code": "UNSUPPORTED_SOURCE_SCHEMA"})
+        return 0, differences
+    users = source.execute(text("SELECT id::text,email,password_hash FROM users ORDER BY id")).mappings().all()
+    moved = 0
+    for row in users:
+        if not row["password_hash"] or not str(row["password_hash"]).startswith("pbkdf2_sha256$"):
+            differences.append({"entity": "users", "legacy_id": row["id"], "code": "INCOMPATIBLE_PASSWORD_HASH"})
+            continue
+        native_id = db.execute(text("""SELECT native_id FROM legacy_identity_map WHERE
+          source_system='legacy-postgres' AND entity_type='user' AND legacy_id=:id"""), {"id": row["id"]}).scalar() or uuid.uuid4()
+        db.execute(text("""INSERT INTO users(id,email,password_hash,active,platform_admin)
+          VALUES (:id,:email,:hash,true,false) ON CONFLICT (id) DO NOTHING"""),
+          {"id": native_id, "email": row["email"].lower(), "hash": row["password_hash"]})
+        db.execute(text("""INSERT INTO legacy_identity_map(source_system,entity_type,legacy_id,native_id,source_fingerprint)
+          VALUES ('legacy-postgres','user',:legacy,:native,:fp) ON CONFLICT DO NOTHING"""),
+          {"legacy": row["id"], "native": native_id, "fp": fingerprint})
+        moved += 1
+    membership_cols = table_columns(source, "memberships")
+    if {"workspace_id", "user_id", "role"}.issubset(membership_cols):
+        memberships = source.execute(text("SELECT workspace_id::text,user_id::text,role FROM memberships")).mappings().all()
+        for row in memberships:
+            workspace = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"), {"id": row["workspace_id"]}).scalar()
+            user = db.execute(text("SELECT native_id FROM legacy_identity_map WHERE source_system='legacy-postgres' AND entity_type='user' AND legacy_id=:id"), {"id": row["user_id"]}).scalar()
+            if not workspace or not user:
+                differences.append({"entity": "memberships", "code": "UNRESOLVED_IDENTITY", "workspace_id": row["workspace_id"], "user_id": row["user_id"]})
+                continue
+            db.execute(text("""INSERT INTO memberships(workspace_id,user_id,role) VALUES (:workspace,:user,:role)
+              ON CONFLICT (workspace_id,user_id) DO NOTHING"""), {"workspace": workspace, "user": user, "role": row["role"]})
+    else:
+        differences.append({"entity": "memberships", "code": "UNSUPPORTED_SOURCE_SCHEMA"})
+    return moved, differences
+
+
 def migrate_catalog(source, db, fingerprint):
     cols = table_columns(source, "catalog")
     required = {"id", "workspace_id", "kind", "code", "name", "description"}
@@ -134,10 +171,14 @@ def run(mode):
         if mode == "apply":
             with legacy_engine().connect() as source:
                 migrated = migrate_workspaces(source, db, fingerprint)
+                account_moved, account_differences = migrate_accounts(source, db, fingerprint)
+                migrated += account_moved
+                differences.extend(account_differences)
                 catalog_moved, catalog_difference = migrate_catalog(source, db, fingerprint)
                 lead_moved, lead_difference = migrate_leads(source, db, fingerprint)
                 migrated += catalog_moved + lead_moved
                 differences.extend(x for x in (catalog_difference, lead_difference) if x)
+            status = "DIFFERENCES" if differences else "COMPLETED"
         elif mode in ("reconcile", "final-delta"):
             for entity, table in (("workspaces", "workspaces"), ("catalog", "catalog"), ("leads", "leads")):
                 native_count = db.scalar(text(f"SELECT count(*) FROM {table}")) or 0
