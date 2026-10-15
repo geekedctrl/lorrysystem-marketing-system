@@ -58,25 +58,12 @@
 </div>
 {% endif %}
 
-<section class="card section-card">
-  <div class="card-head"><h2>Campaign Strategist</h2><span class="badge">Mock preview</span></div>
-  <p>Create an evidence-backed campaign proposal from completed research, qualification and product matches. Review the strategy and channel copy before using it in outreach.</p>
-  <p class="stage-muted">Generation costs $0 with the mock provider. Asset recommendations are plans; no assets are generated and no messages are sent.</p>
-  {% if current_workspace.role in ['ADMIN','OPERATOR','REVIEWER'] %}
-  <form method="post" action="/leads/{{ lead.id }}/campaign-proposals">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <input type="hidden" name="idempotency_key" value="{{ campaign_request_id }}">
-    <button class="button" type="submit">Generate campaign proposal</button>
-  </form>
-  {% endif %}
-  {% for proposal in campaign_proposals %}
-  <p><a href="/campaign-proposals/{{ proposal.id }}">Review saved proposal · Version {{ proposal.version }}</a> <span class="badge">{{ proposal.status }}</span> · {{ proposal.created_at|iso_date }}</p>
-  {% else %}<p class="stage-muted">No campaign proposals saved yet.</p>{% endfor %}
-</section>
-
 <div class="metric-grid detail-metrics">
 
 <div class="metric-card"><span>Current Score</span><strong>{{ lead.current_score if lead.current_score is not none else '—' }}</strong>
+</div>
+
+<div class="metric-card"><span>Status</span><strong class="small-strong">{{ lead.status|replace('_',' ')|title }}</strong>
 </div>
 
 <div class="metric-card"><span>Priority</span><strong class="small-strong">{{ lead.priority }}</strong>
@@ -144,6 +131,8 @@
 </div>
 </div>
 
+{% include 'lead_stage_overview.html' %}
+
 <div class="section-tabs" role="tablist" aria-label="Lead details" data-tabs="lead">
 <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="false">Overview
 </button>
@@ -158,7 +147,7 @@
 <button type="button" role="tab" id="tab-activity" aria-controls="panel-activity" aria-selected="false">Activity
 </button>
 </div>
-<section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-tab-panel="lead">{% include 'lead_stage_overview.html' %}
+<section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-tab-panel="lead">
 <div class='card'><h2>Preparation status</h2><p>{% if pipeline_state.managed %}This product prepares leads automatically. Review any missing evidence or contact details before continuing.{% else %}Research this company, confirm its contact and assess the fit before preparing outreach.{% endif %}</p>
 <a class='button secondary' href='#contact-review'>Review contact and preparation
 </a>
@@ -268,6 +257,21 @@
 
 </section>
 <section role="tabpanel" id="panel-outreach" aria-labelledby="tab-outreach" data-tab-panel="lead">
+<section class="card section-card lead-campaign-card">
+  <div class="card-head"><div><span class="research-eyebrow">Campaign strategist</span><h2>Turn the research into a campaign</h2></div><span class="badge">Mock preview</span></div>
+  <p>Create an evidence-backed campaign proposal from completed research, qualification and product matches. Review the strategy and channel copy before using it in outreach.</p>
+  <p class="stage-muted">Generation costs $0 with the mock provider. Asset recommendations are plans; no assets are generated and no messages are sent.</p>
+  {% if current_workspace.role in ['ADMIN','OPERATOR','REVIEWER'] %}
+  <form method="post" action="/leads/{{ lead.id }}/campaign-proposals">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="idempotency_key" value="{{ campaign_request_id }}">
+    <button class="button" type="submit">Generate campaign proposal</button>
+  </form>
+  {% endif %}
+  {% for proposal in campaign_proposals %}
+  <p><a href="/campaign-proposals/{{ proposal.id }}">Review saved proposal · Version {{ proposal.version }}</a> <span class="badge">{{ proposal.status }}</span> · {{ proposal.created_at|iso_date }}</p>
+  {% else %}<p class="stage-muted">No campaign proposals saved yet.</p>{% endfor %}
+</section>
 <div class="card section-card" id="lead-actions">
 
 <div class="card-head"><h2>Outreach</h2>
