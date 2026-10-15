@@ -8,6 +8,8 @@ from marketing_backend.db import Session, engine
 from marketing_backend.models import (
     User,
     Workspace,
+    Organization,
+    OrganizationMembership,
     Membership,
     Job,
     Lead,
@@ -29,11 +31,15 @@ password = secrets.token_urlsafe(24)
 email = "smoke-" + secrets.token_hex(6) + "@example.test"
 with Session() as db:
     actor = User(email=email, password_hash=hash_password(password))
-    workspace = Workspace(name="REBUILD SMOKE FIXTURE")
-    db.add_all([actor, workspace])
+    organization = Organization(name="REBUILD SMOKE FIXTURE")
+    db.add_all([actor, organization])
+    db.flush()
+    workspace = Workspace(name="REBUILD SMOKE FIXTURE", organization_id=organization.id)
+    db.add(workspace)
     db.flush()
     uid, wid = actor.id, workspace.id
     db.add(Membership(user_id=uid, workspace_id=wid, role="ADMIN"))
+    db.add(OrganizationMembership(organization_id=organization.id, user_id=uid, role="OWNER"))
     db.commit()
 try:
     with httpx.Client(base_url="http://backend-api:8000", timeout=10) as client:
@@ -132,5 +138,7 @@ finally:
         db.execute(delete(LoginSession).where(LoginSession.user_id == uid))
         db.execute(delete(ExecutorOwnership).where(ExecutorOwnership.workspace_id == wid))
         db.execute(delete(Workspace).where(Workspace.id == wid))
+        db.execute(delete(OrganizationMembership).where(OrganizationMembership.organization_id == organization.id))
+        db.execute(delete(Organization).where(Organization.id == organization.id))
         db.execute(delete(User).where(User.id == uid))
         db.commit()

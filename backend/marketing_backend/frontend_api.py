@@ -21,6 +21,7 @@ from .models import (
     LoginSession,
     Job,
     Workspace,
+    OrganizationMembership,
     now,
 )
 from .pipeline import context, fingerprint
@@ -71,7 +72,9 @@ def me(
     return {
         "id": actor.id,
         "email": actor.email,
-        "capabilities": {"create_workspace": actor.platform_admin},
+        "capabilities": {"create_workspace": bool(db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.user_id == actor.id,
+            OrganizationMembership.role.in_(["OWNER", "ADMIN"]))))},
         "expires_at": login.expires_at,
     }
 

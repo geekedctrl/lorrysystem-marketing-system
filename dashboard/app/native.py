@@ -20,11 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 ROOT = Path(__file__).parent
-READ_ROUTES = re.compile(r"^(catalog|catalog/all|candidates|candidates/[\w-]+|leads|leads/page|leads/[\w-]+|leads/[\w-]+/preparation|preparation/[\w-]+|approvals|jobs|jobs/[\w-]+|operations|senders|deliveries|deliveries/[\w-]+|email-suppressions)$")
+READ_ROUTES = re.compile(r"^(catalog|catalog/all|candidates|candidates/[\w-]+|leads|leads/page|leads/[\w-]+|leads/[\w-]+/preparation|preparation/[\w-]+|approvals|jobs|jobs/[\w-]+|operations|senders|deliveries|deliveries/[\w-]+|email-suppressions|profile|members|connections)$")
 RUN_STATUSES = {"PREPARING", "NEEDS_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "FAILED", "STALE"}
 WRITE_ROUTES = {
-    "PUT": [(r"catalog", {"ADMIN"})],
-    "PATCH": [(r"catalog/[\w-]+", {"ADMIN"})],
+    "PUT": [(r"catalog", {"ADMIN"}), (r"profile", {"ADMIN"}), (r"automation/preferences", {"ADMIN"}), (r"provider-connections/(MODEL|SEARCH)", {"ADMIN"})],
+    "PATCH": [(r"catalog/[\w-]+", {"ADMIN"}), (r"members/[\w-]+", {"ADMIN"})],
     "POST": [
         (r"candidates/[\w-]+/(accept|reject|retry)", {"ADMIN", "OPERATOR", "REVIEWER"}),
         (r"automation/(activate|pause|resume)", {"ADMIN"}),
@@ -148,7 +148,33 @@ def create_app(transport=None):
             return JSONResponse(profile, status)
         # Explicit public projection: no upstream credentials are browser data.
         profile = {"id": profile["id"], "email": profile["email"], "expires_at": profile["expires_at"], "capabilities": {"create_workspace": bool(profile.get("capabilities", {}).get("create_workspace"))}}
-        return {"csrf": session["csrf"], "workspaces": workspaces, "workspace_id": session.get("wid"), "user": profile}
+        status, organizations = await upstream("GET", "/organizations", session["token"])
+        if status >= 400:
+            return JSONResponse(organizations, status)
+        return {"csrf": session["csrf"], "workspaces": workspaces, "organizations": organizations, "organization_id": session.get("oid"), "workspace_id": session.get("wid"), "user": profile}
+
+    @app.api_route("/settings/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+    async def settings(request: Request, path: str):
+        session = current(request)
+        if not session:
+            return JSONResponse({"detail": "Session expired."}, 401)
+        allowed = ((request.method == "GET" and (path in {"organizations", "auth/sessions"} or re.fullmatch(r"organizations/[\w-]+/(workspaces|members)", path)))
+                   or (request.method == "POST" and (path in {"organizations", "auth/password", "invitations/accept"} or re.fullmatch(r"organizations/[\w-]+/(workspaces|invitations)", path) or re.fullmatch(r"workspaces/[\w-]+/invitations", path)))
+                   or (request.method == "PUT" and re.fullmatch(r"organizations/[\w-]+", path))
+                   or (request.method == "PATCH" and (re.fullmatch(r"organizations/[\w-]+/members/[\w-]+", path) or re.fullmatch(r"organizations/[\w-]+/workspaces/[\w-]+/status", path)))
+                   or (request.method == "DELETE" and path == "auth/sessions/other"))
+        if not allowed:
+            return JSONResponse({"detail": "This feature is not available."}, 404)
+        if request.method != "GET" and not check_csrf(request, session):
+            return JSONResponse({"detail": "Reload before submitting."}, 403)
+        payload = None
+        if request.method in {"POST", "PUT", "PATCH"}:
+            try:
+                payload = await request.json()
+            except ValueError:
+                return JSONResponse({"detail": "Check the submitted fields."}, 422)
+        status, result = await upstream(request.method, f"/{path}", session["token"], payload)
+        return JSONResponse(result, 200 if status == 204 else status)
 
     @app.post("/session/logout")
     async def logout(request: Request):
@@ -181,8 +207,33 @@ def create_app(transport=None):
             if not workspace:
                 return JSONResponse({"detail": "You do not have access to this workspace."}, 403)
             session["wid"] = workspace["id"]
+            session["oid"] = workspace.get("organization_id")
             session["csrf"] = secrets.token_urlsafe(32)
             return {"workspace": workspace, "csrf": session["csrf"]}
+
+    @app.post("/session/organization")
+    async def switch_organization(request: Request):
+        session = current(request)
+        if not session:
+            return JSONResponse({"detail": "Session expired."}, 401)
+        if not check_csrf(request, session):
+            return JSONResponse({"detail": "Reload before submitting."}, 403)
+        body = await request.json()
+        async with session["lock"]:
+            status, organizations = await upstream("GET", "/organizations", session["token"])
+            if status >= 400:
+                return JSONResponse(organizations, status)
+            org = next((o for o in organizations if o["id"] == body.get("organization_id")), None)
+            if not org:
+                return JSONResponse({"detail": "You do not have access to this organization."}, 403)
+            status, workspaces = await upstream("GET", "/workspaces", session["token"])
+            if status >= 400:
+                return JSONResponse(workspaces, status)
+            selected = next((w for w in workspaces if w.get("organization_id") == org["id"]), None)
+            session["oid"] = org["id"]
+            session["wid"] = selected["id"] if selected else None
+            session["csrf"] = secrets.token_urlsafe(32)
+            return {"organization": org, "workspace": selected, "csrf": session["csrf"]}
 
     @app.api_route("/gateway/{wid}/{path:path}", methods=["GET", "POST", "PUT", "PATCH"])
     async def gateway(request: Request, wid: str, path: str):

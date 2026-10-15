@@ -73,8 +73,10 @@ def migrate_workspaces(source, db, fingerprint):
         existing = db.execute(text("""SELECT native_id FROM legacy_identity_map
           WHERE source_system='legacy-postgres' AND entity_type='workspace' AND legacy_id=:id"""), {"id": row["id"]}).scalar()
         native_id = existing or uuid.uuid4()
-        db.execute(text("""INSERT INTO workspaces(id,name,active,automation_enabled)
-          VALUES (:id,:name,true,false) ON CONFLICT (id) DO NOTHING"""), {"id": native_id, "name": row["name"]})
+        db.execute(text("""INSERT INTO organizations(id,name) VALUES (:id,:name)
+          ON CONFLICT (id) DO NOTHING"""), {"id": native_id, "name": row["name"]})
+        db.execute(text("""INSERT INTO workspaces(id,organization_id,name,active,automation_enabled)
+          VALUES (:id,:id,:name,true,false) ON CONFLICT (id) DO NOTHING"""), {"id": native_id, "name": row["name"]})
         db.execute(text("""INSERT INTO legacy_identity_map
           (source_system,entity_type,legacy_id,native_id,source_fingerprint)
           VALUES ('legacy-postgres','workspace',:legacy,:native,:fp)
@@ -121,6 +123,13 @@ def migrate_accounts(source, db, fingerprint):
               ON CONFLICT (workspace_id,user_id) DO NOTHING"""), {"workspace": workspace, "user": user, "role": row["role"]})
     else:
         differences.append({"entity": "memberships", "code": "UNSUPPORTED_SOURCE_SCHEMA"})
+    db.execute(text("""INSERT INTO organization_memberships(organization_id,user_id,role)
+      SELECT w.organization_id, COALESCE(
+        (SELECT id FROM users WHERE platform_admin AND active ORDER BY id LIMIT 1),
+        (SELECT user_id FROM memberships WHERE workspace_id=w.id AND role='ADMIN' ORDER BY user_id LIMIT 1)), 'OWNER'
+      FROM workspaces w WHERE EXISTS (SELECT 1 FROM users WHERE platform_admin AND active)
+        OR EXISTS (SELECT 1 FROM memberships WHERE workspace_id=w.id AND role='ADMIN')
+      ON CONFLICT (organization_id,user_id) DO NOTHING"""))
     return moved, differences
 
 

@@ -14,6 +14,8 @@ from .models import (
     LoginAttempt,
     Workspace,
     Membership,
+    Organization,
+    OrganizationMembership,
     Catalog,
     Lead,
     Job,
@@ -158,7 +160,7 @@ def logout(
 @app.get("/workspaces", response_model=list[out.WorkspaceResponse])
 def workspaces(actor=Depends(user), db=Depends(session)):
     return [
-        {"id": w.id, "name": w.name, "role": m.role}
+        {"id": w.id, "name": w.name, "role": m.role, "organization_id": w.organization_id}
         for w, m in db.execute(
             select(Workspace, Membership)
             .join(Membership)
@@ -171,7 +173,11 @@ def workspaces(actor=Depends(user), db=Depends(session)):
 def create_workspace(data: WorkspaceInput, actor=Depends(user), db=Depends(session)):
     if not actor.platform_admin:
         raise HTTPException(403, "Platform administrator required")
-    w = Workspace(name=data.name)
+    org = Organization(name=data.name)
+    db.add(org)
+    db.flush()
+    db.add(OrganizationMembership(organization_id=org.id, user_id=actor.id, role="OWNER"))
+    w = Workspace(name=data.name, organization_id=org.id)
     db.add(w)
     db.flush()
     db.add(Membership(workspace_id=w.id, user_id=actor.id, role="ADMIN"))
@@ -447,3 +453,6 @@ app.include_router(sending_router)
 
 from .ownership_api import router as ownership_router
 app.include_router(ownership_router)
+
+from .organization_api import router as organization_router
+app.include_router(organization_router)
