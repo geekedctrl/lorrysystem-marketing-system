@@ -42,6 +42,20 @@
   const empty = (text) => `<p class="empty">${esc(text)}</p>`;
   const card = (title, body) =>
     `<section class="card"><h2>${esc(title)}</h2>${body}</section>`;
+  const icon = (name) => {
+    const paths = {
+      overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+      leads: '<path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      discovery: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/><path d="M11 7v8M7 11h8"/>',
+      approvals: '<path d="m5 12 4 4L19 6"/>',
+      sending: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+      operations: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4L7.3 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 2Z"/>',
+      setup: '<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
+      arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    };
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.overview}</svg>`;
+  };
   const canWork = () => ["ADMIN", "OPERATOR"].includes(state.workspace?.role);
   const canReview = () => ["ADMIN", "REVIEWER"].includes(state.workspace?.role);
   const canReviewCandidate = () =>
@@ -190,7 +204,11 @@
     };
   }
   function shell() {
-    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(label(state.workspace?.role))}</p></div><nav>${[["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["sending", "Sending"], ["operations", "Activity & operations"], ...(isAdmin() ? [["setup", "Product setup"]] : [])].map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${esc(t)}</a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Platform administrator" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><div class="page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false">Menu</button></div><div id="view" aria-live="polite"></div></main></div>`;
+    const navItems = [["overview", "Overview", "overview"], ["leads", "Leads", "leads"], ["discovery", "Discovery", "discovery"], ["approvals", "Approvals", "approvals"], ["sending", "Outreach", "sending"], ["operations", "Activity & operations", "operations"], ...(isAdmin() ? [["setup", "Product setup", "setup"]] : [])];
+    const title = state.page === "lead" ? "Lead workspace" : label(state.page);
+    const subtitle = state.page === "overview" ? "Lead generation and outreach operations at a glance." : state.page === "lead" ? "Company research, qualification and outreach." : "Manage your lead generation workspace.";
+    const initials = (state.user?.email || "M").split("@")[0].split(/[._-]/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><a class="brand" href="#overview" data-page="overview"><span class="brand-mark">M</span><span>Marketing<small>Product operations</small></span></a><div class="workspace-controls"><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(label(state.workspace?.role))}</p></div><div class="nav-caption">WORKSPACE</div><nav>${navItems.map(([p, t, i]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${icon(i)}<span>${esc(t)}</span></a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}</small><button data-theme>${icon("setup")}<span>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</span></button><button id="logout">${icon("arrow")}<span>Sign out</span></button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><header class="native-topbar"><div class="topbar-title"><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">☰</button><div><h1 id="heading">${esc(title)}</h1><p>${esc(subtitle)}</p></div></div><div class="topbar-tools"><button data-theme class="theme-toggle" aria-label="Change theme" title="Change theme">◐</button><span class="account-avatar" aria-label="Signed in as ${esc(state.user?.email || "")}">${esc(initials)}</span></div></header><div id="view" aria-live="polite"></div></main></div>`;
     document.querySelector("#workspace").onchange = async (e) => {
       const previous = state.workspace.id;
       if (
@@ -242,8 +260,8 @@
         notice(error.message);
       }
     };
-    document.querySelector("#collapse").onclick = () =>
-      document.querySelector(".native-shell").classList.toggle("collapsed");
+    const collapse = document.querySelector("#collapse");
+    if (collapse) collapse.onclick = () => document.querySelector(".native-shell").classList.toggle("collapsed");
     const menu = document.querySelector(".mobile-menu"),
       sidebar = document.querySelector("#sidebar"),
       scrim = document.querySelector(".scrim");
@@ -448,12 +466,35 @@
       const pending = d.approvals.filter(
           (a) => a.status === "PENDING" && !a.stale,
         ),
+        approved = d.approvals.filter((a) => a.status === "APPROVED"),
+        recentLeads = d.leads.slice(0, 3),
+        recentApprovals = [...d.approvals].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0, 4),
         stops = (d.operations.current_preparation || []).filter((r) =>
           ["FAILED", "NEEDS_REVIEW", "STALE", "CHANGES_REQUESTED"].includes(
             r.status,
           ),
         );
-      view.innerHTML = `<div class="grid">${card("Ready for human review", `<h1>${pending.length}</h1><p>Pending drafts in the latest 100 approvals.</p><button data-page="approvals" class="primary">Review drafts</button>`)}${card("Preparation needs attention", `<h1>${stops.length}</h1><p>Current runs with a failure or review stop.</p><button data-page="leads">Review leads</button>`)}</div>${card("Your next step", !d.catalog.some((x) => x.kind === "PRODUCT") ? `<p>Add actual offerings and activate your product.</p>${isAdmin() ? '<button data-page="setup" class="primary">Set up product</button>' : "<p>Ask an administrator to configure this workspace.</p>"}` : !d.operations.enabled ? `<p>Automation is paused. An administrator can resume it from Product setup.</p>` : `<p>Automation is active. Find companies, prepare a lead, or review drafts.</p>${canWork() ? '<button data-page="discovery" class="primary">Find leads</button>' : ""}`)}${card("Workspace leads", leadTable(d.leads.slice(0, 5)))}`;
+      const actionTitle = pending.length ? "Review pending outreach" : stops.length ? "Review preparation needs" : d.catalog.some((x) => x.kind === "PRODUCT") && d.operations.enabled ? "Find your next customers" : "Set up your workspace";
+      const actionCopy = pending.length ? "Preparation runs stop for human approval. Approved outreach is not sent automatically." : stops.length ? "Some lead preparations need attention before they can continue." : !d.operations.enabled ? "Automation is paused. An administrator can resume it from Product setup." : "Discover suitable companies, review their evidence, and prepare the next conversation.";
+      const actionPage = pending.length ? "approvals" : stops.length ? "leads" : d.catalog.some((x) => x.kind === "PRODUCT") ? "discovery" : "setup";
+      const actionLabel = pending.length ? "Open approval queue" : stops.length ? "Review leads" : actionPage === "setup" ? "Configure product" : "Find companies";
+      const approvalRows = pending.slice(0, 3).map((a) => {
+        const snapshot = a.snapshot || {}, draftValue = snapshot.draft || snapshot.DRAFTING || snapshot;
+        const company = snapshot.inputs?.company?.company_name || snapshot.company?.company_name || "Company awaiting review";
+        return `<a class="overview-list-row" href="#approvals" data-page="approvals"><span class="overview-row-copy"><strong>${esc(draftValue.subject || "Outreach draft")}</strong><small>${esc(company)}${draftValue.channel ? ` · ${esc(label(draftValue.channel))}` : ""}</small></span><span class="overview-pill is-pending">Pending</span></a>`;
+      }).join("");
+      const leadRows = recentLeads.map((lead) => {
+        const run = lead.current_preparation || (d.operations.current_preparation || []).find((r) => r.lead_id === lead.id);
+        const score = run?.results?.SCORING?.score;
+        return `<a class="overview-list-row overview-lead-row" href="#lead/${esc(lead.id)}" data-lead="${esc(lead.id)}"><span class="overview-row-copy"><strong>${esc(lead.company_name)}</strong><small>${esc(lead.primary_contact?.name || "Contact not selected")}${lead.website ? ` · ${esc(lead.website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}` : ""}</small></span><span class="overview-row-meta">${run ? badge(run.status) : '<span class="overview-pill">New</span>'}<strong>${score == null ? "—" : esc(score)}</strong></span></a>`;
+      }).join("");
+      const activityRows = recentApprovals.map((a) => {
+        const snapshot = a.snapshot || {}, draftValue = snapshot.draft || snapshot.DRAFTING || snapshot;
+        const company = snapshot.inputs?.company?.company_name || snapshot.company?.company_name || "Company";
+        const status = a.status === "PENDING" ? "PENDING APPROVAL" : label(a.status).toUpperCase();
+        return `<tr><td><strong>${esc(company)}</strong></td><td>${esc(label(draftValue.channel || "EMAIL"))}</td><td>${esc(draftValue.subject || "Outreach draft")}</td><td><span class="overview-pill ${a.status === "APPROVED" ? "is-approved" : a.status === "PENDING" ? "is-pending" : ""}">${esc(status)}</span></td><td>${esc(a.created_at ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(a.created_at)) : "—")}</td></tr>`;
+      }).join("");
+      view.innerHTML = `<section class="overview-hero"><div class="overview-hero-copy"><span class="overview-eyebrow">YOUR NEXT ACTION</span><h2>${esc(actionTitle)}</h2><p>${esc(actionCopy)}</p></div><button class="overview-hero-action" data-page="${actionPage}">${esc(actionLabel)} ${icon("arrow")}</button></section><section class="overview-metrics" aria-label="Workspace summary"><article class="overview-metric metric-leads"><span>Active leads</span><strong>${esc(d.leadPage.total)}</strong><small>Companies in this workspace</small></article><article class="overview-metric metric-approvals"><span>Pending approvals</span><strong>${esc(pending.length)}</strong><small>Drafts waiting for review</small></article><article class="overview-metric metric-drafts"><span>Recent drafts</span><strong>${esc(d.approvals.length)}</strong><small>Latest ${d.approvals.length === 100 ? "100" : d.approvals.length} drafts</small></article><article class="overview-metric metric-approved"><span>Recently approved</span><strong>${esc(approved.length)}</strong><small>In recent review history</small></article></section><div class="overview-columns"><section class="overview-panel"><header class="overview-panel-heading"><h2>Recent leads</h2><button data-page="leads">View all ${icon("arrow")}</button></header><div class="overview-list">${leadRows || '<p class="overview-empty">No leads yet. Discover companies to get started.</p>'}</div></section><section class="overview-panel"><header class="overview-panel-heading"><h2>Pending approvals</h2><button data-page="approvals">Open queue ${icon("arrow")}</button></header><div class="overview-list">${approvalRows || '<p class="overview-empty">You’re all caught up. New drafts will appear here for review.</p>'}</div></section></div><section class="overview-panel overview-activity"><header class="overview-panel-heading"><div><h2>Recent outreach</h2><p>Draft activity and review decisions. Approval does not send messages.</p></div><button data-page="approvals">View all ${icon("arrow")}</button></header>${activityRows ? `<div class="overview-table-wrap"><table class="overview-table"><thead><tr><th>COMPANY</th><th>CHANNEL</th><th>SUBJECT</th><th>STATUS</th><th>CREATED</th></tr></thead><tbody>${activityRows}</tbody></table></div>` : '<p class="overview-empty">Outreach activity will appear after a draft is prepared.</p>'}</section>`;
     } else if (state.page === "leads")
       view.innerHTML = card(
         "Companies",
@@ -1029,7 +1070,12 @@
               3
           ];
       window.marketingTheme(next);
-      theme.textContent = "Theme: " + next;
+      document.querySelectorAll("button[data-theme]").forEach((button) => {
+        const label = button.querySelector("span");
+        if (label) label.textContent = "Theme: " + next;
+        button.setAttribute("aria-label", "Change theme, currently " + next);
+        button.title = "Theme: " + next;
+      });
     }
     const page = e.target.closest("[data-page]"),
       lead = e.target.closest("[data-lead]"),

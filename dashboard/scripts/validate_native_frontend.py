@@ -42,7 +42,7 @@ class NativeFixture:
         self.stale = False
         self.fail_activation = False
         self.activation_keys = []
-        self.leads = {W1: [{"id": L1, "company_name": "Synthetic Haulage <script>alert(1)</script>", "website": "https://haulage.example.com"}], W2: [{"id": L1, "company_name": "Synthetic Academy", "website": "https://academy.example.com"}]}
+        self.leads = {W1: [{"id": L1, "company_name": "Northstar Logistics", "website": "https://northstarlogistics.example.com"}], W2: [{"id": L1, "company_name": "Synthetic Academy", "website": "https://academy.example.com"}]}
         self.quote = "Morgan Lee Operations Director morgan@example.com"
         self.results = {
             "RESEARCH": {"facts": [{"category": "INDUSTRY", "statement": "Publicly documented logistics services", "source_url": "https://haulage.example.com/team", "evidence_quote": self.quote, "confidence": 85, "kind": "OBSERVED"}], "people": [], "unknowns": ["Fleet size is not established"], "pages": [{"source_url": "https://haulage.example.com/team", "text": self.quote}], "coverage": {"pages_attempted": 2, "unavailable_pages": 1}},
@@ -158,7 +158,7 @@ class NativeFixture:
         if suffix == "approvals":
             if self.revision:
                 return httpx.Response(200,json=[self.revision,{"id":AID,"run_id":RID,"version":1,"status":"CHANGES_REQUESTED","snapshot":self.parent_snapshot,"stale":True,"decision":{"note":"Please revise the opening"},"created_at":NOW}])
-            return httpx.Response(200, json=[] if self.status == "NEEDS_REVIEW" else [{"id": AID, "run_id": RID, "status": "PENDING" if self.status == "PENDING_APPROVAL" else self.status, "snapshot": {"draft": self.results["DRAFTING"], "results": self.results, "inputs": {"company": {"company_name": "Saved synthetic company"}, "catalog": self.catalog[wid]}}, "stale": self.stale, "decision": {}, "created_at": NOW}])
+            return httpx.Response(200, json=[] if self.status == "NEEDS_REVIEW" else [{"id": AID, "run_id": RID, "status": "PENDING" if self.status == "PENDING_APPROVAL" else self.status, "snapshot": {"draft": self.results["DRAFTING"], "results": self.results, "inputs": {"company": {"company_name": "Northstar Logistics"}, "catalog": self.catalog[wid]}}, "stale": self.stale, "decision": {}, "created_at": NOW}])
         if suffix.endswith("/revision"):
             assert set(body)=={"idempotency_key","expected_version","subject","body","evidence","note"}
             self.parent_snapshot=copy.deepcopy({"draft":self.results["DRAFTING"],"results":self.results,"inputs":{"company":{"company_name":"Saved synthetic company"},"catalog":self.catalog[wid]}})
@@ -294,10 +294,10 @@ class BFFAcceptance(unittest.TestCase):
         profile=self.client.get("/session").json()["user"]
         self.assertFalse(profile["capabilities"]["create_workspace"])
         self.assertNotIn("private_token",profile)
-        result=self.client.get(f"/gateway/{W1}/leads/page",params={"q":"Synthetic","limit":25,"status":"PENDING_APPROVAL"})
+        result=self.client.get(f"/gateway/{W1}/leads/page",params={"q":"Northstar","limit":25,"status":"PENDING_APPROVAL"})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json()["total"],1)
-        self.assertEqual(self.fixture.queries[-1][1],{"q":"Synthetic","limit":"25","status":"PENDING_APPROVAL"})
+        self.assertEqual(self.fixture.queries[-1][1],{"q":"Northstar","limit":"25","status":"PENDING_APPROVAL"})
         for query in ["limit=101","limit=bad","status=BAD","secret=bad","q=a&q=b"]:
             self.assertEqual(self.client.get(f"/gateway/{W1}/leads/page?{query}").status_code,422)
         self.assertEqual(self.client.get(f"/gateway/{W1}/leads/{L1}").status_code,200)
@@ -346,17 +346,26 @@ def browser_acceptance():
             executable=os.getenv("FRONTEND_BROWSER",r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
             browser=p.chromium.launch(executable_path=executable if Path(executable).exists() else None,headless=True)
             page=browser.new_page(viewport={"width":1440,"height":1000})
+            page.add_init_script("localStorage.setItem('marketing-theme','dark')")
             page.set_default_timeout(10000)
             page.on("pageerror",lambda error:errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{port}")
             page.get_by_label("Email",exact=True).fill("admin@example.com");page.get_by_label("Password").fill("synthetic")
             page.get_by_role("button",name="Sign in",exact=True).click()
             try:
-                page.get_by_role("heading",name="Ready for human review").wait_for()
+                page.locator(".native-topbar h1").get_by_text("Overview").wait_for()
             except Exception:
                 print("URL:",page.url);print("Errors:",errors);print("Calls:",fixture.calls)
                 raise
+            assert page.locator(".native-topbar h1").inner_text()=="Overview"
+            assert page.get_by_role("heading",name="Recent leads",exact=True).count()==1
+            assert page.get_by_role("heading",name="Pending approvals",exact=True).count()==1
+            assert page.locator(".native-sidebar nav .ui-icon").count() >= 6
             page.screenshot(path=str(output/"overview-desktop.png"),full_page=True)
+            page.set_viewport_size({"width":390,"height":844})
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Overview overflows at mobile width"
+            page.screenshot(path=str(output/"overview-mobile.png"),full_page=True)
+            page.set_viewport_size({"width":1440,"height":1000})
             original_leads=len(fixture.leads[W1])
             page.get_by_role("link",name="Discovery",exact=True).click()
             page.get_by_role("heading",name="Synthetic Candidate Logistics",exact=True).wait_for()
@@ -384,6 +393,7 @@ def browser_acceptance():
             assert page.get_by_role("heading",name="Product setup").count() >= 1
             page.get_by_role("button",name="Save offerings & activate").click();page.get_by_role("heading",name="Jobs & history").wait_for()
             assert fixture.activation_keys[-1]==fixture.activation_keys[-2],"Retry changed the idempotency key"
+            fixture.leads[W1][0]["company_name"]="Synthetic Haulage <script>alert(1)</script>"
             page.get_by_role("link",name="Leads",exact=True).click()
             page.get_by_text("Add a company",exact=True).click()
             page.get_by_label("Company name",exact=True).fill("Synthetic new company")
@@ -420,7 +430,7 @@ def browser_acceptance():
             page.get_by_role("button",name="Create delivery for send approval",exact=True).click()
             page.get_by_role("button",name="Approve and queue this email",exact=True).click()
             page.get_by_text("Queued",exact=True).wait_for()
-            page.get_by_role("link",name="Sending",exact=True).click()
+            page.get_by_role("link",name="Outreach",exact=True).click()
             page.get_by_role("heading",name="Delivery history",exact=True).wait_for()
             page.screenshot(path=str(output/"sending-outbox-synthetic.png"),full_page=True)
             page.get_by_role("link",name="Leads",exact=True).click()
@@ -429,7 +439,7 @@ def browser_acceptance():
             page.get_by_role("tab",name="Activity",exact=True).focus();page.keyboard.press("Home");assert page.get_by_role("tab",name="Overview",exact=True).get_attribute("aria-selected")=="true"
             fixture.status="PENDING_APPROVAL";fixture.stale=True
             page.get_by_role("link",name="Approvals",exact=True).click();assert page.get_by_role("button",name="Approve draft",exact=True).is_disabled()
-            page.locator("#workspace").select_option(W2);page.get_by_role("heading",name="Ready for human review").wait_for();assert "Synthetic Haulage" not in page.locator("#view").inner_text()
+            page.locator("#workspace").select_option(W2);page.locator(".native-topbar h1").get_by_text("Overview").wait_for();assert "Synthetic Haulage" not in page.locator("#view").inner_text()
             page.get_by_role("link",name="Leads",exact=True).click();page.get_by_text("Synthetic Academy",exact=True).wait_for()
             fixture.job_status="FAILED"
             page.get_by_role("link",name="Activity & operations",exact=True).click()
@@ -439,12 +449,12 @@ def browser_acceptance():
             for width,height,name in [(1024,768,"tablet"),(390,844,"mobile")]:
                 page.set_viewport_size({"width":width,"height":height});page.screenshot(path=str(output/f"leads-{name}.png"),full_page=True)
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),f"Page overflow at {width}"
-            page.get_by_role("button",name="Menu",exact=True).click();page.keyboard.press("Escape");assert not page.locator("#sidebar").is_visible()
+            page.get_by_role("button",name="Open navigation",exact=True).click();page.keyboard.press("Escape");assert not page.locator("#sidebar").is_visible()
             page.set_viewport_size({"width":1440,"height":1000})
             page.get_by_role("button",name="Theme:",exact=False).click();page.screenshot(path=str(output/"leads-theme.png"),full_page=True)
             page.get_by_role("button",name="Sign out",exact=True).click();page.get_by_role("heading",name="Welcome back").wait_for()
             for role in ["operator","reviewer","viewer"]:
-                page.get_by_label("Email",exact=True).fill(role+"@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click();page.get_by_role("heading",name="Ready for human review").wait_for()
+                page.get_by_label("Email",exact=True).fill(role+"@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click();page.locator(".native-topbar h1").get_by_text("Overview").wait_for()
                 assert page.get_by_role("link",name="Product setup",exact=True).count()==0
                 page.get_by_role("link",name="Discovery",exact=True).click()
                 page.get_by_role("heading",name="Find your next customers",exact=True).wait_for()
@@ -455,7 +465,7 @@ def browser_acceptance():
                 page.get_by_role("button",name="Sign out",exact=True).click();page.get_by_role("heading",name="Welcome back").wait_for()
             fixture.stale=False;fixture.status="CHANGES_REQUESTED"
             page.get_by_label("Email",exact=True).fill("admin@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click()
-            page.get_by_role("heading",name="Ready for human review").wait_for()
+            page.locator(".native-topbar h1").get_by_text("Overview").wait_for()
             # More than one page; open an older record through direct detail.
             fixture.leads[W1]+=[{"id":f"00000000-0000-4000-8000-{i:012d}","company_name":f"Older company {i}","website":"https://older.example.com"} for i in range(30)]
             page.get_by_role("link",name="Leads",exact=True).click()
@@ -479,7 +489,7 @@ def browser_acceptance():
             assert fixture.parent_snapshot["draft"]["subject"]=="An exploratory conversation"
             page.get_by_role("button",name="Sign out",exact=True).click()
             page.get_by_label("Email",exact=True).fill("reviewer@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click()
-            page.get_by_role("heading",name="Ready for human review").wait_for()
+            page.locator(".native-topbar h1").get_by_text("Overview").wait_for()
             page.get_by_role("link",name="Approvals",exact=True).click()
             page.get_by_label("Review note (required for every decision)",exact=True).fill("Reviewed the separate human revision")
             page.get_by_role("button",name="Approve draft",exact=True).click()
