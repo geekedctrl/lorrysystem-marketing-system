@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 from sqlalchemy import select
 from marketing_backend.db import Session, engine
-from marketing_backend.models import User, Workspace, Membership
+from marketing_backend.models import User, Workspace, Membership, Organization, OrganizationMembership
 from marketing_backend.auth import hash_password
 from marketing_backend.providers import Providers
 from marketing_backend.research import ProviderFailure
@@ -267,9 +267,12 @@ def bootstrap():
                 )
             print("Existing isolated fixture manifest retained")
             return
+        organization = Organization(name="Acceptance organization")
+        db.add(organization)
+        db.flush()
         workspaces = [
-            Workspace(name="Transport Acceptance"),
-            Workspace(name="Accounting Acceptance"),
+            Workspace(name="Transport Acceptance", organization_id=organization.id),
+            Workspace(name="Accounting Acceptance", organization_id=organization.id),
         ]
         db.add_all(workspaces)
         db.flush()
@@ -283,6 +286,8 @@ def bootstrap():
             db.flush()
             for w in workspaces:
                 db.add(Membership(workspace_id=w.id, user_id=actor.id, role=role))
+            if role == "ADMIN":
+                db.add(OrganizationMembership(organization_id=organization.id, user_id=actor.id, role="OWNER"))
             accounts[role] = {"email": email, "password": password}
         outsider_password = secrets.token_urlsafe(24)
         outsider = User(

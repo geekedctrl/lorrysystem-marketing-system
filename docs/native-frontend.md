@@ -1,5 +1,7 @@
 # Native marketing frontend
 
+Current organization ownership, workspace creation, and Settings behavior are documented in [native-settings-organizations.md](native-settings-organizations.md). The historical implementation notes below describe the earlier single-workspace setup model.
+
 Implemented in the isolated `geekedctrl/redesign-frontend` branch against the 11 October 2026 native backend handoff and OpenAPI snapshot. The native backend implementation is in the separate `rebuild/python-backend` checkout at checkpoint `721a44f`. This frontend branch does not contain that backend. Older campaign roadmap and legacy API notes are historical context for this work.
 
 ## Backend support integration — 11 October 2026

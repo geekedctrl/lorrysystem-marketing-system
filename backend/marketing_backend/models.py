@@ -48,11 +48,59 @@ class LoginAttempt(Base):
 class Workspace(Base):
     __tablename__ = "workspaces"
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     automation_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     automation: Mapped[dict] = mapped_column(JSONB, default=dict)
     next_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (CheckConstraint("role IN ('OWNER','ADMIN','MEMBER')"),)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(12))
+
+
+class WorkspaceCreation(Base):
+    __tablename__ = "workspace_creations"
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    request_hash: Mapped[str] = mapped_column(String(64))
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id"))
+    email: Mapped[str] = mapped_column(String(254))
+    role: Mapped[str] = mapped_column(String(12))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProviderConnection(Base):
+    __tablename__ = "provider_connections"
+    __table_args__ = (CheckConstraint("kind IN ('MODEL','SEARCH')"),)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(8), primary_key=True)
+    secret_ciphertext: Mapped[str] = mapped_column(Text)
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ExecutorOwnership(Base):
