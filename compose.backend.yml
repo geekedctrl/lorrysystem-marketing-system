@@ -27,6 +27,7 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://backend_api:${BACKEND_API_DB_PASSWORD}@backend-db:5432/marketing_rebuild
       SENDER_CREDENTIAL_ENCRYPTION_KEY: ${SENDER_CREDENTIAL_ENCRYPTION_KEY:-}
       OWNERSHIP_PREFLIGHT_TOKEN: ${OWNERSHIP_PREFLIGHT_TOKEN:-}
       OWNERSHIP_CUTOVER_READY: ${OWNERSHIP_CUTOVER_READY:-false}
