@@ -619,12 +619,35 @@
       "Outreach",
       "Activity",
     ];
-    let html = `<button data-page="leads">← Back to leads</button><div class="grid">${card(l.company_name, `${link(l.website, "Official website")}<p>${run ? badge(run.status) : "Preparation not started"}</p>`)}${card("Primary contact", contact ? `<strong>${esc(contact.name)}</strong><p>${esc(contact.role)}<br>${esc(contact.email || "No supported email")}</p>` : empty("No supported primary contact selected yet."))}</div><div class="tabs" role="tablist" aria-label="Lead sections">${tabs.map((t, i) => `<button id="tab-${i}" role="tab" aria-controls="lead-panel" aria-selected="${t === state.tab}" tabindex="${t === state.tab ? 0 : -1}" data-tab="${t}">${t}</button>`).join("")}</div><section id="lead-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(state.tab)}">`;
+    const stages = [
+      { name: "Research", result: "RESEARCH", tab: "Research", detail: "Company evidence" },
+      { name: "Contact review", result: "CONTACT_SEARCH", tab: "People", detail: "Public contacts", ready: Boolean(contact) },
+      { name: "Qualification", result: "SCORING", tab: "Qualification", detail: "Fit assessment" },
+      { name: "Product fit", result: "MATCHING", tab: "Qualification", detail: "Offering match" },
+      { name: "Outreach draft", result: "DRAFTING", tab: "Outreach", detail: "Human review" },
+    ];
+    const stageMarkup = stages.map((stage, i) => {
+      const complete = Boolean(results[stage.result]) && (stage.ready !== false);
+      const active = !complete && run && ["RUNNING", "PENDING"].includes(run.status) &&
+        (i === 0 || stages.slice(0, i).every((prior) => results[prior.result]));
+      const stageState = complete ? "Complete" : active ? "In progress" : "Not started";
+      return `<button class="lead-stage ${complete ? "is-complete" : ""} ${active ? "is-active" : ""}" data-tab="${stage.tab}" aria-label="${stage.name}: ${stageState}"><span class="lead-stage-number">${complete ? "✓" : String(i + 1).padStart(2, "0")}</span><span class="lead-stage-copy"><strong>${stage.name}</strong><small>${stage.detail}</small><small class="lead-stage-status">${stageState}</small></span></button>`;
+    }).join("");
+    const score = results.SCORING?.score;
+    const updated = run?.created_at || l.created_at;
+    const dateLabel = (value) => {
+      if (!value) return "No activity";
+      const date = new Date(value);
+      return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+    };
+    let html = `<a class="lead-back" href="#leads" data-page="leads">← All leads</a><header class="lead-hero"><div class="lead-hero-main"><div class="lead-kicker">LEAD PROFILE</div><h2>${esc(l.company_name)}</h2><div class="lead-hero-links">${link(l.website, "Visit company website")}${contact?.role ? `<span>·</span><span>${esc(contact.role)}</span>` : ""}</div></div><div class="lead-hero-status">${run ? badge(run.status) : '<span class="badge">Not prepared</span>'}${run?.stop_reason ? `<span class="muted">${esc(label(run.stop_reason))}</span>` : ""}</div></header><section class="lead-metrics" aria-label="Lead summary">${[["Fit score", score == null ? "—" : `${score}/100`], ["Preparation", run ? label(run.status) : "Not started"], ["Priority", score == null ? "Unscored" : score >= 70 ? "High fit" : score >= 40 ? "Review" : "Low fit"], ["Primary contact", contact?.name || "Not selected"], ["Last activity", dateLabel(updated)]].map(([name, value]) => `<div class="lead-metric"><span>${name}</span><strong>${esc(value)}</strong></div>`).join("")}</section><section class="lead-stage-panel" aria-labelledby="lead-stages-title"><div class="lead-section-heading"><div><span class="lead-kicker">WORKFLOW</span><h3 id="lead-stages-title">Preparation stages</h3></div><span class="muted">${stages.filter((s) => results[s.result] && s.ready !== false).length} of ${stages.length} complete</span></div><nav class="lead-stages" aria-label="Preparation stages">${stageMarkup}</nav></section><div class="lead-context-grid"><article class="lead-context-card"><span class="lead-kicker">COMPANY</span><h3>${esc(l.company_name)}</h3><p>${link(l.website, "Official website")}</p></article><article class="lead-context-card"><span class="lead-kicker">PRIMARY CONTACT</span>${contact ? `<h3>${esc(contact.name)}</h3><p>${esc(contact.role || "Role not established")}${contact.email ? ` · ${esc(contact.email)}` : ""}</p>` : `<h3>Contact review needed</h3><p>No supported primary contact has been selected.</p>`}<button class="text-action" data-tab="People">Review people →</button></article></div><div class="tabs" role="tablist" aria-label="Lead sections">${tabs.map((t, i) => `<button id="tab-${i}" role="tab" aria-controls="lead-panel" aria-selected="${t === state.tab}" tabindex="${t === state.tab ? 0 : -1}" data-tab="${t}">${t}</button>`).join("")}</div><section id="lead-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(state.tab)}">`;
     if (state.tab === "Overview")
       html += card(
         "Preparation",
         `<p>${run?.stop_reason ? esc(label(run.stop_reason)) : "Prepare this lead to collect evidence, qualify fit, and create a draft for review."}</p>${canWork() ? command(`leads/${l.id}/prepare`, "Start fresh preparation", {}, !d.operations.enabled) : ""}${!d.operations.enabled ? "<p>Automation is paused. Ask an administrator to resume it.</p>" : ""}<p class="muted">Stage results arrive progressively. Partial evidence remains available if work stops.</p>`,
       );
+    if (state.tab !== "Overview" && canWork())
+      html += `<div class="lead-page-action">${command(`leads/${l.id}/prepare`, "Start fresh preparation", {}, !d.operations.enabled)}</div>`;
     if (state.tab === "Research") {
       const r = results.RESEARCH;
       html += r
