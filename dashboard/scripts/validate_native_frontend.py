@@ -394,6 +394,16 @@ def browser_acceptance():
             assert page.get_by_label("Company name",exact=True).input_value()=="Synthetic new company"
             page.on("dialog",lambda dialog:dialog.accept())
             page.get_by_role("row").filter(has_text="Synthetic Haulage").get_by_role("button",name="Open lead",exact=True).click()
+            page.locator(".lead-hero").get_by_role("heading",name="Synthetic Haulage <script>alert(1)</script>",exact=True).wait_for()
+            assert page.get_by_role("navigation",name="Preparation stages").get_by_role("button").count()==5
+            assert page.get_by_text("75/100",exact=True).count()==1
+            page.screenshot(path=str(output/"lead-profile-desktop.png"),full_page=True)
+            page.set_viewport_size({"width":390,"height":844})
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Lead profile overflows at mobile width"
+            page.screenshot(path=str(output/"lead-profile-mobile.png"),full_page=True)
+            page.set_viewport_size({"width":1440,"height":1000})
+            page.get_by_role("navigation",name="Preparation stages").get_by_role("button",name="Qualification: Complete").click()
+            assert page.get_by_role("tab",name="Qualification",exact=True).get_attribute("aria-selected")=="true"
             page.get_by_role("button",name="Start fresh preparation").click()
             page.get_by_role("tab",name="Qualification",exact=True).click()
             page.get_by_text("Qualification has not completed yet.",exact=True).wait_for()
@@ -452,8 +462,8 @@ def browser_acceptance():
             page.get_by_role("button",name="Next page",exact=True).click()
             page.get_by_role("link",name="Older company 29",exact=True).wait_for()
             page.get_by_role("link",name="Older company 29",exact=True).click()
-            page.get_by_role("heading",name="Older company 29",exact=True).wait_for()
-            page.get_by_role("button",name="Back to leads",exact=False).click()
+            page.locator(".lead-hero").get_by_role("heading",name="Older company 29",exact=True).wait_for()
+            page.get_by_role("link",name="Leads",exact=True).click()
             page.get_by_role("link",name="Older company 29",exact=True).wait_for()
             page.get_by_label("Search companies",exact=True).fill("Older company 29")
             page.get_by_role("button",name="Apply filters",exact=True).click()
