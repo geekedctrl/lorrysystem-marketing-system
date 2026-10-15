@@ -269,7 +269,7 @@ def schedule(db):
             Workspace.next_discovery_at <= now(),
             ExecutorOwnership.owner == 'PYTHON', ExecutorOwnership.state == 'ACTIVE',
         )
-        .with_for_update(skip_locked=True)
+        .with_for_update(of=Workspace, skip_locked=True)
     ):
         active = db.scalar(
             select(Job.id).where(
