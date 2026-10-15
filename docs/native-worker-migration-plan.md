@@ -77,6 +77,8 @@ Before retirement, connect the dashboard to the replacement contracts, expose cu
 
 Select exactly one active executor per workspace. Disable/drain old n8n ownership before enabling the new executor against equivalent live data; the separate local database is not itself a cutover. Verify rollback can restore the old executor without duplicate preparation or messages.
 
+Legacy API preflight receives the legacy workspace UUID, while ownership rows live in the native database. It must resolve `legacy_identity_map` before checking a capability. A missing identity mapping fails closed and prevents a reliable rollback. Do not mark reconciliation complete or activate Python until the legacy workspace, catalog, pending jobs and active leases have been reconciled with the mapped native workspace.
+
 PRs always target `develop`; local acceptance precedes DEV release. Production release is a separate decision. Do not disable n8n until parity, migration, dashboard readiness and executor ownership are verified.
 
 ## Progress reporting
