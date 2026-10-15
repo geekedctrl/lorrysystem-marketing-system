@@ -126,6 +126,22 @@ small,
   gap: 6px;
   margin: 0;
 }
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+  max-width: 100%;
+}
+.settings-nav button[aria-current="page"] {
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-weight: 650;
+}
+.workspace-controls select { max-width: 100%; }
+.workspace-controls button { width: 100%; margin-top: 8px; }
+.sender-enabled { display: flex; align-items: center; gap: 8px; }
+.sender-enabled input[type="checkbox"] { width: auto; margin: 0; }
 .discovery-toolbar {
   display: flex;
   justify-content: space-between;

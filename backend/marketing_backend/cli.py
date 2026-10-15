@@ -1,7 +1,7 @@
 import argparse, getpass
 from sqlalchemy import select
 from .db import Session
-from .models import User, Workspace, Membership
+from .models import User, Workspace, Membership, Organization, OrganizationMembership
 from .auth import hash_password
 
 
@@ -42,7 +42,11 @@ def main():
             db.flush()
         workspace = db.scalar(select(Workspace).where(Workspace.name == args.workspace))
         if not workspace and args.command == "bootstrap":
-            workspace = Workspace(name=args.workspace)
+            organization = Organization(name=args.workspace)
+            db.add(organization)
+            db.flush()
+            db.add(OrganizationMembership(organization_id=organization.id, user_id=actor.id, role="OWNER"))
+            workspace = Workspace(name=args.workspace, organization_id=organization.id)
             db.add(workspace)
             db.flush()
         if not workspace:

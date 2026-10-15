@@ -5,6 +5,10 @@
   const state = {
     csrf: "",
     workspaces: [],
+    organizations: [],
+    organization: null,
+    settingsSection: "account",
+    workspaceDraft: null,
     workspace: null,
     page: "overview",
     lead: null,
@@ -203,12 +207,30 @@
       }
     };
   }
+  function organizationEmpty() {
+    const canCreate = ["OWNER", "ADMIN"].includes(state.organization?.role);
+    app.innerHTML = `<main id="content" class="login" tabindex="-1">${card("No workspace in this organization", `<p>${esc(state.organization?.name)} has no workspace you can access.</p><button id="empty-create" class="primary" ${canCreate ? "" : 'disabled title="Organization owner or administrator required"'}>Create workspace</button><button id="empty-settings">Organization settings or create another organization</button><label for="empty-org">Switch organization</label><select id="empty-org">${state.organizations.map((o) => `<option value="${esc(o.id)}" ${o.id === state.organization?.id ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select>`)}</main>`;
+    document.querySelector("#empty-create").onclick = () => createWorkspaceFlow();
+    document.querySelector("#empty-settings").onclick = () => { state.page = "settings"; state.settingsSection = "organization"; shell(); loadSettings(); };
+    document.querySelector("#empty-org").onchange = async (event) => {
+      try { const result = await request("/session/organization", "POST", { organization_id: event.target.value }, true); state.organization = result.organization; state.workspace = result.workspace; state.csrf = result.csrf; if (state.workspace) { shell(); load(); } else organizationEmpty(); }
+      catch (error) { notice(error.message); }
+    };
+  }
   function shell() {
-    const navItems = [["overview", "Overview", "overview"], ["leads", "Leads", "leads"], ["discovery", "Discovery", "discovery"], ["approvals", "Approvals", "approvals"], ["sending", "Outreach", "sending"], ["operations", "Activity & operations", "operations"], ...(isAdmin() ? [["setup", "Product setup", "setup"]] : [])];
-    const title = state.page === "lead" ? "Lead workspace" : label(state.page);
-    const subtitle = state.page === "overview" ? "Lead generation and outreach operations at a glance." : state.page === "lead" ? "Company research, qualification and outreach." : "Manage your lead generation workspace.";
-    const initials = (state.user?.email || "M").split("@")[0].split(/[._-]/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><a class="brand" href="#overview" data-page="overview"><span class="brand-mark">M</span><span>Marketing<small>Product operations</small></span></a><div class="workspace-controls"><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(label(state.workspace?.role))}</p></div><div class="nav-caption">WORKSPACE</div><nav>${navItems.map(([p, t, i]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${icon(i)}<span>${esc(t)}</span></a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}</small><button data-theme>${icon("setup")}<span>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</span></button><button id="logout">${icon("arrow")}<span>Sign out</span></button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><header class="native-topbar"><div class="topbar-title"><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">☰</button><div><h1 id="heading">${esc(title)}</h1><p>${esc(subtitle)}</p></div></div><div class="topbar-tools"><button data-theme class="theme-toggle" aria-label="Change theme" title="Change theme">◐</button><span class="account-avatar" aria-label="Signed in as ${esc(state.user?.email || "")}">${esc(initials)}</span></div></header><div id="view" aria-live="polite"></div></main></div>`;
+    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="organization">Organization</label><select id="organization">${state.organizations.map((o) => `<option value="${esc(o.id)}" ${o.id === state.organization?.id ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.filter((w) => w.organization_id === state.organization?.id).map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(state.organization?.name || "Organization")} · ${esc(label(state.workspace?.role))}</p><button type="button" id="create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button></div><nav>${(state.workspace ? [["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["sending", "Outreach"], ["operations", "Activity & operations"], ["settings", "Settings"]] : [["settings", "Settings"]]).map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${icon(p === "settings" ? "setup" : p)}<span>${esc(t)}</span></a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Can create workspaces" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><header class="native-topbar page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">Menu</button></header><div id="view" aria-live="polite"></div></main></div>`;
+    document.querySelector("#create-workspace").onclick = () => createWorkspaceFlow();
+    document.querySelector("#organization").onchange = async (event) => {
+      if (state.dirty && !confirm("Leave your unsaved changes and switch organization?")) { event.target.value = state.organization.id; return; }
+      resetRequests(); state.dirty = false;
+      try {
+        const result = await request("/session/organization", "POST", { organization_id: event.target.value }, true);
+        state.organization = result.organization; state.workspace = result.workspace; state.csrf = result.csrf;
+        state.data = {}; state.setup = null; state.page = "overview";
+        if (!state.workspace) { organizationEmpty(); return; }
+        shell(); await load();
+      } catch (error) { notice(error.message); await boot(); }
+    };
     document.querySelector("#workspace").onchange = async (e) => {
       const previous = state.workspace.id;
       if (
@@ -237,6 +259,7 @@
           true,
         );
         state.workspace = data.workspace;
+        state.organization = state.organizations.find((o) => o.id === data.workspace.organization_id) || state.organization;
         state.csrf = data.csrf;
         history.replaceState(null, "", "#overview");
         shell();
@@ -298,25 +321,75 @@
       }
     };
   }
-  async function boot() {
+  async function createWorkspaceFlow() {
+    const draft = state.workspaceDraft || { name: "", description: "", organization_id: state.organization?.id || "", idempotency_key: uid(), step: 0 };
+    state.workspaceDraft = draft;
+    async function draw(error = "") {
+      const choices = state.organizations.map((o) => `<option value="${esc(o.id)}" ${o.id === draft.organization_id ? "selected" : ""}>${esc(o.name)} · ${esc(o.role)}</option>`).join("");
+      app.innerHTML = `<main class="login" id="content" tabindex="-1">${card("Create workspace", `<p>Step ${draft.step + 1} of 2</p><form id="workspace-create">${draft.step === 0 ? `${field("name", "Workspace name", draft.name, "required minlength=2 maxlength=120")}${area("description", "Description (optional)", draft.description, "maxlength=2000")}` : `<p><strong>${esc(draft.name)}</strong></p><p>${esc(draft.description)}</p><label for="organization-choice">Organization</label><select id="organization-choice" name="organization_id">${choices}</select>${!choices ? `${field("organization_name", "New organization name", draft.organization_name || "", "required minlength=2 maxlength=120")}` : ""}`}<div class="error" role="alert" ${error ? "" : "hidden"}>${esc(error)}</div><div class="actions">${draft.step ? '<button type="button" id="workspace-back">Back</button>' : ""}<button class="primary">${draft.step ? "Create workspace" : "Continue"}</button><button type="button" id="workspace-cancel">Cancel</button></div></form>`)}</main>`;
+      document.querySelector("#workspace-cancel").onclick = () => { state.workspaceDraft = null; state.dirty = false; state.workspace ? shell() : boot(); if (state.workspace) load(); };
+      document.querySelector("#workspace-back")?.addEventListener("click", () => { draft.step = 0; draw(); });
+      document.querySelector("#workspace-create").onsubmit = async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        if (draft.step === 0) {
+          draft.name = form.elements.name.value.trim();
+          draft.description = form.elements.description.value.trim();
+          draft.step = 1;
+          draw();
+          return;
+        }
+        const submit = form.querySelector("button.primary");
+        submit.disabled = true;
+        try {
+          let oid = form.elements.organization_id?.value;
+          if (!oid) {
+            draft.organization_name = form.elements.organization_name.value.trim();
+            const org = await request("/settings/organizations", "POST", { name: draft.organization_name }, true);
+            state.organizations.push(org);
+            oid = org.id;
+            draft.organization_id = oid;
+          }
+          const created = await request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces`, "POST", { name: draft.name, description: draft.description, idempotency_key: draft.idempotency_key }, true);
+          state.workspaceDraft = null;
+          state.dirty = false;
+          state.organization = state.organizations.find((o) => o.id === oid);
+          await boot(created.id);
+          state.page = "settings";
+          state.settingsSection = "product";
+          history.replaceState(null, "", "#settings");
+          shell();
+          await load();
+        } catch (failure) { draw(failure.message); }
+      };
+    }
+    draw();
+  }
+
+  async function boot(preferredWorkspaceId = null) {
     try {
       const info = await request("/session", "GET", undefined, true);
       state.csrf = info.csrf;
       state.workspaces = info.workspaces;
+      state.organizations = info.organizations || [];
+      state.organization = state.organizations.find((o) => o.id === info.organization_id) || state.organizations[0] || null;
       state.user = info.user;
       if (!info.workspaces.length) {
-        app.innerHTML = `<main id="content" class="login">${card("No workspace access", "<p>Ask your administrator to grant access to a product workspace.</p><button id='empty-logout'>Sign out</button>")}</main>`;
+        if (state.organization) { state.workspace = null; organizationEmpty(); return; }
+        app.innerHTML = `<main id="content" class="login">${card("Get started", `<p>Create an organization and your first product workspace.</p><button id="empty-create" class="primary">Create workspace</button><button id='empty-logout'>Sign out</button>`)}</main>`;
+        document.querySelector("#empty-create").onclick = () => createWorkspaceFlow();
         document.querySelector("#empty-logout").onclick = async () => {
           await request("/session/logout", "POST", undefined, true);
           login();
         };
         return;
       }
-      const wid =
-        info.workspace_id &&
+      const available = info.workspaces.filter((w) => w.organization_id === state.organization?.id);
+      if (state.organization && !available.length && !preferredWorkspaceId) { state.workspace = null; organizationEmpty(); return; }
+      const wid = preferredWorkspaceId || (info.workspace_id &&
         info.workspaces.some((w) => w.id === info.workspace_id)
           ? info.workspace_id
-          : info.workspaces[0].id;
+          : (available[0] || info.workspaces[0]).id);
       const selected = await request(
         "/session/workspace",
         "POST",
@@ -324,6 +397,7 @@
         true,
       );
       state.workspace = selected.workspace;
+      state.organization = state.organizations.find((o) => o.id === state.workspace.organization_id) || state.organization;
       state.csrf = selected.csrf;
       shell();
       await load();
@@ -345,10 +419,108 @@
     await load();
     document.querySelector("#content")?.focus();
   }
+  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"]];
+  function settingsNav() {
+    return `<nav class="settings-nav" aria-label="Settings sections">${settingsTabs.filter(([id]) => state.workspace || ["account", "organization"].includes(id)).map(([id, title]) => `<button type="button" data-settings="${id}" ${state.settingsSection === id ? 'aria-current="page"' : ""}>${title}</button>`).join("")}</nav>`;
+  }
+  async function loadSettings() {
+    const view = document.querySelector("#view");
+    if (!view) return;
+    view.innerHTML = settingsNav() + empty("Loading settings…");
+    try {
+      const section = state.settingsSection;
+      const oid = state.workspace?.organization_id || state.organization?.id;
+      let html = "";
+      if (section === "account") {
+        const sessions = await request("/settings/auth/sessions", "GET", undefined, true);
+        html = card("Account", `<p>Signed in as <strong>${esc(state.user.email)}</strong></p><p>${sessions.length} active session${sessions.length === 1 ? "" : "s"}</p><form id="password-form">${field("current_password", "Current password", "", "required", "password")}${field("new_password", "New password (12 or more characters)", "", "required minlength=12", "password")}<div class="error" role="alert" hidden></div><button class="primary">Change password</button></form><button id="end-other">Sign out other sessions</button><h3>Accept an invitation</h3><form id="accept-invite">${field("token", "Invitation code", "", "required minlength=32")}<div class="error" role="alert" hidden></div><button>Accept invitation</button></form>`);
+      } else if (section === "organization") {
+        const [members, organizationWorkspaces] = oid ? await Promise.all([
+          request(`/settings/organizations/${encodeURIComponent(oid)}/members`, "GET", undefined, true),
+          request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces`, "GET", undefined, true),
+        ]) : [[], []];
+        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html += card("Manage organization", `<form id="organization-name">${field("name", "Organization name", state.organization?.name || "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Save name</button></form><h3>Member roles</h3>${members.map((m) => `<form data-org-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Role for ${esc(m.email)}" ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>${["MEMBER", "ADMIN", "OWNER"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""} ${role === "OWNER" && state.organization?.role !== "OWNER" ? "disabled" : ""}>${role}</option>`).join("")}</select><button ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>Save role</button><div class="error" role="alert" hidden></div></form>`).join("")}`);
+        html += card("Organization workspaces", organizationWorkspaces.map((w) => `<p>${esc(w.name)} · ${w.active ? "Active" : "Inactive"} ${!w.active ? `<button data-reactivate="${esc(w.id)}" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Reactivate</button>` : ""}</p>`).join("") || empty("Create a workspace to start product setup."));
+        html += card("Create another organization", `<form id="new-organization">${field("name", "New organization name", "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button>Create organization</button></form>`);
+      } else if (section === "workspace") {
+        const [profile, members] = await Promise.all([request("profile"), request("members")]);
+        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html += card("Workspace roles", members.map((m) => `<form data-workspace-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Workspace role for ${esc(m.email)}" ${!isAdmin() ? "disabled" : ""}>${["VIEWER", "REVIEWER", "OPERATOR", "ADMIN"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""}>${role}</option>`).join("")}</select><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save role</button><div class="error" role="alert" hidden></div></form>`).join(""));
+        html += card("Deactivate workspace", `<p>Pause access to this workspace and stop its automation. Its records are retained.</p><button id="deactivate-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Deactivate workspace</button>`);
+      } else if (section === "connections") {
+        const [status, senders] = await Promise.all([request("connections"), request("senders")]);
+        const modelDraft = (status.provider_drafts || []).find((p) => p.kind === "MODEL");
+        html = card("Connections", `<p>Automation connection: ${esc(status.automation)}</p><p>Provider connection: ${esc(status.model)}</p><p>Search connection: ${esc(status.search)}</p><p class="muted">Saved provider credentials remain disabled and unverified until separate calibration. Saving them does not call a provider.</p><h3>Senders</h3>${senders.map((s) => `<p><strong>${esc(s.name)}</strong> · ${s.enabled ? "Enabled" : "Disabled"} · ${s.verified_at ? "Verified" : "Unverified"}<br>${esc(s.from_email)} ${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</p>`).join("") || empty("No sender connection configured.")}<p class="muted">Credentials are encrypted and never displayed. A sender must be enabled and verified before use.</p>`);
+        html += card("Model provider", `<form data-command="provider-connections/MODEL" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Model connection draft</legend>${field("base_url", "Public HTTPS model endpoint", modelDraft?.settings?.base_url || "", "required maxlength=500", "url")}${field("model_name", "Model name", modelDraft?.settings?.model_name || "", "required maxlength=200")}${field("secret", "API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
+        html += card("Search provider", `<form data-command="provider-connections/SEARCH" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Search connection draft</legend>${field("secret", "Search API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
+        html += card("Add sender connection", `<form data-command="senders" data-sender><fieldset ${isAdmin() ? "" : "disabled"}><legend>Sender credentials</legend>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label for="sender-security">Security</label><select id="sender-security" name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label class="sender-enabled"><input type="checkbox" name="enabled"> Enabled after verification</label></fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Add sender</button></form>${isAdmin() ? "" : '<p class="muted">Workspace administrator required.</p>'}`);
+      }
+      view.innerHTML = settingsNav() + html;
+      document.querySelector("#settings-create-workspace")?.addEventListener("click", createWorkspaceFlow);
+      document.querySelector("#new-organization")?.addEventListener("submit", async (event) => {
+        event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+        try {
+          const org = await request("/settings/organizations", "POST", Object.fromEntries(new FormData(form)), true);
+          state.organizations.push(org); state.dirty = false;
+          const selected = await request("/session/organization", "POST", { organization_id: org.id }, true);
+          state.organization = selected.organization; state.workspace = selected.workspace; state.csrf = selected.csrf;
+          organizationEmpty();
+        } catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
+      });
+      document.querySelector("#deactivate-workspace")?.addEventListener("click", async () => {
+        if (!confirm(`Deactivate ${state.workspace.name}?`)) return;
+        try { await request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces/${encodeURIComponent(state.workspace.id)}/status`, "PATCH", { active: false }, true); state.dirty = false; await boot(); }
+        catch (error) { notice(error.message); }
+      });
+      for (const button of document.querySelectorAll("[data-reactivate]")) button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces/${encodeURIComponent(button.dataset.reactivate)}/status`, "PATCH", { active: true }, true); await boot(); notice("Workspace reactivated."); }
+        catch (error) { notice(error.message); button.disabled = false; }
+      });
+      document.querySelector("#organization-name")?.addEventListener("submit", async (event) => {
+        event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+        try { const org = await request(`/settings/organizations/${encodeURIComponent(oid)}`, "PUT", Object.fromEntries(new FormData(form)), true); state.organization.name = org.name; state.dirty = false; await loadSettings(); notice("Organization saved."); }
+        catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
+      });
+      for (const form of document.querySelectorAll("[data-org-member],[data-workspace-member]")) form.addEventListener("submit", async (event) => {
+        event.preventDefault(); const button = form.querySelector("button"); button.disabled = true;
+        const endpoint = form.dataset.orgMember ? `/settings/organizations/${encodeURIComponent(oid)}/members/${encodeURIComponent(form.dataset.orgMember)}` : `members/${encodeURIComponent(form.dataset.workspaceMember)}`;
+        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); state.dirty = false; await loadSettings(); notice("Role saved."); }
+        catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
+      });
+      for (const [id, endpoint] of [["invite-org", `/settings/organizations/${encodeURIComponent(oid)}/invitations`], ["invite-workspace", `/settings/workspaces/${encodeURIComponent(state.workspace?.id || "")}/invitations`]]) {
+        document.querySelector(`#${id}`)?.addEventListener("submit", async (event) => {
+          event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+          try { const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true); document.querySelector("#invitation-result").textContent = `Share this invitation code securely: ${invitation.token}`; form.reset(); state.dirty = false; }
+          catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; }
+          finally { button.disabled = false; }
+        });
+      }
+      document.querySelector("#accept-invite")?.addEventListener("submit", async (event) => {
+        event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+        try { await request("/settings/invitations/accept", "POST", Object.fromEntries(new FormData(form)), true); state.dirty = false; await boot(); notice("Invitation accepted."); }
+        catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
+      });
+      document.querySelector("#password-form")?.addEventListener("submit", async (event) => {
+        event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+        try { await request("/settings/auth/password", "POST", Object.fromEntries(new FormData(form)), true); form.reset(); state.dirty = false; notice("Password changed. Other sessions were signed out."); }
+        catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; }
+        finally { button.disabled = false; }
+      });
+      document.querySelector("#end-other")?.addEventListener("click", async () => { try { await request("/settings/auth/sessions/other", "DELETE", undefined, true); loadSettings(); } catch (e) { notice(e.message); } });
+      document.querySelector("#workspace-profile")?.addEventListener("submit", async (event) => {
+        event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
+        try { const profile = await request("profile", "PUT", Object.fromEntries(new FormData(form))); state.workspace.name = profile.name; state.dirty = false; state.workspaces.find((w) => w.id === profile.id).name = profile.name; shell(); await loadSettings(); notice("Workspace saved."); }
+        catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
+      });
+    } catch (error) { view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`; }
+  }
   async function load(poll = false) {
     const view = document.querySelector("#view"),
       epoch = state.epoch;
     if (!view) return;
+    if (state.page === "settings" && !["product", "automation"].includes(state.settingsSection)) return loadSettings();
     if (!poll) view.innerHTML = empty("Loading workspace records…");
     try {
       const query = new URLSearchParams({ limit: "25" });
@@ -475,9 +647,9 @@
           ),
         );
       const actionTitle = pending.length ? "Review pending outreach" : stops.length ? "Review preparation needs" : d.catalog.some((x) => x.kind === "PRODUCT") && d.operations.enabled ? "Find your next customers" : "Set up your workspace";
-      const actionCopy = pending.length ? "Preparation runs stop for human approval. Approved outreach is not sent automatically." : stops.length ? "Some lead preparations need attention before they can continue." : !d.operations.enabled ? "Automation is paused. An administrator can resume it from Product setup." : "Discover suitable companies, review their evidence, and prepare the next conversation.";
-      const actionPage = pending.length ? "approvals" : stops.length ? "leads" : d.catalog.some((x) => x.kind === "PRODUCT") ? "discovery" : "setup";
-      const actionLabel = pending.length ? "Open approval queue" : stops.length ? "Review leads" : actionPage === "setup" ? "Configure product" : "Find companies";
+      const actionCopy = pending.length ? "Preparation runs stop for human approval. Approved outreach is not sent automatically." : stops.length ? "Some lead preparations need attention before they can continue." : !d.operations.enabled ? "Automation is paused. An administrator can resume it from Settings." : "Discover suitable companies, review their evidence, and prepare the next conversation.";
+      const actionPage = pending.length ? "approvals" : stops.length ? "leads" : d.catalog.some((x) => x.kind === "PRODUCT") ? "discovery" : "settings";
+      const actionLabel = pending.length ? "Open approval queue" : stops.length ? "Review leads" : actionPage === "settings" ? "Configure product" : "Find companies";
       const approvalRows = pending.slice(0, 3).map((a) => {
         const snapshot = a.snapshot || {}, draftValue = snapshot.draft || snapshot.DRAFTING || snapshot;
         const company = snapshot.inputs?.company?.company_name || snapshot.company?.company_name || "Company awaiting review";
@@ -494,7 +666,7 @@
         const status = a.status === "PENDING" ? "PENDING APPROVAL" : label(a.status).toUpperCase();
         return `<tr><td><strong>${esc(company)}</strong></td><td>${esc(label(draftValue.channel || "EMAIL"))}</td><td>${esc(draftValue.subject || "Outreach draft")}</td><td><span class="overview-pill ${a.status === "APPROVED" ? "is-approved" : a.status === "PENDING" ? "is-pending" : ""}">${esc(status)}</span></td><td>${esc(a.created_at ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(a.created_at)) : "—")}</td></tr>`;
       }).join("");
-      view.innerHTML = `<section class="overview-hero"><div class="overview-hero-copy"><span class="overview-eyebrow">YOUR NEXT ACTION</span><h2>${esc(actionTitle)}</h2><p>${esc(actionCopy)}</p></div><button class="overview-hero-action" data-page="${actionPage}">${esc(actionLabel)} ${icon("arrow")}</button></section><section class="overview-metrics" aria-label="Workspace summary"><article class="overview-metric metric-leads"><span>Active leads</span><strong>${esc(d.leadPage.total)}</strong><small>Companies in this workspace</small></article><article class="overview-metric metric-approvals"><span>Pending approvals</span><strong>${esc(pending.length)}</strong><small>Drafts waiting for review</small></article><article class="overview-metric metric-drafts"><span>Recent drafts</span><strong>${esc(d.approvals.length)}</strong><small>Latest ${d.approvals.length === 100 ? "100" : d.approvals.length} drafts</small></article><article class="overview-metric metric-approved"><span>Recently approved</span><strong>${esc(approved.length)}</strong><small>In recent review history</small></article></section><div class="overview-columns"><section class="overview-panel"><header class="overview-panel-heading"><h2>Recent leads</h2><button data-page="leads">View all ${icon("arrow")}</button></header><div class="overview-list">${leadRows || '<p class="overview-empty">No leads yet. Discover companies to get started.</p>'}</div></section><section class="overview-panel"><header class="overview-panel-heading"><h2>Pending approvals</h2><button data-page="approvals">Open queue ${icon("arrow")}</button></header><div class="overview-list">${approvalRows || '<p class="overview-empty">You’re all caught up. New drafts will appear here for review.</p>'}</div></section></div><section class="overview-panel overview-activity"><header class="overview-panel-heading"><div><h2>Recent outreach</h2><p>Draft activity and review decisions. Approval does not send messages.</p></div><button data-page="approvals">View all ${icon("arrow")}</button></header>${activityRows ? `<div class="overview-table-wrap"><table class="overview-table"><thead><tr><th>COMPANY</th><th>CHANNEL</th><th>SUBJECT</th><th>STATUS</th><th>CREATED</th></tr></thead><tbody>${activityRows}</tbody></table></div>` : '<p class="overview-empty">Outreach activity will appear after a draft is prepared.</p>'}</section>`;
+      view.innerHTML = `<section class="overview-hero"><div class="overview-hero-copy"><span class="overview-eyebrow">YOUR NEXT ACTION</span><h2>${esc(actionTitle)}</h2><p>${esc(actionCopy)}</p></div><button class="overview-hero-action" data-page="${actionPage}" ${actionPage === "settings" ? 'data-section="product"' : ""}>${esc(actionLabel)} ${icon("arrow")}</button></section><section class="overview-metrics" aria-label="Workspace summary"><article class="overview-metric metric-leads"><span>Active leads</span><strong>${esc(d.leadPage.total)}</strong><small>Companies in this workspace</small></article><article class="overview-metric metric-approvals"><span>Pending approvals</span><strong>${esc(pending.length)}</strong><small>Drafts waiting for review</small></article><article class="overview-metric metric-drafts"><span>Recent drafts</span><strong>${esc(d.approvals.length)}</strong><small>Latest ${d.approvals.length === 100 ? "100" : d.approvals.length} drafts</small></article><article class="overview-metric metric-approved"><span>Recently approved</span><strong>${esc(approved.length)}</strong><small>In recent review history</small></article></section><div class="overview-columns"><section class="overview-panel"><header class="overview-panel-heading"><h2>Recent leads</h2><button data-page="leads">View all ${icon("arrow")}</button></header><div class="overview-list">${leadRows || '<p class="overview-empty">No leads yet. Discover companies to get started.</p>'}</div></section><section class="overview-panel"><header class="overview-panel-heading"><h2>Pending approvals</h2><button data-page="approvals">Open queue ${icon("arrow")}</button></header><div class="overview-list">${approvalRows || '<p class="overview-empty">You’re all caught up. New drafts will appear here for review.</p>'}</div></section></div><section class="overview-panel overview-activity"><header class="overview-panel-heading"><div><h2>Recent outreach</h2><p>Draft activity and review decisions. Approval does not send messages.</p></div><button data-page="approvals">View all ${icon("arrow")}</button></header>${activityRows ? `<div class="overview-table-wrap"><table class="overview-table"><thead><tr><th>COMPANY</th><th>CHANNEL</th><th>SUBJECT</th><th>STATUS</th><th>CREATED</th></tr></thead><tbody>${activityRows}</tbody></table></div>` : '<p class="overview-empty">Outreach activity will appear after a draft is prepared.</p>'}</section>`;
     } else if (state.page === "leads")
       view.innerHTML = card(
         "Companies",
@@ -513,6 +685,21 @@
         ) +
         card("Accepted companies", leadTable(d.leads));
     else if (state.page === "setup") renderSetup();
+    else if (state.page === "settings" && state.settingsSection === "product" && !isAdmin()) {
+      view.innerHTML = settingsNav() + card("Product", `<p>${esc(d.operations.preferences?.product_description || "Product setup has not been completed.")}</p><h3>Target customers</h3><p>${esc(d.operations.preferences?.target_customers || "Not defined yet")}</p><h3>Offerings and targeting profiles</h3>${d.catalog.map((c) => `<p>${esc(c.name)} · ${esc(c.kind)}<br>${esc(c.description)}</p>`).join("") || empty("No offerings or targeting profiles yet.")}<p>Activation: ${d.operations.enabled ? "Active" : "Paused or incomplete"}</p><p class="muted">A workspace administrator can change product setup.</p>`);
+    }
+    else if (state.page === "settings") {
+      renderSetup();
+      document.querySelector("#view").insertAdjacentHTML("afterbegin", settingsNav());
+      const cards = [...document.querySelectorAll("#view .setup > .card")];
+      if (state.settingsSection === "product") cards[1]?.setAttribute("hidden", "");
+      if (state.settingsSection === "automation") {
+        cards[0]?.setAttribute("hidden", ""); cards[2]?.setAttribute("hidden", ""); cards[3]?.setAttribute("hidden", "");
+        if (!isAdmin()) document.querySelector("#view").insertAdjacentHTML("beforeend", card("Automation controls", `<p>${d.operations.enabled ? "Active" : "Paused"}</p><button disabled title="Workspace administrator required">Pause or resume</button>`));
+        document.querySelector("#view").insertAdjacentHTML("beforeend", card("Discovery preferences", `<form data-command="automation/preferences" data-method="PUT">${field("batch_size", "Maximum companies per batch", d.operations.preferences?.batch_size || 3, "required min=1 max=10 step=1", "number")}<div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save preferences</button></form><p class="muted">These preferences apply to future batches.</p>`));
+        document.querySelector("#view").insertAdjacentHTML("beforeend", card("Job health", `<p>Next discovery: ${esc(d.operations.next_discovery_at || "Not scheduled")}</p>${jobCards(d.jobs)}`));
+      }
+    }
     else if (state.page === "lead") renderLead();
     else if (state.page === "approvals")
       view.innerHTML = card(
@@ -635,10 +822,8 @@
   }
   function renderSending() {
     const d = state.data;
-    const senderSetup = isAdmin() ? `<details><summary>Add SMTP sender</summary><form data-command="senders" data-sender>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label>Security</label><select name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label><input type="checkbox" name="enabled"> Enabled after verification</label><div class="error" hidden role="alert"></div><button>Add sender</button></form></details>` : "";
-    const senderRows = d.senders.map((s) => `<article class="card"><strong>${esc(s.name)}</strong> ${badge(s.enabled ? "ENABLED" : "DISABLED")}<p>${esc(s.from_name)} · ${esc(s.from_email)}<br>${esc(s.host)}:${esc(s.port)} · ${esc(s.security)}</p><p class="muted">${s.verified_at ? "Verified " + esc(s.verified_at) : "Not verified"}. Password is never displayed.</p>${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</article>`).join("") || empty("No sender connections configured.");
     const suppressionForm = canWork() ? `<form data-command="email-suppressions">${field("email","Email address","","required maxlength=254","email")}<label>Reason</label><select name="reason"><option value="DO_NOT_CONTACT">Do not contact</option><option value="OPT_OUT">Opt out</option><option value="BOUNCE">Bounce</option></select><div class="error" hidden role="alert"></div><button>Add suppression</button></form>` : "";
-    document.querySelector("#view").innerHTML = card("Sender connections", `<p>Credentials are encrypted and redacted. Verification signs in but sends no message.</p>${senderRows}${senderSetup}`) + card("Delivery history", d.deliveries.length ? d.deliveries.map(deliveryControls).join("") : empty("No deliveries prepared.")) + card("Recipient suppressions", `${suppressionForm}${d.suppressions.map((s) => `<p>${esc(s.email)} · ${esc(label(s.reason))}</p>`).join("") || empty("No suppressed recipients.")}`);
+    document.querySelector("#view").innerHTML = card("Sender connection", `<p>${d.senders.length} configured. Manage credentials and verification in Settings.</p><button data-page="settings" data-section="connections">Open Connections</button>`) + card("Delivery history", d.deliveries.length ? d.deliveries.map(deliveryControls).join("") : empty("No deliveries prepared.")) + card("Recipient suppressions", `${suppressionForm}${d.suppressions.map((s) => `<p>${esc(s.email)} · ${esc(label(s.reason))}</p>`).join("") || empty("No suppressed recipients.")}`);
   }
   function renderLead() {
     const d = state.data,
@@ -1010,6 +1195,7 @@
       payload.port = Number(payload.port);
       payload.enabled = payload.enabled === "on";
     }
+    if (form.dataset.command === "automation/preferences") payload.batch_size = Number(payload.batch_size);
     if (/^(discovery|leads\/.+\/prepare)$/.test(form.dataset.command)) {
       form.dataset.key ||= uid();
       payload.idempotency_key = form.dataset.key;
@@ -1078,11 +1264,18 @@
       });
     }
     const page = e.target.closest("[data-page]"),
+      settings = e.target.closest("[data-settings]"),
       lead = e.target.closest("[data-lead]"),
       tab = e.target.closest("[data-tab]");
     if (page) {
       e.preventDefault();
+      if (page.dataset.section) state.settingsSection = page.dataset.section;
       navigate(page.dataset.page);
+    }
+    if (settings) {
+      state.settingsSection = settings.dataset.settings;
+      resetRequests();
+      load();
     }
     if (lead) {
       e.preventDefault();

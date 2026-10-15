@@ -11,6 +11,11 @@ from marketing_backend.models import (
     LoginSession,
     LoginAttempt,
     Workspace,
+    Organization,
+    OrganizationMembership,
+    WorkspaceCreation,
+    Invitation,
+    ProviderConnection,
     Membership,
     Catalog,
     Lead,
@@ -53,10 +58,15 @@ class BackendFixtures(unittest.TestCase):
                 Lead,
                 Catalog,
                 Membership,
+                Invitation,
+                ProviderConnection,
+                WorkspaceCreation,
+                OrganizationMembership,
                 ExecutorOwnership,
                 LoginSession,
                 LoginAttempt,
                 Workspace,
+                Organization,
                 User,
             ):
                 db.execute(delete(model))
@@ -69,10 +79,14 @@ class BackendFixtures(unittest.TestCase):
             b = User(
                 email="viewer@example.test", password_hash=hash_password(self.password)
             )
-            w = Workspace(name="Fleet")
-            other = Workspace(name="Accounting")
-            db.add_all([a, b, w, other])
+            org = Organization(name="Fixture organization")
+            db.add_all([a, b, org])
             db.flush()
+            w = Workspace(name="Fleet", organization_id=org.id)
+            other = Workspace(name="Accounting", organization_id=org.id)
+            db.add_all([w, other])
+            db.flush()
+            db.add(OrganizationMembership(organization_id=org.id, user_id=a.id, role="OWNER"))
             self.uid, self.wid, self.other = a.id, w.id, other.id
             db.query(ExecutorOwnership).filter(ExecutorOwnership.workspace_id.in_([w.id, other.id])).update({ExecutorOwnership.owner: "PYTHON"}, synchronize_session=False)
             db.add_all(

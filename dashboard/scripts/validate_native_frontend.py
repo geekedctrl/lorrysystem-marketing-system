@@ -80,7 +80,33 @@ class NativeFixture:
         if path == "/auth/me":
             return httpx.Response(200,json={"id":role,"email":role.lower()+"@example.com","expires_at":"2026-10-12T00:00:00Z","capabilities":{"create_workspace":False},"private_token":"must-not-reach-browser"})
         if path == "/workspaces":
-            return httpx.Response(200, json=[{"id": W1, "name": "Fleet product", "role": role}, {"id": W2, "name": "Education product", "role": role}])
+            return httpx.Response(200, json=[{"id": W1, "name": "Fleet product", "role": role, "organization_id": W1}, {"id": W2, "name": "Education product", "role": role, "organization_id": W2}])
+        if path == "/organizations":
+            return httpx.Response(200, json=[{"id": W1, "name": "Fleet organization", "role": "OWNER"}, {"id": W2, "name": "Education organization", "role": "OWNER"}])
+        if path == "/auth/sessions":
+            return httpx.Response(200, json=[{"current": True, "expires_at": NOW}])
+        if path == "/auth/password" and request.method == "POST":
+            return httpx.Response(204)
+        if path == "/auth/sessions/other" and request.method == "DELETE":
+            return httpx.Response(204)
+        if path in (f"/workspaces/{W1}/invitations", f"/workspaces/{W2}/invitations") and request.method == "POST":
+            return httpx.Response(201, json={"id": CID, "token": "synthetic-invitation-code-123456789012", "expires_at": NOW})
+        if path in (f"/organizations/{W1}/members", f"/organizations/{W2}/members"):
+            return httpx.Response(200, json=[{"user_id": W1, "email": "admin@example.test", "role": "OWNER"}])
+        if path in (f"/organizations/{W1}/workspaces", f"/organizations/{W2}/workspaces") and request.method == "GET":
+            wid = path.split("/")[2]
+            return httpx.Response(200, json=[{"id": wid, "name": "Fleet product" if wid == W1 else "Education product", "description": "", "active": True, "role": role}])
+        if path == f"/organizations/{W1}/workspaces" and request.method == "POST":
+            return httpx.Response(201, json={"id": W2, "name": body["name"], "organization_id": W1, "replayed": False})
+        if path in (f"/workspaces/{W1}/profile", f"/workspaces/{W2}/profile"):
+            wid = path.split("/")[2]
+            return httpx.Response(200, json={"id": wid, "organization_id": wid, "name": "Fleet product" if wid == W1 else "Education product", "description": "", "active": True, "role": role})
+        if path in (f"/workspaces/{W1}/members", f"/workspaces/{W2}/members"):
+            return httpx.Response(200, json=[{"user_id": W1, "email": "admin@example.test", "role": role}])
+        if path in (f"/workspaces/{W1}/connections", f"/workspaces/{W2}/connections"):
+            return httpx.Response(200, json={"automation": "configured", "model": "unavailable", "search": "unavailable", "senders": [], "provider_drafts": []})
+        if path in (f"/workspaces/{W1}/provider-connections/MODEL", f"/workspaces/{W2}/provider-connections/MODEL") and request.method == "PUT":
+            return httpx.Response(200, json={"kind": "MODEL", "status": "unverified", "settings": {"base_url": body["base_url"], "model_name": body["model_name"]}, "secret_present": True})
         parts = path.split("/")
         wid, suffix = parts[2], "/".join(parts[3:])
         if suffix=="leads/page":
@@ -121,6 +147,8 @@ class NativeFixture:
             return httpx.Response(404,json={"detail":"Candidate not found"})
         if suffix == "operations":
             return httpx.Response(200, json={"enabled": self.enabled[wid], "preferences": {"product_description": "Actual product with documented capabilities", "batch_size": 3}, "next_discovery_at": None, "stalled_jobs": [], "delayed_pending_jobs": [], "current_preparation": [self.run()], "provider_health": {}, "recent_provider_usage": [], "cost_basis": "Conservative reservations"})
+        if suffix == "automation/preferences" and request.method == "PUT":
+            return httpx.Response(200, json={"batch_size": body["batch_size"]})
         if suffix == "senders":
             if request.method == "POST":
                 assert body["password"] and isinstance(body["port"],int) and isinstance(body["enabled"],bool)
@@ -230,6 +258,24 @@ class BFFAcceptance(unittest.TestCase):
         self.assertNotIn("ADMIN", self.client.cookies.get("native_session"))
         self.assertEqual(self.client.post(f"/gateway/{W1}/discovery", json={"idempotency_key": "synthetic-key"}).status_code, 403)
 
+    def test_settings_creation_path_and_workspace_boundaries(self):
+        headers = self.sign_in()
+        self.assertEqual(len(self.client.get("/session").json()["organizations"]), 2)
+        self.assertEqual(self.client.post(f"/settings/organizations/{W1}/workspaces",
+                          json={"name": "New"}).status_code, 403)
+        created = self.client.post(f"/settings/organizations/{W1}/workspaces", headers=headers,
+                                   json={"name": "New", "idempotency_key": "synthetic-key"})
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.get(f"/gateway/{W1}/profile").status_code, 200)
+        self.assertEqual(self.client.get(f"/gateway/{W1}/connections").json()["model"], "unavailable")
+        self.assertEqual(self.client.put(f"/gateway/{W1}/automation/preferences", headers=headers,
+                                         json={"batch_size": 4}).json()["batch_size"], 4)
+        provider = self.client.put(f"/gateway/{W1}/provider-connections/MODEL", headers=headers,
+                                   json={"secret": "synthetic-secret", "base_url": "https://api.example.com/v1", "model_name": "model"})
+        self.assertEqual(provider.status_code, 200)
+        self.assertNotIn("synthetic-secret", provider.text)
+        self.assertEqual(self.client.get(f"/gateway/{W2}/profile").status_code, 409)
+
     def test_native_dashboard_deployment_routes(self):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual(response.status_code, 302)
@@ -246,6 +292,15 @@ class BFFAcceptance(unittest.TestCase):
         self.assertEqual(self.client.get(f"/gateway/{W1}/leads").status_code, 409)
         self.assertEqual(self.client.post(f"/gateway/{W2}/discovery", headers=headers, json={"idempotency_key": "synthetic-key"}).status_code, 403)
         self.assertEqual(self.client.get(f"/gateway/{W2}/leads").json()[0]["company_name"], "Synthetic Academy")
+
+    def test_organization_switch_keeps_selected_workspace_boundary(self):
+        headers = self.sign_in()
+        selected = self.client.post("/session/organization", headers=headers,
+                                    json={"organization_id": W2})
+        self.assertEqual(selected.status_code, 200)
+        self.assertEqual(selected.json()["workspace"]["id"], W2)
+        self.assertEqual(self.client.get(f"/gateway/{W1}/leads").status_code, 409)
+        self.assertEqual(self.client.get(f"/gateway/{W2}/leads").status_code, 200)
 
     def test_role_matrix(self):
         for role, work, setup, review in [("admin",True,True,True),("operator",True,False,False),("reviewer",False,False,True),("viewer",False,False,False)]:
@@ -366,6 +421,25 @@ def browser_acceptance():
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Overview overflows at mobile width"
             page.screenshot(path=str(output/"overview-mobile.png"),full_page=True)
             page.set_viewport_size({"width":1440,"height":1000})
+            page.get_by_role("link", name="Settings", exact=True).click()
+            for section, heading in [("Account", "Account"), ("Organization", "Organization"), ("Workspace", "Workspace"), ("Connections", "Connections")]:
+                page.get_by_role("button", name=section, exact=True).click()
+                page.get_by_role("heading", name=heading, exact=True).wait_for()
+            assert page.get_by_label("Connection name", exact=True).is_visible()
+            page.screenshot(path=str(output/"settings-connections-desktop.png"), full_page=True)
+            page.get_by_role("button", name="Workspace", exact=True).click()
+            page.get_by_role("heading", name="Workspace", exact=True).wait_for()
+            page.get_by_role("heading", name="Invite a teammate", exact=True).wait_for()
+            page.locator("#invite-workspace").get_by_label("Email").fill("teammate@example.test")
+            page.locator("#invite-workspace").get_by_role("button", name="Create invitation").click()
+            page.get_by_text("synthetic-invitation-code-123456789012").wait_for()
+            page.get_by_role("button", name="Account", exact=True).click()
+            page.get_by_label("Current password").fill("synthetic")
+            page.get_by_label("New password (12 or more characters)").fill("new-synthetic-password-123")
+            page.get_by_role("button", name="Change password").click()
+            page.get_by_text("Password changed. Other sessions were signed out.").wait_for()
+            page.get_by_role("button", name="Sign out other sessions").click()
+            page.get_by_role("link", name="Overview", exact=True).click()
             original_leads=len(fixture.leads[W1])
             page.get_by_role("link",name="Discovery",exact=True).click()
             page.get_by_role("heading",name="Synthetic Candidate Logistics",exact=True).wait_for()
@@ -376,16 +450,20 @@ def browser_acceptance():
             assert len(fixture.leads[W1])==original_leads+1
             assert fixture.candidates[W1][0]["status"]=="ACCEPTED"
             page.screenshot(path=str(output/"discovery-manual-acceptance.png"),full_page=True)
-            page.get_by_role("link",name="Product setup",exact=True).click()
+            page.get_by_role("link",name="Settings",exact=True).click()
+            page.get_by_role("button",name="Automation",exact=True).click()
             page.get_by_role("button",name="Pause automation",exact=True).click()
             page.get_by_role("button",name="Resume automation",exact=True).wait_for()
             page.get_by_role("button",name="Resume automation",exact=True).click()
             page.get_by_role("button",name="Pause automation",exact=True).wait_for()
+            page.get_by_role("button",name="Product",exact=True).click()
             page.get_by_role("button",name="Deactivate Fleet operations",exact=True).click()
             page.get_by_role("button",name="Reactivate Fleet operations",exact=True).wait_for()
             page.get_by_role("button",name="Reactivate Fleet operations",exact=True).click()
+            page.get_by_role("button",name="Automation",exact=True).click()
             page.get_by_role("button",name="Resume automation",exact=True).click()
             page.get_by_role("button",name="Pause automation",exact=True).wait_for()
+            page.get_by_role("button",name="Product",exact=True).click()
             page.get_by_label("Describe the real product").fill("A real synthetic product with documented operations capabilities")
             page.get_by_role("button",name="Continue",exact=True).click();page.get_by_role("button",name="Continue",exact=True).click()
             fixture.fail_activation=True
@@ -439,7 +517,7 @@ def browser_acceptance():
             page.get_by_role("tab",name="Activity",exact=True).focus();page.keyboard.press("Home");assert page.get_by_role("tab",name="Overview",exact=True).get_attribute("aria-selected")=="true"
             fixture.status="PENDING_APPROVAL";fixture.stale=True
             page.get_by_role("link",name="Approvals",exact=True).click();assert page.get_by_role("button",name="Approve draft",exact=True).is_disabled()
-            page.locator("#workspace").select_option(W2);page.locator(".native-topbar h1").get_by_text("Overview").wait_for();assert "Synthetic Haulage" not in page.locator("#view").inner_text()
+            page.locator("#organization").select_option(W2);page.locator(".native-topbar h1").get_by_text("Overview").wait_for();assert "Synthetic Haulage" not in page.locator("#view").inner_text()
             page.get_by_role("link",name="Leads",exact=True).click();page.get_by_text("Synthetic Academy",exact=True).wait_for()
             fixture.job_status="FAILED"
             page.get_by_role("link",name="Activity & operations",exact=True).click()
@@ -455,7 +533,7 @@ def browser_acceptance():
             page.get_by_role("button",name="Sign out",exact=True).click();page.get_by_role("heading",name="Welcome back").wait_for()
             for role in ["operator","reviewer","viewer"]:
                 page.get_by_label("Email",exact=True).fill(role+"@example.com");page.get_by_label("Password").fill("synthetic");page.get_by_role("button",name="Sign in",exact=True).click();page.locator(".native-topbar h1").get_by_text("Overview").wait_for()
-                assert page.get_by_role("link",name="Product setup",exact=True).count()==0
+                assert page.get_by_role("link",name="Settings",exact=True).count()==1
                 page.get_by_role("link",name="Discovery",exact=True).click()
                 page.get_by_role("heading",name="Find your next customers",exact=True).wait_for()
                 assert page.get_by_role("button",name="Find leads",exact=True).count()==(1 if role=="operator" else 0)
@@ -502,8 +580,87 @@ def browser_acceptance():
         server.should_exit=True;thread.join(timeout=5);sock.close()
 
 
+def browser_creation_acceptance():
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    class EmptyFixture(NativeFixture):
+        def __init__(self):
+            super().__init__()
+            self.organizations = []
+            self.workspaces = []
+        def respond(self, request):
+            path = request.url.path
+            if request.method == "GET" and path == "/workspaces":
+                return httpx.Response(200, json=self.workspaces)
+            if request.method == "GET" and path == "/organizations":
+                return httpx.Response(200, json=self.organizations)
+            if request.method == "POST" and path == "/organizations":
+                body = json.loads(request.content)
+                org = {"id": W1, "name": body["name"], "role": "OWNER"}
+                self.organizations.append(org)
+                return httpx.Response(201, json=org)
+            if request.method == "POST" and path == f"/organizations/{W1}/workspaces":
+                body = json.loads(request.content)
+                self.workspaces.append({"id": W2, "name": body["name"], "role": "ADMIN", "organization_id": W1})
+                return httpx.Response(201, json={"id": W2, "name": body["name"], "organization_id": W1, "replayed": False})
+            if request.method == "GET" and path.startswith(f"/workspaces/{W2}/"):
+                suffix = path.split(f"/workspaces/{W2}/", 1)[1]
+                if suffix == "operations":
+                    return httpx.Response(200, json={"enabled": False, "preferences": {}, "next_discovery_at": None, "current_preparation": [], "provider_health": {}, "recent_provider_usage": []})
+                if suffix == "leads/page":
+                    return httpx.Response(200, json={"items": [], "total": 0, "limit": 25, "next_cursor": None, "as_of": NOW})
+                if suffix in {"catalog", "catalog/all", "approvals", "jobs", "senders", "deliveries", "email-suppressions"}:
+                    return httpx.Response(200, json=[])
+            return super().respond(request)
+    fixture = EmptyFixture()
+    sock = socket.socket(); sock.bind(("127.0.0.1", 0)); port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(create_app(httpx.MockTransport(fixture.respond)), log_level="error"))
+    thread = threading.Thread(target=lambda: server.run(sockets=[sock]), daemon=True); thread.start()
+    for _ in range(100):
+        if server.started: break
+        time.sleep(.05)
+    try:
+        with sync_playwright() as p:
+            executable = os.getenv("FRONTEND_BROWSER", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+            browser = p.chromium.launch(executable_path=executable if Path(executable).exists() else None, headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{port}")
+            page.get_by_label("Email", exact=True).fill("new@example.test")
+            page.get_by_label("Password").fill("synthetic")
+            page.get_by_role("button", name="Sign in", exact=True).click()
+            page.get_by_role("heading", name="Get started").wait_for()
+            page.get_by_role("button", name="Create workspace").click()
+            page.get_by_label("Workspace name").fill("New synthetic workspace")
+            page.get_by_label("Description (optional)").fill("Synthetic setup")
+            page.get_by_role("button", name="Continue").click()
+            page.get_by_label("New organization name").fill("New synthetic organization")
+            page.get_by_role("button", name="Create workspace").click()
+            try:
+                page.get_by_role("heading", name="Product setup").wait_for(timeout=5000)
+            except Exception:
+                print("Creation page:", page.locator("body").inner_text())
+                print("Creation errors:", errors)
+                print("Created workspaces:", fixture.workspaces)
+                print("API calls:", fixture.calls[-30:])
+                raise
+            assert fixture.workspaces[0]["id"] == W2
+            assert not errors, errors
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            output = Path(__file__).resolve().parents[2]/"tmp/native-ui-review"
+            output.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(output/"workspace-created-mobile.png"), full_page=True)
+            browser.close()
+        print("Browser creation acceptance passed: empty state, two-step creation, selected setup and mobile width.")
+    finally:
+        server.should_exit = True; thread.join(timeout=5); sock.close()
+
+
 if __name__=="__main__":
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(BFFAcceptance)
     result=unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():sys.exit(1)
-    if "--browser" in sys.argv:browser_acceptance()
+    if "--browser" in sys.argv:
+        browser_acceptance()
+        browser_creation_acceptance()

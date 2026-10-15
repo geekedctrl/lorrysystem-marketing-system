@@ -45,11 +45,111 @@ class WorkspaceResponse(Public):
     id: UUID
     name: str
     role: Role
+    organization_id: UUID
 
 
 class WorkspaceCreated(Public):
     id: UUID
     name: str
+
+
+class OrganizationResponse(Public):
+    id: UUID
+    name: str
+    role: Literal["OWNER", "ADMIN", "MEMBER"]
+
+
+class OrganizationName(Public):
+    id: UUID
+    name: str
+
+
+class OrganizationMember(Public):
+    user_id: UUID
+    email: str
+    role: Literal["OWNER", "ADMIN", "MEMBER"]
+
+
+class OrganizationWorkspace(Public):
+    id: UUID
+    name: str
+    description: str
+    active: bool
+    role: Role | None
+
+
+class NewWorkspace(Public):
+    id: UUID
+    name: str
+    organization_id: UUID
+    replayed: bool
+
+
+class WorkspaceProfile(Public):
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: str
+    active: bool
+    role: Role
+
+
+class WorkspaceMember(Public):
+    user_id: UUID
+    email: str
+    role: Role
+
+
+class MemberRole(Public):
+    user_id: UUID
+    role: str
+
+
+class InvitationCreated(Public):
+    id: UUID
+    token: str
+    expires_at: datetime
+
+
+class InvitationAccepted(Public):
+    accepted: bool
+    organization_id: UUID
+    workspace_id: UUID | None
+
+
+class AccountSession(Public):
+    current: bool
+    expires_at: datetime
+
+
+class SenderStatus(Public):
+    id: UUID
+    name: str
+    status: Literal["disabled", "verified", "unverified"]
+
+
+class ProviderDraftStatus(Public):
+    kind: Literal["MODEL", "SEARCH"]
+    status: Literal["unverified"]
+    settings: dict[str, str]
+    secret_present: bool
+
+
+class ConnectionStatus(Public):
+    automation: Literal["disabled", "configured"]
+    model: Literal["configured", "unverified", "unavailable"]
+    search: Literal["configured", "unverified", "unavailable"]
+    senders: list[SenderStatus]
+    provider_drafts: list[ProviderDraftStatus]
+
+
+class WorkspaceStatus(Public):
+    id: UUID
+    active: bool
+
+
+class DiscoveryBatchSize(Public):
+    batch_size: int
 
 
 class CatalogResponse(Public):
