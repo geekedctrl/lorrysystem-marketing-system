@@ -4,7 +4,7 @@ import secrets
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from .auth import user, scope
 from .db import session
 from .models import ExecutorOwnership
@@ -62,13 +62,21 @@ def preflight(wid: UUID, capability: str, x_ownership_token: str = Header(defaul
     token = os.environ.get("OWNERSHIP_PREFLIGHT_TOKEN", "")
     if not token or not secrets.compare_digest(x_ownership_token, token):
         raise HTTPException(401, "Internal authentication required")
+    # The legacy application keeps its own workspace UUIDs. Resolve those
+    # through the explicit migration map before consulting native ownership;
+    # otherwise valid legacy IDs fail closed even after a deliberate cutover,
+    # and rollback cannot route claims back to n8n.
+    native_wid = db.execute(text("""SELECT native_id FROM legacy_identity_map
+      WHERE source_system='legacy-postgres' AND entity_type='workspace'
+        AND legacy_id=:legacy_id"""), {"legacy_id": str(wid)}).scalar_one_or_none()
+    ownership_wid = native_wid or wid
     if capability == "ALL":
-        rows = db.scalars(select(ExecutorOwnership).where(ExecutorOwnership.workspace_id == wid)).all()
+        rows = db.scalars(select(ExecutorOwnership).where(ExecutorOwnership.workspace_id == ownership_wid)).all()
         return {"allow_new_legacy_claim": any(r.owner == "N8N" and r.state == "ACTIVE" for r in rows),
                 "owner": "MIXED", "state": "ACTIVE", "version": max((r.version for r in rows), default=0)}
     if capability not in CAPABILITIES:
         raise HTTPException(404, "Unknown capability")
-    row = db.get(ExecutorOwnership, (wid, capability))
+    row = db.get(ExecutorOwnership, (ownership_wid, capability))
     if not row:
         if os.environ.get("APP_ENV") == "ci":
             return {"allow_new_legacy_claim": True, "allow_existing_legacy_lease": True, "owner": "N8N", "state": "ACTIVE", "version": 0}
