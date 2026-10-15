@@ -11,6 +11,7 @@ from .pipeline import domain
 from .providers import Providers
 from .research import PageText, normalize, ProviderFailure
 from .public_fetch import fetch_public, FetchError, checked_url
+from .github_public import enrich as github_enrich
 
 
 class Strict(BaseModel):
