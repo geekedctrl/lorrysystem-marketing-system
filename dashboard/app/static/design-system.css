@@ -1083,6 +1083,80 @@ html {
 .research-documented {
   color: var(--success);
 }
+
+/* Lead detail: keep the production summary hierarchy and surface DEV stages. */
+.lead-page .page-heading { min-width: 0; }
+.lead-page .heading-row { align-items: flex-start; gap: 24px; }
+.lead-page .topbar h1 { font-size: clamp(23px, 2vw, 29px); font-weight: 720; }
+.lead-page .heading-row > div:first-child p { margin-top: 6px; color: var(--muted); }
+.lead-page .heading-badges { justify-content: flex-end; align-items: center; gap: 8px; }
+.lead-page .detail-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+.lead-page .detail-metrics .metric-card {
+  min-height: 94px;
+  padding: 16px 18px;
+  justify-content: space-between;
+}
+.lead-page .detail-metrics .metric-card span { margin: 0; font-size: 11px; }
+.lead-page .detail-metrics .metric-card strong { margin: 8px 0 0; font-size: 24px; }
+.lead-page .detail-metrics .metric-card .small-strong { font-size: 14px; line-height: 1.35; }
+.lead-page .two-column { gap: 14px; margin: 0 0 18px; }
+.lead-page .two-column > .card { padding: 20px 22px; }
+.lead-page .two-column .card-head { margin-bottom: 14px; }
+.lead-page .details { gap: 10px; }
+.lead-page .details > div { gap: 16px; }
+.lead-page .details dt { color: var(--muted); font-weight: 550; }
+.lead-page .details dd { overflow-wrap: anywhere; }
+.lead-page .lead-stages {
+  gap: 9px;
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 82%, var(--surface-soft));
+  box-shadow: var(--shadow);
+}
+.lead-page .lead-stage {
+  min-height: 76px;
+  align-content: center;
+  padding: 12px 10px;
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 2px 5px rgba(24, 54, 41, .025);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.lead-page .lead-stage:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 38%, var(--line)); box-shadow: var(--shadow); }
+.lead-page .lead-stage > span { width: 27px; height: 27px; font-size: 11px; font-weight: 750; }
+.lead-page .lead-stage strong { color: var(--text); font-size: 11px; }
+.lead-page .lead-stage small { line-height: 1.35; }
+.lead-page .lead-stage-complete { border-color: color-mix(in srgb, var(--primary) 26%, var(--line)); background: var(--primary-soft); }
+.lead-page .lead-stage-complete > span { background: var(--primary); color: var(--on-primary); }
+.lead-page .section-tabs { margin-bottom: 17px; }
+.lead-page [data-tab-panel="lead"] { min-width: 0; }
+.lead-page .lead-campaign-card { padding: 22px; margin-bottom: 16px; }
+.lead-page .lead-campaign-card .card-head { align-items: flex-start; }
+.lead-page .lead-campaign-card h2 { margin-top: 4px; font-size: 17px; }
+.lead-page .lead-campaign-card > p { max-width: 760px; }
+.lead-page .lead-campaign-card form { margin-top: 14px; }
+@media (max-width: 1050px) {
+  .lead-page .detail-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lead-page .lead-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .lead-page .heading-row { display: block; }
+  .lead-page .heading-badges { justify-content: flex-start; margin-top: 10px; }
+  .lead-page .detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .lead-page .detail-metrics .metric-card { min-height: 84px; padding: 13px; }
+  .lead-page .detail-metrics .metric-card strong { font-size: 21px; }
+  .lead-page .two-column { grid-template-columns: 1fr; gap: 12px; }
+  .lead-page .two-column > .card { padding: 17px; }
+  .lead-page .lead-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 10px; }
+  .lead-page .lead-stage { min-height: 70px; }
+  .lead-page .lead-campaign-card { padding: 18px; }
+}
 .research-status-failed {
   color: var(--danger);
 }
