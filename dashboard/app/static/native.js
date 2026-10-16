@@ -43,6 +43,23 @@
       .replace(/^./, (c) => c.toUpperCase());
   const badge = (value) =>
     `<span class="badge ${["NEEDS_REVIEW", "FAILED", "STALE", "PENDING_APPROVAL"].includes(value) ? "attention" : ["APPROVED", "COMPLETED"].includes(value) ? "success" : ""}">${esc(label(value))}</span>`;
+  // Read-only, display-only status descriptions. Do not expose provider payloads.
+  const connectionStatus = (value) => {
+    const key = typeof value === "string" ? value.trim().toUpperCase() : "";
+    const known = {
+      CONFIGURED: ["Configured", "Configuration is saved. This does not mean it was tested or verified.", "configured"],
+      UNVERIFIED: ["Unverified", "Verification has not been confirmed. Do not assume the connection is ready.", "unverified"],
+      UNAVAILABLE: ["Unavailable", "The connection is not currently available for use. Ask a workspace administrator to check the approved setup process.", "unavailable"],
+      DISABLED: ["Disabled", "The connection is disabled and cannot be used.", "disabled"],
+      ENABLED: ["Enabled", "The connection is enabled, but successful provider operation is not confirmed here.", "configured"],
+      VERIFIED: ["Verified", "The current system marks this connection verified; no test was performed by this page.", "configured"],
+      MISSING: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+      NOT_CONFIGURED: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+    };
+    const [title, description, tone] = known[key] || ["Other status", "The API returned a status this page does not recognize. Ask an administrator to review the approved configuration process.", "unknown"];
+    return `<div class="connection-status connection-status--${tone}"><span class="connection-status__label">${esc(title)}</span><p>${esc(description)}</p></div>`;
+  };
+  const connectionRow = (name, value) => `<div class="connection-row"><h3>${esc(name)}</h3>${connectionStatus(value)}</div>`;
   const empty = (text) => `<p class="empty">${esc(text)}</p>`;
   const card = (title, body) =>
     `<section class="card"><h2>${esc(title)}</h2>${body}</section>`;
@@ -449,12 +466,10 @@
         html += card("Workspace roles", members.map((m) => `<form data-workspace-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Workspace role for ${esc(m.email)}" ${!isAdmin() ? "disabled" : ""}>${["VIEWER", "REVIEWER", "OPERATOR", "ADMIN"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""}>${role}</option>`).join("")}</select><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save role</button><div class="error" role="alert" hidden></div></form>`).join(""));
         html += card("Deactivate workspace", `<p>Pause access to this workspace and stop its automation. Its records are retained.</p><button id="deactivate-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Deactivate workspace</button>`);
       } else if (section === "connections") {
+        // Only the existing dashboard BFF is queried; no provider calls or writes.
         const [status, senders] = await Promise.all([request("connections"), request("senders")]);
-        const modelDraft = (status.provider_drafts || []).find((p) => p.kind === "MODEL");
-        html = card("Connections", `<p>Automation connection: ${esc(status.automation)}</p><p>Provider connection: ${esc(status.model)}</p><p>Search connection: ${esc(status.search)}</p><p class="muted">Saved provider credentials remain disabled and unverified until separate calibration. Saving them does not call a provider.</p><h3>Senders</h3>${senders.map((s) => `<p><strong>${esc(s.name)}</strong> · ${s.enabled ? "Enabled" : "Disabled"} · ${s.verified_at ? "Verified" : "Unverified"}<br>${esc(s.from_email)} ${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</p>`).join("") || empty("No sender connection configured.")}<p class="muted">Credentials are encrypted and never displayed. A sender must be enabled and verified before use.</p>`);
-        html += card("Model provider", `<form data-command="provider-connections/MODEL" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Model connection draft</legend>${field("base_url", "Public HTTPS model endpoint", modelDraft?.settings?.base_url || "", "required maxlength=500", "url")}${field("model_name", "Model name", modelDraft?.settings?.model_name || "", "required maxlength=200")}${field("secret", "API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Search provider", `<form data-command="provider-connections/SEARCH" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Search connection draft</legend>${field("secret", "Search API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Add sender connection", `<form data-command="senders" data-sender><fieldset ${isAdmin() ? "" : "disabled"}><legend>Sender credentials</legend>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label for="sender-security">Security</label><select id="sender-security" name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label class="sender-enabled"><input type="checkbox" name="enabled"> Enabled after verification</label></fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Add sender</button></form>${isAdmin() ? "" : '<p class="muted">Workspace administrator required.</p>'}`);
+        html = card("Connections", `<p class="muted">Read-only connection information for the selected workspace. A configured connection has not necessarily been verified or tested.</p><div class="connection-list">${connectionRow("Automation", status?.automation)}${connectionRow("Model provider", status?.model)}${connectionRow("Search provider", status?.search)}</div><p class="muted">To update a connection, ask a workspace administrator to use the project owner's approved configuration process. No credentials or provider tests are available from this page.</p>`);
+        html += card("Sender connections", `<p class="muted">These statuses are existing records, not results of a new connectivity test.</p><div class="connection-list">${Array.isArray(senders) ? senders.map((sender) => `<div class="connection-row"><h3>${esc(sender.name || "Unnamed sender")}</h3><p class="muted">${esc(sender.from_email || "Email address unavailable")}</p>${connectionStatus(sender.enabled ? (sender.verified_at ? "VERIFIED" : "UNVERIFIED") : "DISABLED")}</div>`).join("") || empty("No sender connections configured. A workspace administrator can follow the approved setup process.") : empty("Sender information is unavailable.")}</div>`);
       }
       view.innerHTML = settingsNav() + html;
       document.querySelector("#settings-create-workspace")?.addEventListener("click", createWorkspaceFlow);
@@ -514,7 +529,14 @@
         try { const profile = await request("profile", "PUT", Object.fromEntries(new FormData(form))); state.workspace.name = profile.name; state.dirty = false; state.workspaces.find((w) => w.id === profile.id).name = profile.name; shell(); await loadSettings(); notice("Workspace saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
-    } catch (error) { view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`; }
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      if (state.settingsSection === "connections") {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">Connection information is unavailable right now. Retry by reopening Connections, or ask a workspace administrator to check the approved setup process.</div>`;
+      } else {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`;
+      }
+    }
   }
   async function load(poll = false) {
     const view = document.querySelector("#view"),

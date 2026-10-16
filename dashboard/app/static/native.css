@@ -638,3 +638,15 @@ summary:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* Day 1: accessible, read-only connection states */
+.connection-list { display: grid; gap: 14px; margin: 18px 0; }
+.connection-row { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); overflow-wrap: anywhere; }
+.connection-row h3 { font-size: 15px; margin: 0 0 10px; }
+.connection-status__label { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 13px; font-weight: 700; }
+.connection-status p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.connection-status--configured .connection-status__label { color: var(--success); }
+.connection-status--unverified .connection-status__label { color: var(--warning); }
+.connection-status--unavailable .connection-status__label { color: var(--warning); }
+.connection-status--disabled .connection-status__label, .connection-status--unknown .connection-status__label { color: var(--muted); }
+@media (max-width: 600px) { .connection-row { padding: 12px; } .connection-list { gap: 10px; } }
