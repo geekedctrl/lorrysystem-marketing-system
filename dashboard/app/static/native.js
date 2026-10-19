@@ -776,15 +776,48 @@
   function command(path, title, payload = {}, disabled = false) {
     return `<form data-command="${esc(path)}" data-payload="${esc(JSON.stringify(payload))}"><div class="error" hidden role="alert"></div><div class="actions"><button class="primary" ${disabled ? "disabled" : ""}>${esc(title)}</button></div></form>`;
   }
+  // Display-only explanation. The API is still authoritative about retries.
+  function jobExplanation(job) {
+    const status = String(job.status || "").toUpperCase();
+    const code = String(job.failure_code || "").toUpperCase();
+    if (status === "NEEDS_REVIEW") return "Human review is required before this work can continue. Review the saved evidence; retry does not replace approval.";
+    if (status === "PENDING_APPROVAL") return "Waiting for a person to review and approve the next step. No message is sent automatically.";
+    if (status === "PENDING") return "The job has been queued and has not started yet.";
+    if (status === "RUNNING") return "The job is in progress. Check back for its result.";
+    if (status === "COMPLETED") return "The job finished. Any candidate, contact, or draft still needs its separate review.";
+    if (status !== "FAILED") return "Check the saved job history for its current state.";
+    if (/BUDGET|LIMIT|QUOTA/.test(code)) return "The job stopped because of a usage or budget limit. Ask an administrator to check the approved configuration.";
+    if (/PROVIDER|CONFIG|MODEL|CREDENTIAL|AUTH/.test(code)) return "A required service or configuration was unavailable. Ask an administrator to check the approved setup process.";
+    if (/TIMEOUT|NETWORK|FETCH|HTTP_5/.test(code)) return "The job could not complete a service or website request. Review the saved context before trying again.";
+    return "The job failed. Review its saved details to understand the problem before requesting a retry.";
+  }
+  function jobRetryState(job) {
+    if (job.status !== "FAILED") return { allowed: false, reason: "Only failed jobs can be retried." };
+    if (!canWork()) return { allowed: false, reason: "Retry requires an Admin or Operator workspace role." };
+    if (!state.data.operations?.enabled) return { allowed: false, reason: "Automation is paused. An administrator must resume it before retrying." };
+    if (Number.isFinite(Number(job.max_attempts)) && Number(job.max_attempts) > 0 && Number(job.attempts) >= Number(job.max_attempts))
+      return { allowed: false, reason: "The maximum number of attempts has been reached. Ask an administrator to review this job." };
+    return { allowed: true, reason: "An Admin or Operator may request a retry. The server will check eligibility again." };
+  }
   function jobCards(jobs) {
-    return jobs.length
-      ? jobs
-          .map(
-            (j) =>
-              `<article class="card"><strong>${esc(label(j.kind))}</strong> ${badge(j.status)}<p class="muted">Attempt ${esc(j.attempts)} of ${esc(j.max_attempts)} · ${esc(j.created_at)}</p>${j.kind === "DISCOVERY" && j.result?.counts ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p><p>${esc(label(j.result.outcome))}. Suitable candidates await your acceptance.</p>` : ""}${j.failure_code ? `<p>${esc(label(j.failure_code))}. ${/PROVIDER|BUDGET|CONFIG|MODEL/.test(j.failure_code) ? "Ask an administrator to review configuration." : "Review the saved context before retrying."}</p>` : ""}<details><summary>Stage events & technical details</summary><pre>${esc(JSON.stringify({ history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>${canWork() && j.status === "FAILED" ? command(`jobs/${j.id}/retry`, "Retry failed job") : ""}</article>`,
-          )
-          .join("")
-      : empty("No jobs recorded yet.");
+    return jobs.length ? jobs.map((j) => {
+      const retry = jobRetryState(j);
+      const description = jobExplanation(j);
+      const counts = j.kind === "DISCOVERY" && j.result?.counts
+        ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p>` : "";
+      const action = j.status === "FAILED" && retry.allowed
+        ? command(`jobs/${j.id}/retry`, "Retry failed job")
+        : "";
+      return `<article class="card job-review" aria-label="${esc(label(j.kind))} job">
+        <div class="job-review__heading"><strong>${esc(label(j.kind))}</strong>${badge(j.status)}</div>
+        <p class="muted">Attempt ${esc(j.attempts ?? "?")} of ${esc(j.max_attempts ?? "?")} · ${esc(j.created_at || "Date unavailable")}</p>
+        <p class="job-review__explanation">${esc(description)}</p>${counts}
+        ${j.kind === "DISCOVERY" && j.result?.outcome ? `<p class="muted">Discovery outcome: ${esc(label(j.result.outcome))}. Candidates must be accepted separately.</p>` : ""}
+        <p class="muted job-review__eligibility">${esc(retry.reason)}</p>
+        ${action}
+        <details><summary>Stage events &amp; technical details</summary><pre>${esc(JSON.stringify({ failure_code: j.failure_code, history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>
+      </article>`;
+    }).join("") : empty("No jobs recorded yet.");
   }
   function researchFacts(facts) {
     return [...new Set(facts.map((f) => f.category))]
@@ -1241,7 +1274,9 @@
               ? "Candidate rejected. Your decision has been saved."
               : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/retry")
                 ? "Company reassessment queued."
-                : "Request accepted. Check the current status below.",
+                : form.dataset.command.startsWith("jobs/") && form.dataset.command.endsWith("/retry")
+                  ? "Retry requested. Check the updated job status; any human review still applies."
+                  : "Request accepted. Check the current status below.",
       );
       state.busy = false;
       await load();
