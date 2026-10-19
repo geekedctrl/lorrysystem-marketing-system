@@ -440,12 +440,28 @@
   function settingsNav() {
     return `<nav class="settings-nav" aria-label="Settings sections">${settingsTabs.filter(([id]) => state.workspace || ["account", "organization"].includes(id)).map(([id, title]) => `<button type="button" data-settings="${id}" ${state.settingsSection === id ? 'aria-current="page"' : ""}>${title}</button>`).join("")}</nav>`;
   }
+  // Only display fields actually supplied by the existing member endpoints.
+  function teamMemberDisplay(member) {
+    const status = typeof member.status === "string" && member.status.trim()
+      ? label(member.status)
+      : typeof member.active === "boolean"
+        ? member.active ? "Active" : "Inactive"
+        : "Status not provided";
+    return `<div class="team-member"><strong>${esc(member.email || "Member email unavailable")}</strong><span>Role: ${esc(label(member.role))}</span><span>Status: ${esc(status)}</span></div>`;
+  }
   async function loadSettings() {
     const view = document.querySelector("#view");
     if (!view) return;
     view.innerHTML = settingsNav() + empty("Loading settings…");
+    const renderEpoch = state.epoch;
+    const section = state.settingsSection;
+    const workspaceId = state.workspace?.id;
+    const organizationId = state.organization?.id;
+    const stillCurrent = () => renderEpoch === state.epoch &&
+      state.page === "settings" && section === state.settingsSection &&
+      workspaceId === state.workspace?.id && organizationId === state.organization?.id &&
+      document.querySelector("#view") === view;
     try {
-      const section = state.settingsSection;
       const oid = state.workspace?.organization_id || state.organization?.id;
       let html = "";
       if (section === "account") {
@@ -456,13 +472,15 @@
           request(`/settings/organizations/${encodeURIComponent(oid)}/members`, "GET", undefined, true),
           request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces`, "GET", undefined, true),
         ]) : [[], []];
-        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Only organization owners and administrators can issue organization invitations. Member role changes also depend on your permissions. The server checks every action.</p>`);
         html += card("Manage organization", `<form id="organization-name">${field("name", "Organization name", state.organization?.name || "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Save name</button></form><h3>Member roles</h3>${members.map((m) => `<form data-org-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Role for ${esc(m.email)}" ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>${["MEMBER", "ADMIN", "OWNER"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""} ${role === "OWNER" && state.organization?.role !== "OWNER" ? "disabled" : ""}>${role}</option>`).join("")}</select><button ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>Save role</button><div class="error" role="alert" hidden></div></form>`).join("")}`);
         html += card("Organization workspaces", organizationWorkspaces.map((w) => `<p>${esc(w.name)} · ${w.active ? "Active" : "Inactive"} ${!w.active ? `<button data-reactivate="${esc(w.id)}" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Reactivate</button>` : ""}</p>`).join("") || empty("Create a workspace to start product setup."));
         html += card("Create another organization", `<form id="new-organization">${field("name", "New organization name", "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button>Create organization</button></form>`);
       } else if (section === "workspace") {
         const [profile, members] = await Promise.all([request("profile"), request("members")]);
-        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Workspace administrators can invite members and change workspace roles. Other roles can view team information but cannot change it. The server makes the final permission decision.</p>`);
         html += card("Workspace roles", members.map((m) => `<form data-workspace-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Workspace role for ${esc(m.email)}" ${!isAdmin() ? "disabled" : ""}>${["VIEWER", "REVIEWER", "OPERATOR", "ADMIN"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""}>${role}</option>`).join("")}</select><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save role</button><div class="error" role="alert" hidden></div></form>`).join(""));
         html += card("Deactivate workspace", `<p>Pause access to this workspace and stop its automation. Its records are retained.</p><button id="deactivate-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Deactivate workspace</button>`);
       } else if (section === "connections") {
@@ -471,6 +489,8 @@
         html = card("Connections", `<p class="muted">Read-only connection information for the selected workspace. A configured connection has not necessarily been verified or tested.</p><div class="connection-list">${connectionRow("Automation", status?.automation)}${connectionRow("Model provider", status?.model)}${connectionRow("Search provider", status?.search)}</div><p class="muted">To update a connection, ask a workspace administrator to use the project owner's approved configuration process. No credentials or provider tests are available from this page.</p>`);
         html += card("Sender connections", `<p class="muted">These statuses are existing records, not results of a new connectivity test.</p><div class="connection-list">${Array.isArray(senders) ? senders.map((sender) => `<div class="connection-row"><h3>${esc(sender.name || "Unnamed sender")}</h3><p class="muted">${esc(sender.from_email || "Email address unavailable")}</p>${connectionStatus(sender.enabled ? (sender.verified_at ? "VERIFIED" : "UNVERIFIED") : "DISABLED")}</div>`).join("") || empty("No sender connections configured. A workspace administrator can follow the approved setup process.") : empty("Sender information is unavailable.")}</div>`);
       }
+      // Never render delayed team data after a workspace/organization/section switch.
+      if (!stillCurrent()) return;
       view.innerHTML = settingsNav() + html;
       document.querySelector("#settings-create-workspace")?.addEventListener("click", createWorkspaceFlow);
       document.querySelector("#new-organization")?.addEventListener("submit", async (event) => {
@@ -501,13 +521,39 @@
       for (const form of document.querySelectorAll("[data-org-member],[data-workspace-member]")) form.addEventListener("submit", async (event) => {
         event.preventDefault(); const button = form.querySelector("button"); button.disabled = true;
         const endpoint = form.dataset.orgMember ? `/settings/organizations/${encodeURIComponent(oid)}/members/${encodeURIComponent(form.dataset.orgMember)}` : `members/${encodeURIComponent(form.dataset.workspaceMember)}`;
-        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); state.dirty = false; await loadSettings(); notice("Role saved."); }
+        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); if (!stillCurrent()) return; state.dirty = false; await loadSettings(); notice("Role saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
       for (const [id, endpoint] of [["invite-org", `/settings/organizations/${encodeURIComponent(oid)}/invitations`], ["invite-workspace", `/settings/workspaces/${encodeURIComponent(state.workspace?.id || "")}/invitations`]]) {
         document.querySelector(`#${id}`)?.addEventListener("submit", async (event) => {
           event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
-          try { const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true); document.querySelector("#invitation-result").textContent = `Share this invitation code securely: ${invitation.token}`; form.reset(); state.dirty = false; }
+          try {
+            const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true);
+            if (!stillCurrent()) return;
+            const target = document.querySelector("#invitation-result");
+            // One-time response only: never store the code in state, storage or logs.
+            const code = typeof invitation.token === "string" ? invitation.token : "";
+            target.replaceChildren();
+            const instructions = document.createElement("p");
+            instructions.textContent = "Invitation created. Copy and share this code securely now. It will disappear when you leave this section.";
+            target.append(instructions);
+            if (code) {
+              const value = document.createElement("code");
+              value.className = "team-invitation-code";
+              value.textContent = code;
+              const copy = document.createElement("button");
+              copy.type = "button";
+              copy.textContent = "Copy invitation code";
+              copy.onclick = async () => {
+                try { await navigator.clipboard.writeText(code); instructions.textContent = "Code copied. Share it privately; it will not be shown again after leaving this section."; }
+                catch { instructions.textContent = "Copy is unavailable here. Select the displayed code and copy it manually."; }
+              };
+              target.append(value, copy);
+            } else {
+              instructions.textContent = "Invitation created, but no shareable code was returned. Ask the project owner to review the existing API response.";
+            }
+            form.reset(); state.dirty = false;
+          }
           catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; }
           finally { button.disabled = false; }
         });
@@ -530,7 +576,7 @@
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
     } catch (error) {
-      if (error.name === "AbortError") return;
+      if (error.name === "AbortError" || !stillCurrent()) return;
       if (state.settingsSection === "connections") {
         view.innerHTML = settingsNav() + `<div class="error" role="alert">Connection information is unavailable right now. Retry by reopening Connections, or ask a workspace administrator to check the approved setup process.</div>`;
       } else {

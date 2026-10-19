@@ -660,3 +660,12 @@ summary:focus-visible {
 .job-review summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .job-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 @media (max-width: 480px) { .job-review { padding: 16px; } .job-review .actions button { width: 100%; } }
+
+/* Team settings: accessible read-only member summaries and one-time invitation code. */
+.team-member { display:flex; flex-wrap:wrap; gap:6px 14px; padding:12px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.team-member strong { min-width:min(220px,100%); }
+.team-member span { color:var(--muted); }
+.team-invitation { display:flex; flex-wrap:wrap; align-items:center; gap:10px; overflow-wrap:anywhere; margin-top:12px; }
+.team-invitation p { width:100%; margin:0; }
+.team-invitation-code { display:block; max-width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); overflow-wrap:anywhere; user-select:all; }
+@media (max-width:600px) { .team-member { flex-direction:column; gap:3px; } .team-invitation button { width:100%; } }
