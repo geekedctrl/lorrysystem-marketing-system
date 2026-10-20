@@ -669,3 +669,10 @@ summary:focus-visible {
 .team-invitation p { width:100%; margin:0; }
 .team-invitation-code { display:block; max-width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); overflow-wrap:anywhere; user-select:all; }
 @media (max-width:600px) { .team-member { flex-direction:column; gap:3px; } .team-invitation button { width:100%; } }
+
+/* Synthetic import preview: read-only and usable on narrow screens. */
+.import-destination { padding: 12px; background: var(--surface-soft); border-radius: 8px; overflow-wrap:anywhere; }
+.import-table { min-width: 650px; }
+.import-table td { overflow-wrap: anywhere; max-width: 260px; }
+.import-table p { margin: 6px 0 0; font-size: 12px; }
+@media (max-width: 540px) { .import-table { min-width: 600px; } }

@@ -436,7 +436,7 @@
     await load();
     document.querySelector("#content")?.focus();
   }
-  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"]];
+  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"], ["import-preview", "Import preview"]];
   function settingsNav() {
     return `<nav class="settings-nav" aria-label="Settings sections">${settingsTabs.filter(([id]) => state.workspace || ["account", "organization"].includes(id)).map(([id, title]) => `<button type="button" data-settings="${id}" ${state.settingsSection === id ? 'aria-current="page"' : ""}>${title}</button>`).join("")}</nav>`;
   }
@@ -449,9 +449,61 @@
         : "Status not provided";
     return `<div class="team-member"><strong>${esc(member.email || "Member email unavailable")}</strong><span>Role: ${esc(label(member.role))}</span><span>Status: ${esc(status)}</span></div>`;
   }
+  // Preview-only import: uses the fixed local fixture below, never network calls.
+  const importSample = `company_name,website,industry
+Alpha Logistics,https://alpha.example,Logistics
+Beta Transport,,Transport
+Alpha Logistics,https://alpha.example,Logistics
+Gamma Supplies,https://gamma.example,Wholesale`;
+  const importFields = ["company_name", "website", "industry"];
+  function parseImportPreview(input) {
+    if (typeof input !== "string" || input.length > 12000) return { error: "Sample input is too large or invalid." };
+    if (!input.trim()) return { error: "The sample contains no rows." };
+    const lines = input.replace(/\r\n?/g, "\n").trim().split("\n");
+    if (lines.length > 101) return { error: "Preview supports at most 100 sample rows." };
+    // Simple CSV fixture format only; quoted/multiline CSV is deliberately unsupported.
+    const cells = lines.map(line => line.split(",").map(x => x.trim()));
+    const headers = cells.shift();
+    if (!headers || headers.some(h => !h || /["\r\n]/.test(h)) || new Set(headers).size !== headers.length ||
+        !importFields.every(f => headers.includes(f))) return { error: "Invalid header. Expected company_name, website and industry." };
+    const seen = new Set();
+    const rows = cells.map((values, i) => {
+      if (values.length !== headers.length || values.some(v => /["\r\n]/.test(v))) return { number: i + 2, values: {}, issues: ["Malformed row: expected one value per column."], status: "Invalid" };
+      const record = Object.fromEntries(headers.map((h, n) => [h, values[n]]));
+      const issues = [];
+      if (!record.company_name) issues.push("Company name is required.");
+      if (!record.website) issues.push("Website is required.");
+      else {
+        try { const u = new URL(record.website); if (!["https:", "http:"].includes(u.protocol) || !u.hostname.includes(".") || u.username || u.password) issues.push("Website must be a valid public-looking HTTP(S) URL."); }
+        catch { issues.push("Website format is invalid."); }
+      }
+      const key = `${(record.company_name || "").toLowerCase()}|${(record.website || "").toLowerCase()}`;
+      if (record.company_name && record.website && seen.has(key)) issues.push("Duplicate row in sample.");
+      else if (record.company_name && record.website) seen.add(key);
+      const status = issues.some(x => x.startsWith("Duplicate")) ? "Duplicate" : issues.length ? "Invalid" : "Valid";
+      return { number: i + 2, values: record, issues, status };
+    });
+    return { rows, fields: headers, valid: rows.filter(r => r.status === "Valid").length,
+      invalid: rows.filter(r => r.status === "Invalid").length, duplicate: rows.filter(r => r.status === "Duplicate").length };
+  }
+  function renderImportPreview() {
+    const view = document.querySelector("#view");
+    if (!view || !state.workspace) return;
+    const workspaceId = state.workspace.id;
+    const epoch = state.epoch;
+    const preview = parseImportPreview(importSample);
+    const destination = `<p class="import-destination"><strong>Preview destination:</strong> ${esc(state.organization?.name || "Organization")} / ${esc(state.workspace.name || "Workspace")}</p>`;
+    const mapping = `<div class="table-wrap"><table><caption>Sample field mapping</caption><thead><tr><th>Sample field</th><th>Preview field</th></tr></thead><tbody>${importFields.map(x => `<tr><td>${esc(x)}</td><td>${esc(label(x))}</td></tr>`).join("")}</tbody></table></div>`;
+    const summary = preview.error ? `<p role="alert" class="error">${esc(preview.error)}</p>` :
+      `<p role="status">${preview.rows.length} sample rows · ${preview.valid} valid · ${preview.invalid} invalid · ${preview.duplicate} duplicate</p>`;
+    const table = preview.rows ? `<div class="table-wrap"><table class="import-table"><caption>Sample validation results</caption><thead><tr><th>Row</th><th>Company</th><th>Website</th><th>Industry</th><th>Status / issues</th></tr></thead><tbody>${preview.rows.map(r => `<tr><td>${r.number}</td><td>${esc(r.values.company_name || "—")}</td><td>${esc(r.values.website || "—")}</td><td>${esc(r.values.industry || "—")}</td><td><strong>${esc(r.status)}</strong>${r.issues.map(x => `<p class="muted">${esc(x)}</p>`).join("")}</td></tr>`).join("")}</tbody></table></div>` : "";
+    if (epoch !== state.epoch || workspaceId !== state.workspace?.id) return;
+    view.innerHTML = settingsNav() + card("Import preview — synthetic only", `${destination}<p>This is a demonstration using fake sample data. No file is uploaded, no workspace records are read or changed, and no import request is sent.</p>${mapping}${summary}${table}<div class="actions"><button type="button" disabled aria-describedby="import-disabled-help">Import (unavailable)</button></div><p id="import-disabled-help" class="muted">Preview only. The project owner must approve an import API contract before real imports can be enabled.</p>`);
+  }
   async function loadSettings() {
     const view = document.querySelector("#view");
     if (!view) return;
+    if (state.settingsSection === "import-preview") { renderImportPreview(); return; }
     view.innerHTML = settingsNav() + empty("Loading settings…");
     const renderEpoch = state.epoch;
     const section = state.settingsSection;
