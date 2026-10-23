@@ -43,6 +43,23 @@
       .replace(/^./, (c) => c.toUpperCase());
   const badge = (value) =>
     `<span class="badge ${["NEEDS_REVIEW", "FAILED", "STALE", "PENDING_APPROVAL"].includes(value) ? "attention" : ["APPROVED", "COMPLETED"].includes(value) ? "success" : ""}">${esc(label(value))}</span>`;
+  // Read-only, display-only status descriptions. Do not expose provider payloads.
+  const connectionStatus = (value) => {
+    const key = typeof value === "string" ? value.trim().toUpperCase() : "";
+    const known = {
+      CONFIGURED: ["Configured", "Configuration is saved. This does not mean it was tested or verified.", "configured"],
+      UNVERIFIED: ["Unverified", "Verification has not been confirmed. Do not assume the connection is ready.", "unverified"],
+      UNAVAILABLE: ["Unavailable", "The connection is not currently available for use. Ask a workspace administrator to check the approved setup process.", "unavailable"],
+      DISABLED: ["Disabled", "The connection is disabled and cannot be used.", "disabled"],
+      ENABLED: ["Enabled", "The connection is enabled, but successful provider operation is not confirmed here.", "configured"],
+      VERIFIED: ["Verified", "The current system marks this connection verified; no test was performed by this page.", "configured"],
+      MISSING: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+      NOT_CONFIGURED: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+    };
+    const [title, description, tone] = known[key] || ["Other status", "The API returned a status this page does not recognize. Ask an administrator to review the approved configuration process.", "unknown"];
+    return `<div class="connection-status connection-status--${tone}"><span class="connection-status__label">${esc(title)}</span><p>${esc(description)}</p></div>`;
+  };
+  const connectionRow = (name, value) => `<div class="connection-row"><h3>${esc(name)}</h3>${connectionStatus(value)}</div>`;
   const empty = (text) => `<p class="empty">${esc(text)}</p>`;
   const card = (title, body) =>
     `<section class="card"><h2>${esc(title)}</h2>${body}</section>`;
@@ -419,16 +436,84 @@
     await load();
     document.querySelector("#content")?.focus();
   }
-  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"]];
+  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"], ["import-preview", "Import preview"]];
   function settingsNav() {
     return `<nav class="settings-nav" aria-label="Settings sections">${settingsTabs.filter(([id]) => state.workspace || ["account", "organization"].includes(id)).map(([id, title]) => `<button type="button" data-settings="${id}" ${state.settingsSection === id ? 'aria-current="page"' : ""}>${title}</button>`).join("")}</nav>`;
+  }
+  // Only display fields actually supplied by the existing member endpoints.
+  function teamMemberDisplay(member) {
+    const status = typeof member.status === "string" && member.status.trim()
+      ? label(member.status)
+      : typeof member.active === "boolean"
+        ? member.active ? "Active" : "Inactive"
+        : "Status not provided";
+    return `<div class="team-member"><strong>${esc(member.email || "Member email unavailable")}</strong><span>Role: ${esc(label(member.role))}</span><span>Status: ${esc(status)}</span></div>`;
+  }
+  // Preview-only import: uses the fixed local fixture below, never network calls.
+  const importSample = `company_name,website,industry
+Alpha Logistics,https://alpha.example,Logistics
+Beta Transport,,Transport
+Alpha Logistics,https://alpha.example,Logistics
+Gamma Supplies,https://gamma.example,Wholesale`;
+  const importFields = ["company_name", "website", "industry"];
+  function parseImportPreview(input) {
+    if (typeof input !== "string" || input.length > 12000) return { error: "Sample input is too large or invalid." };
+    if (!input.trim()) return { error: "The sample contains no rows." };
+    const lines = input.replace(/\r\n?/g, "\n").trim().split("\n");
+    if (lines.length > 101) return { error: "Preview supports at most 100 sample rows." };
+    // Simple CSV fixture format only; quoted/multiline CSV is deliberately unsupported.
+    const cells = lines.map(line => line.split(",").map(x => x.trim()));
+    const headers = cells.shift();
+    if (!headers || headers.some(h => !h || /["\r\n]/.test(h)) || new Set(headers).size !== headers.length ||
+        !importFields.every(f => headers.includes(f))) return { error: "Invalid header. Expected company_name, website and industry." };
+    const seen = new Set();
+    const rows = cells.map((values, i) => {
+      if (values.length !== headers.length || values.some(v => /["\r\n]/.test(v))) return { number: i + 2, values: {}, issues: ["Malformed row: expected one value per column."], status: "Invalid" };
+      const record = Object.fromEntries(headers.map((h, n) => [h, values[n]]));
+      const issues = [];
+      if (!record.company_name) issues.push("Company name is required.");
+      if (!record.website) issues.push("Website is required.");
+      else {
+        try { const u = new URL(record.website); if (!["https:", "http:"].includes(u.protocol) || !u.hostname.includes(".") || u.username || u.password) issues.push("Website must be a valid public-looking HTTP(S) URL."); }
+        catch { issues.push("Website format is invalid."); }
+      }
+      const key = `${(record.company_name || "").toLowerCase()}|${(record.website || "").toLowerCase()}`;
+      if (record.company_name && record.website && seen.has(key)) issues.push("Duplicate row in sample.");
+      else if (record.company_name && record.website) seen.add(key);
+      const status = issues.some(x => x.startsWith("Duplicate")) ? "Duplicate" : issues.length ? "Invalid" : "Valid";
+      return { number: i + 2, values: record, issues, status };
+    });
+    return { rows, fields: headers, valid: rows.filter(r => r.status === "Valid").length,
+      invalid: rows.filter(r => r.status === "Invalid").length, duplicate: rows.filter(r => r.status === "Duplicate").length };
+  }
+  function renderImportPreview() {
+    const view = document.querySelector("#view");
+    if (!view || !state.workspace) return;
+    const workspaceId = state.workspace.id;
+    const epoch = state.epoch;
+    const preview = parseImportPreview(importSample);
+    const destination = `<p class="import-destination"><strong>Preview destination:</strong> ${esc(state.organization?.name || "Organization")} / ${esc(state.workspace.name || "Workspace")}</p>`;
+    const mapping = `<div class="table-wrap"><table><caption>Sample field mapping</caption><thead><tr><th>Sample field</th><th>Preview field</th></tr></thead><tbody>${importFields.map(x => `<tr><td>${esc(x)}</td><td>${esc(label(x))}</td></tr>`).join("")}</tbody></table></div>`;
+    const summary = preview.error ? `<p role="alert" class="error">${esc(preview.error)}</p>` :
+      `<p role="status">${preview.rows.length} sample rows · ${preview.valid} valid · ${preview.invalid} invalid · ${preview.duplicate} duplicate</p>`;
+    const table = preview.rows ? `<div class="table-wrap"><table class="import-table"><caption>Sample validation results</caption><thead><tr><th>Row</th><th>Company</th><th>Website</th><th>Industry</th><th>Status / issues</th></tr></thead><tbody>${preview.rows.map(r => `<tr><td>${r.number}</td><td>${esc(r.values.company_name || "—")}</td><td>${esc(r.values.website || "—")}</td><td>${esc(r.values.industry || "—")}</td><td><strong>${esc(r.status)}</strong>${r.issues.map(x => `<p class="muted">${esc(x)}</p>`).join("")}</td></tr>`).join("")}</tbody></table></div>` : "";
+    if (epoch !== state.epoch || workspaceId !== state.workspace?.id) return;
+    view.innerHTML = settingsNav() + card("Import preview — synthetic only", `${destination}<p>This is a demonstration using fake sample data. No file is uploaded, no workspace records are read or changed, and no import request is sent.</p>${mapping}${summary}${table}<div class="actions"><button type="button" disabled aria-describedby="import-disabled-help">Import (unavailable)</button></div><p id="import-disabled-help" class="muted">Preview only. The project owner must approve an import API contract before real imports can be enabled.</p>`);
   }
   async function loadSettings() {
     const view = document.querySelector("#view");
     if (!view) return;
+    if (state.settingsSection === "import-preview") { renderImportPreview(); return; }
     view.innerHTML = settingsNav() + empty("Loading settings…");
+    const renderEpoch = state.epoch;
+    const section = state.settingsSection;
+    const workspaceId = state.workspace?.id;
+    const organizationId = state.organization?.id;
+    const stillCurrent = () => renderEpoch === state.epoch &&
+      state.page === "settings" && section === state.settingsSection &&
+      workspaceId === state.workspace?.id && organizationId === state.organization?.id &&
+      document.querySelector("#view") === view;
     try {
-      const section = state.settingsSection;
       const oid = state.workspace?.organization_id || state.organization?.id;
       let html = "";
       if (section === "account") {
@@ -439,23 +524,25 @@
           request(`/settings/organizations/${encodeURIComponent(oid)}/members`, "GET", undefined, true),
           request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces`, "GET", undefined, true),
         ]) : [[], []];
-        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Only organization owners and administrators can issue organization invitations. Member role changes also depend on your permissions. The server checks every action.</p>`);
         html += card("Manage organization", `<form id="organization-name">${field("name", "Organization name", state.organization?.name || "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Save name</button></form><h3>Member roles</h3>${members.map((m) => `<form data-org-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Role for ${esc(m.email)}" ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>${["MEMBER", "ADMIN", "OWNER"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""} ${role === "OWNER" && state.organization?.role !== "OWNER" ? "disabled" : ""}>${role}</option>`).join("")}</select><button ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>Save role</button><div class="error" role="alert" hidden></div></form>`).join("")}`);
         html += card("Organization workspaces", organizationWorkspaces.map((w) => `<p>${esc(w.name)} · ${w.active ? "Active" : "Inactive"} ${!w.active ? `<button data-reactivate="${esc(w.id)}" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Reactivate</button>` : ""}</p>`).join("") || empty("Create a workspace to start product setup."));
         html += card("Create another organization", `<form id="new-organization">${field("name", "New organization name", "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button>Create organization</button></form>`);
       } else if (section === "workspace") {
         const [profile, members] = await Promise.all([request("profile"), request("members")]);
-        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Workspace administrators can invite members and change workspace roles. Other roles can view team information but cannot change it. The server makes the final permission decision.</p>`);
         html += card("Workspace roles", members.map((m) => `<form data-workspace-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Workspace role for ${esc(m.email)}" ${!isAdmin() ? "disabled" : ""}>${["VIEWER", "REVIEWER", "OPERATOR", "ADMIN"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""}>${role}</option>`).join("")}</select><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save role</button><div class="error" role="alert" hidden></div></form>`).join(""));
         html += card("Deactivate workspace", `<p>Pause access to this workspace and stop its automation. Its records are retained.</p><button id="deactivate-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Deactivate workspace</button>`);
       } else if (section === "connections") {
+        // Only the existing dashboard BFF is queried; no provider calls or writes.
         const [status, senders] = await Promise.all([request("connections"), request("senders")]);
-        const modelDraft = (status.provider_drafts || []).find((p) => p.kind === "MODEL");
-        html = card("Connections", `<p>Automation connection: ${esc(status.automation)}</p><p>Provider connection: ${esc(status.model)}</p><p>Search connection: ${esc(status.search)}</p><p class="muted">Saved provider credentials remain disabled and unverified until separate calibration. Saving them does not call a provider.</p><h3>Senders</h3>${senders.map((s) => `<p><strong>${esc(s.name)}</strong> · ${s.enabled ? "Enabled" : "Disabled"} · ${s.verified_at ? "Verified" : "Unverified"}<br>${esc(s.from_email)} ${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</p>`).join("") || empty("No sender connection configured.")}<p class="muted">Credentials are encrypted and never displayed. A sender must be enabled and verified before use.</p>`);
-        html += card("Model provider", `<form data-command="provider-connections/MODEL" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Model connection draft</legend>${field("base_url", "Public HTTPS model endpoint", modelDraft?.settings?.base_url || "", "required maxlength=500", "url")}${field("model_name", "Model name", modelDraft?.settings?.model_name || "", "required maxlength=200")}${field("secret", "API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Search provider", `<form data-command="provider-connections/SEARCH" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Search connection draft</legend>${field("secret", "Search API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Add sender connection", `<form data-command="senders" data-sender><fieldset ${isAdmin() ? "" : "disabled"}><legend>Sender credentials</legend>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label for="sender-security">Security</label><select id="sender-security" name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label class="sender-enabled"><input type="checkbox" name="enabled"> Enabled after verification</label></fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Add sender</button></form>${isAdmin() ? "" : '<p class="muted">Workspace administrator required.</p>'}`);
+        html = card("Connections", `<p class="muted">Read-only connection information for the selected workspace. A configured connection has not necessarily been verified or tested.</p><div class="connection-list">${connectionRow("Automation", status?.automation)}${connectionRow("Model provider", status?.model)}${connectionRow("Search provider", status?.search)}</div><p class="muted">To update a connection, ask a workspace administrator to use the project owner's approved configuration process. No credentials or provider tests are available from this page.</p>`);
+        html += card("Sender connections", `<p class="muted">These statuses are existing records, not results of a new connectivity test.</p><div class="connection-list">${Array.isArray(senders) ? senders.map((sender) => `<div class="connection-row"><h3>${esc(sender.name || "Unnamed sender")}</h3><p class="muted">${esc(sender.from_email || "Email address unavailable")}</p>${connectionStatus(sender.enabled ? (sender.verified_at ? "VERIFIED" : "UNVERIFIED") : "DISABLED")}</div>`).join("") || empty("No sender connections configured. A workspace administrator can follow the approved setup process.") : empty("Sender information is unavailable.")}</div>`);
       }
+      // Never render delayed team data after a workspace/organization/section switch.
+      if (!stillCurrent()) return;
       view.innerHTML = settingsNav() + html;
       document.querySelector("#settings-create-workspace")?.addEventListener("click", createWorkspaceFlow);
       document.querySelector("#new-organization")?.addEventListener("submit", async (event) => {
@@ -486,13 +573,39 @@
       for (const form of document.querySelectorAll("[data-org-member],[data-workspace-member]")) form.addEventListener("submit", async (event) => {
         event.preventDefault(); const button = form.querySelector("button"); button.disabled = true;
         const endpoint = form.dataset.orgMember ? `/settings/organizations/${encodeURIComponent(oid)}/members/${encodeURIComponent(form.dataset.orgMember)}` : `members/${encodeURIComponent(form.dataset.workspaceMember)}`;
-        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); state.dirty = false; await loadSettings(); notice("Role saved."); }
+        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); if (!stillCurrent()) return; state.dirty = false; await loadSettings(); notice("Role saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
       for (const [id, endpoint] of [["invite-org", `/settings/organizations/${encodeURIComponent(oid)}/invitations`], ["invite-workspace", `/settings/workspaces/${encodeURIComponent(state.workspace?.id || "")}/invitations`]]) {
         document.querySelector(`#${id}`)?.addEventListener("submit", async (event) => {
           event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
-          try { const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true); document.querySelector("#invitation-result").textContent = `Share this invitation code securely: ${invitation.token}`; form.reset(); state.dirty = false; }
+          try {
+            const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true);
+            if (!stillCurrent()) return;
+            const target = document.querySelector("#invitation-result");
+            // One-time response only: never store the code in state, storage or logs.
+            const code = typeof invitation.token === "string" ? invitation.token : "";
+            target.replaceChildren();
+            const instructions = document.createElement("p");
+            instructions.textContent = "Invitation created. Copy and share this code securely now. It will disappear when you leave this section.";
+            target.append(instructions);
+            if (code) {
+              const value = document.createElement("code");
+              value.className = "team-invitation-code";
+              value.textContent = code;
+              const copy = document.createElement("button");
+              copy.type = "button";
+              copy.textContent = "Copy invitation code";
+              copy.onclick = async () => {
+                try { await navigator.clipboard.writeText(code); instructions.textContent = "Code copied. Share it privately; it will not be shown again after leaving this section."; }
+                catch { instructions.textContent = "Copy is unavailable here. Select the displayed code and copy it manually."; }
+              };
+              target.append(value, copy);
+            } else {
+              instructions.textContent = "Invitation created, but no shareable code was returned. Ask the project owner to review the existing API response.";
+            }
+            form.reset(); state.dirty = false;
+          }
           catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; }
           finally { button.disabled = false; }
         });
@@ -514,7 +627,14 @@
         try { const profile = await request("profile", "PUT", Object.fromEntries(new FormData(form))); state.workspace.name = profile.name; state.dirty = false; state.workspaces.find((w) => w.id === profile.id).name = profile.name; shell(); await loadSettings(); notice("Workspace saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
-    } catch (error) { view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`; }
+    } catch (error) {
+      if (error.name === "AbortError" || !stillCurrent()) return;
+      if (state.settingsSection === "connections") {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">Connection information is unavailable right now. Retry by reopening Connections, or ask a workspace administrator to check the approved setup process.</div>`;
+      } else {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`;
+      }
+    }
   }
   async function load(poll = false) {
     const view = document.querySelector("#view"),
@@ -754,15 +874,48 @@
   function command(path, title, payload = {}, disabled = false) {
     return `<form data-command="${esc(path)}" data-payload="${esc(JSON.stringify(payload))}"><div class="error" hidden role="alert"></div><div class="actions"><button class="primary" ${disabled ? "disabled" : ""}>${esc(title)}</button></div></form>`;
   }
+  // Display-only explanation. The API is still authoritative about retries.
+  function jobExplanation(job) {
+    const status = String(job.status || "").toUpperCase();
+    const code = String(job.failure_code || "").toUpperCase();
+    if (status === "NEEDS_REVIEW") return "Human review is required before this work can continue. Review the saved evidence; retry does not replace approval.";
+    if (status === "PENDING_APPROVAL") return "Waiting for a person to review and approve the next step. No message is sent automatically.";
+    if (status === "PENDING") return "The job has been queued and has not started yet.";
+    if (status === "RUNNING") return "The job is in progress. Check back for its result.";
+    if (status === "COMPLETED") return "The job finished. Any candidate, contact, or draft still needs its separate review.";
+    if (status !== "FAILED") return "Check the saved job history for its current state.";
+    if (/BUDGET|LIMIT|QUOTA/.test(code)) return "The job stopped because of a usage or budget limit. Ask an administrator to check the approved configuration.";
+    if (/PROVIDER|CONFIG|MODEL|CREDENTIAL|AUTH/.test(code)) return "A required service or configuration was unavailable. Ask an administrator to check the approved setup process.";
+    if (/TIMEOUT|NETWORK|FETCH|HTTP_5/.test(code)) return "The job could not complete a service or website request. Review the saved context before trying again.";
+    return "The job failed. Review its saved details to understand the problem before requesting a retry.";
+  }
+  function jobRetryState(job) {
+    if (job.status !== "FAILED") return { allowed: false, reason: "Only failed jobs can be retried." };
+    if (!canWork()) return { allowed: false, reason: "Retry requires an Admin or Operator workspace role." };
+    if (!state.data.operations?.enabled) return { allowed: false, reason: "Automation is paused. An administrator must resume it before retrying." };
+    if (Number.isFinite(Number(job.max_attempts)) && Number(job.max_attempts) > 0 && Number(job.attempts) >= Number(job.max_attempts))
+      return { allowed: false, reason: "The maximum number of attempts has been reached. Ask an administrator to review this job." };
+    return { allowed: true, reason: "An Admin or Operator may request a retry. The server will check eligibility again." };
+  }
   function jobCards(jobs) {
-    return jobs.length
-      ? jobs
-          .map(
-            (j) =>
-              `<article class="card"><strong>${esc(label(j.kind))}</strong> ${badge(j.status)}<p class="muted">Attempt ${esc(j.attempts)} of ${esc(j.max_attempts)} · ${esc(j.created_at)}</p>${j.kind === "DISCOVERY" && j.result?.counts ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p><p>${esc(label(j.result.outcome))}. Suitable candidates await your acceptance.</p>` : ""}${j.failure_code ? `<p>${esc(label(j.failure_code))}. ${/PROVIDER|BUDGET|CONFIG|MODEL/.test(j.failure_code) ? "Ask an administrator to review configuration." : "Review the saved context before retrying."}</p>` : ""}<details><summary>Stage events & technical details</summary><pre>${esc(JSON.stringify({ history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>${canWork() && j.status === "FAILED" ? command(`jobs/${j.id}/retry`, "Retry failed job") : ""}</article>`,
-          )
-          .join("")
-      : empty("No jobs recorded yet.");
+    return jobs.length ? jobs.map((j) => {
+      const retry = jobRetryState(j);
+      const description = jobExplanation(j);
+      const counts = j.kind === "DISCOVERY" && j.result?.counts
+        ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p>` : "";
+      const action = j.status === "FAILED" && retry.allowed
+        ? command(`jobs/${j.id}/retry`, "Retry failed job")
+        : "";
+      return `<article class="card job-review" aria-label="${esc(label(j.kind))} job">
+        <div class="job-review__heading"><strong>${esc(label(j.kind))}</strong>${badge(j.status)}</div>
+        <p class="muted">Attempt ${esc(j.attempts ?? "?")} of ${esc(j.max_attempts ?? "?")} · ${esc(j.created_at || "Date unavailable")}</p>
+        <p class="job-review__explanation">${esc(description)}</p>${counts}
+        ${j.kind === "DISCOVERY" && j.result?.outcome ? `<p class="muted">Discovery outcome: ${esc(label(j.result.outcome))}. Candidates must be accepted separately.</p>` : ""}
+        <p class="muted job-review__eligibility">${esc(retry.reason)}</p>
+        ${action}
+        <details><summary>Stage events &amp; technical details</summary><pre>${esc(JSON.stringify({ failure_code: j.failure_code, history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>
+      </article>`;
+    }).join("") : empty("No jobs recorded yet.");
   }
   function researchFacts(facts) {
     return [...new Set(facts.map((f) => f.category))]
@@ -1219,7 +1372,9 @@
               ? "Candidate rejected. Your decision has been saved."
               : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/retry")
                 ? "Company reassessment queued."
-                : "Request accepted. Check the current status below.",
+                : form.dataset.command.startsWith("jobs/") && form.dataset.command.endsWith("/retry")
+                  ? "Retry requested. Check the updated job status; any human review still applies."
+                  : "Request accepted. Check the current status below.",
       );
       state.busy = false;
       await load();

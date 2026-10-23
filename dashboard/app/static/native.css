@@ -638,3 +638,41 @@ summary:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* Day 1: accessible, read-only connection states */
+.connection-list { display: grid; gap: 14px; margin: 18px 0; }
+.connection-row { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); overflow-wrap: anywhere; }
+.connection-row h3 { font-size: 15px; margin: 0 0 10px; }
+.connection-status__label { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 13px; font-weight: 700; }
+.connection-status p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.connection-status--configured .connection-status__label { color: var(--success); }
+.connection-status--unverified .connection-status__label { color: var(--warning); }
+.connection-status--unavailable .connection-status__label { color: var(--warning); }
+.connection-status--disabled .connection-status__label, .connection-status--unknown .connection-status__label { color: var(--muted); }
+@media (max-width: 600px) { .connection-row { padding: 12px; } .connection-list { gap: 10px; } }
+
+/* Day 2: read-friendly, keyboard-accessible job review */
+.job-review__heading { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.job-review__explanation { line-height: 1.6; max-width: 75ch; }
+.job-review__eligibility { font-size: 13px; }
+.job-review details { margin-top: 12px; }
+.job-review summary { cursor: pointer; min-height: 36px; padding: 8px 0; }
+.job-review summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.job-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+@media (max-width: 480px) { .job-review { padding: 16px; } .job-review .actions button { width: 100%; } }
+
+/* Team settings: accessible read-only member summaries and one-time invitation code. */
+.team-member { display:flex; flex-wrap:wrap; gap:6px 14px; padding:12px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.team-member strong { min-width:min(220px,100%); }
+.team-member span { color:var(--muted); }
+.team-invitation { display:flex; flex-wrap:wrap; align-items:center; gap:10px; overflow-wrap:anywhere; margin-top:12px; }
+.team-invitation p { width:100%; margin:0; }
+.team-invitation-code { display:block; max-width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); overflow-wrap:anywhere; user-select:all; }
+@media (max-width:600px) { .team-member { flex-direction:column; gap:3px; } .team-invitation button { width:100%; } }
+
+/* Synthetic import preview: read-only and usable on narrow screens. */
+.import-destination { padding: 12px; background: var(--surface-soft); border-radius: 8px; overflow-wrap:anywhere; }
+.import-table { min-width: 650px; }
+.import-table td { overflow-wrap: anywhere; max-width: 260px; }
+.import-table p { margin: 6px 0 0; font-size: 12px; }
+@media (max-width: 540px) { .import-table { min-width: 600px; } }

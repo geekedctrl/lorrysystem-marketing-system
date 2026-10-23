@@ -425,7 +425,9 @@ def browser_acceptance():
             for section, heading in [("Account", "Account"), ("Organization", "Organization"), ("Workspace", "Workspace"), ("Connections", "Connections")]:
                 page.get_by_role("button", name=section, exact=True).click()
                 page.get_by_role("heading", name=heading, exact=True).wait_for()
-            assert page.get_by_label("Connection name", exact=True).is_visible()
+            assert page.get_by_label("Connection name", exact=True).count() == 0
+            assert page.get_by_role("button", name="Verify sender").count() == 0
+            assert page.locator(".connection-status").count() >= 3
             page.screenshot(path=str(output/"settings-connections-desktop.png"), full_page=True)
             page.get_by_role("button", name="Workspace", exact=True).click()
             page.get_by_role("heading", name="Workspace", exact=True).wait_for()
