@@ -43,9 +43,40 @@
       .replace(/^./, (c) => c.toUpperCase());
   const badge = (value) =>
     `<span class="badge ${["NEEDS_REVIEW", "FAILED", "STALE", "PENDING_APPROVAL"].includes(value) ? "attention" : ["APPROVED", "COMPLETED"].includes(value) ? "success" : ""}">${esc(label(value))}</span>`;
+  // Read-only, display-only status descriptions. Do not expose provider payloads.
+  const connectionStatus = (value) => {
+    const key = typeof value === "string" ? value.trim().toUpperCase() : "";
+    const known = {
+      CONFIGURED: ["Configured", "Configuration is saved. This does not mean it was tested or verified.", "configured"],
+      UNVERIFIED: ["Unverified", "Verification has not been confirmed. Do not assume the connection is ready.", "unverified"],
+      UNAVAILABLE: ["Unavailable", "The connection is not currently available for use. Ask a workspace administrator to check the approved setup process.", "unavailable"],
+      DISABLED: ["Disabled", "The connection is disabled and cannot be used.", "disabled"],
+      ENABLED: ["Enabled", "The connection is enabled, but successful provider operation is not confirmed here.", "configured"],
+      VERIFIED: ["Verified", "The current system marks this connection verified; no test was performed by this page.", "configured"],
+      MISSING: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+      NOT_CONFIGURED: ["Not configured", "Configuration is missing. Ask a workspace administrator to follow the approved setup process.", "unavailable"],
+    };
+    const [title, description, tone] = known[key] || ["Other status", "The API returned a status this page does not recognize. Ask an administrator to review the approved configuration process.", "unknown"];
+    return `<div class="connection-status connection-status--${tone}"><span class="connection-status__label">${esc(title)}</span><p>${esc(description)}</p></div>`;
+  };
+  const connectionRow = (name, value) => `<div class="connection-row"><h3>${esc(name)}</h3>${connectionStatus(value)}</div>`;
   const empty = (text) => `<p class="empty">${esc(text)}</p>`;
   const card = (title, body) =>
     `<section class="card"><h2>${esc(title)}</h2>${body}</section>`;
+  const icon = (name) => {
+    const paths = {
+      overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+      leads: '<path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      discovery: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/><path d="M11 7v8M7 11h8"/>',
+      approvals: '<path d="m5 12 4 4L19 6"/>',
+      sending: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+      operations: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4L7.3 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 2Z"/>',
+      setup: '<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/>',
+      arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    };
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.overview}</svg>`;
+  };
   const canWork = () => ["ADMIN", "OPERATOR"].includes(state.workspace?.role);
   const canReview = () => ["ADMIN", "REVIEWER"].includes(state.workspace?.role);
   const canReviewCandidate = () =>
@@ -204,7 +235,7 @@
     };
   }
   function shell() {
-    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="organization">Organization</label><select id="organization">${state.organizations.map((o) => `<option value="${esc(o.id)}" ${o.id === state.organization?.id ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.filter((w) => w.organization_id === state.organization?.id).map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(state.organization?.name || "Organization")} · ${esc(label(state.workspace?.role))}</p><button type="button" id="create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button></div><nav>${(state.workspace ? [["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["sending", "Sending"], ["operations", "Activity & operations"], ["settings", "Settings"]] : [["settings", "Settings"]]).map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${esc(t)}</a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Can create workspaces" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><div class="page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false">Menu</button></div><div id="view" aria-live="polite"></div></main></div>`;
+    app.innerHTML = `<div class="native-shell"><aside class="native-sidebar" id="sidebar" aria-label="Workspace navigation"><div class="brand">Marketing<small>Product operations</small></div><div class="workspace-controls"><label for="organization">Organization</label><select id="organization">${state.organizations.map((o) => `<option value="${esc(o.id)}" ${o.id === state.organization?.id ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select><label for="workspace">Product workspace</label><select id="workspace">${state.workspaces.filter((w) => w.organization_id === state.organization?.id).map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace?.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select><p class="muted">${esc(state.organization?.name || "Organization")} · ${esc(label(state.workspace?.role))}</p><button type="button" id="create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button></div><nav>${(state.workspace ? [["overview", "Overview"], ["leads", "Leads"], ["discovery", "Discovery"], ["approvals", "Approvals"], ["sending", "Outreach"], ["operations", "Activity & operations"], ["settings", "Settings"]] : [["settings", "Settings"]]).map(([p, t]) => `<a href="#${p}" data-page="${p}" ${state.page === p ? "aria-current=page" : ""}>${icon(p === "settings" ? "setup" : p)}<span>${esc(t)}</span></a>`).join("")}</nav><footer><small class="account-identity">${esc(state.user?.email || "")}${state.user?.capabilities?.create_workspace ? " · Can create workspaces" : ""}</small><button data-theme>Theme: ${esc(localStorage.getItem("marketing-theme") || "system")}</button><button id="collapse">Collapse navigation</button><button id="logout">Sign out</button></footer></aside><div class="scrim" hidden></div><main id="content" class="native-main" tabindex="-1"><header class="native-topbar page-top"><div><div class="eyebrow">${esc(state.workspace?.name)}</div><h1 id="heading">${esc(state.page === "lead" ? "Lead workspace" : label(state.page))}</h1></div><button class="mobile-menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">Menu</button></header><div id="view" aria-live="polite"></div></main></div>`;
     document.querySelector("#create-workspace").onclick = () => createWorkspaceFlow();
     document.querySelector("#organization").onchange = async (event) => {
       if (state.dirty && !confirm("Leave your unsaved changes and switch organization?")) { event.target.value = state.organization.id; return; }
@@ -269,8 +300,8 @@
         notice(error.message);
       }
     };
-    document.querySelector("#collapse").onclick = () =>
-      document.querySelector(".native-shell").classList.toggle("collapsed");
+    const collapse = document.querySelector("#collapse");
+    if (collapse) collapse.onclick = () => document.querySelector(".native-shell").classList.toggle("collapsed");
     const menu = document.querySelector(".mobile-menu"),
       sidebar = document.querySelector("#sidebar"),
       scrim = document.querySelector(".scrim");
@@ -405,16 +436,84 @@
     await load();
     document.querySelector("#content")?.focus();
   }
-  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"]];
+  const settingsTabs = [["account", "Account"], ["organization", "Organization"], ["workspace", "Workspace"], ["product", "Product"], ["automation", "Automation"], ["connections", "Connections"], ["import-preview", "Import preview"]];
   function settingsNav() {
     return `<nav class="settings-nav" aria-label="Settings sections">${settingsTabs.filter(([id]) => state.workspace || ["account", "organization"].includes(id)).map(([id, title]) => `<button type="button" data-settings="${id}" ${state.settingsSection === id ? 'aria-current="page"' : ""}>${title}</button>`).join("")}</nav>`;
+  }
+  // Only display fields actually supplied by the existing member endpoints.
+  function teamMemberDisplay(member) {
+    const status = typeof member.status === "string" && member.status.trim()
+      ? label(member.status)
+      : typeof member.active === "boolean"
+        ? member.active ? "Active" : "Inactive"
+        : "Status not provided";
+    return `<div class="team-member"><strong>${esc(member.email || "Member email unavailable")}</strong><span>Role: ${esc(label(member.role))}</span><span>Status: ${esc(status)}</span></div>`;
+  }
+  // Preview-only import: uses the fixed local fixture below, never network calls.
+  const importSample = `company_name,website,industry
+Alpha Logistics,https://alpha.example,Logistics
+Beta Transport,,Transport
+Alpha Logistics,https://alpha.example,Logistics
+Gamma Supplies,https://gamma.example,Wholesale`;
+  const importFields = ["company_name", "website", "industry"];
+  function parseImportPreview(input) {
+    if (typeof input !== "string" || input.length > 12000) return { error: "Sample input is too large or invalid." };
+    if (!input.trim()) return { error: "The sample contains no rows." };
+    const lines = input.replace(/\r\n?/g, "\n").trim().split("\n");
+    if (lines.length > 101) return { error: "Preview supports at most 100 sample rows." };
+    // Simple CSV fixture format only; quoted/multiline CSV is deliberately unsupported.
+    const cells = lines.map(line => line.split(",").map(x => x.trim()));
+    const headers = cells.shift();
+    if (!headers || headers.some(h => !h || /["\r\n]/.test(h)) || new Set(headers).size !== headers.length ||
+        !importFields.every(f => headers.includes(f))) return { error: "Invalid header. Expected company_name, website and industry." };
+    const seen = new Set();
+    const rows = cells.map((values, i) => {
+      if (values.length !== headers.length || values.some(v => /["\r\n]/.test(v))) return { number: i + 2, values: {}, issues: ["Malformed row: expected one value per column."], status: "Invalid" };
+      const record = Object.fromEntries(headers.map((h, n) => [h, values[n]]));
+      const issues = [];
+      if (!record.company_name) issues.push("Company name is required.");
+      if (!record.website) issues.push("Website is required.");
+      else {
+        try { const u = new URL(record.website); if (!["https:", "http:"].includes(u.protocol) || !u.hostname.includes(".") || u.username || u.password) issues.push("Website must be a valid public-looking HTTP(S) URL."); }
+        catch { issues.push("Website format is invalid."); }
+      }
+      const key = `${(record.company_name || "").toLowerCase()}|${(record.website || "").toLowerCase()}`;
+      if (record.company_name && record.website && seen.has(key)) issues.push("Duplicate row in sample.");
+      else if (record.company_name && record.website) seen.add(key);
+      const status = issues.some(x => x.startsWith("Duplicate")) ? "Duplicate" : issues.length ? "Invalid" : "Valid";
+      return { number: i + 2, values: record, issues, status };
+    });
+    return { rows, fields: headers, valid: rows.filter(r => r.status === "Valid").length,
+      invalid: rows.filter(r => r.status === "Invalid").length, duplicate: rows.filter(r => r.status === "Duplicate").length };
+  }
+  function renderImportPreview() {
+    const view = document.querySelector("#view");
+    if (!view || !state.workspace) return;
+    const workspaceId = state.workspace.id;
+    const epoch = state.epoch;
+    const preview = parseImportPreview(importSample);
+    const destination = `<p class="import-destination"><strong>Preview destination:</strong> ${esc(state.organization?.name || "Organization")} / ${esc(state.workspace.name || "Workspace")}</p>`;
+    const mapping = `<div class="table-wrap"><table><caption>Sample field mapping</caption><thead><tr><th>Sample field</th><th>Preview field</th></tr></thead><tbody>${importFields.map(x => `<tr><td>${esc(x)}</td><td>${esc(label(x))}</td></tr>`).join("")}</tbody></table></div>`;
+    const summary = preview.error ? `<p role="alert" class="error">${esc(preview.error)}</p>` :
+      `<p role="status">${preview.rows.length} sample rows · ${preview.valid} valid · ${preview.invalid} invalid · ${preview.duplicate} duplicate</p>`;
+    const table = preview.rows ? `<div class="table-wrap"><table class="import-table"><caption>Sample validation results</caption><thead><tr><th>Row</th><th>Company</th><th>Website</th><th>Industry</th><th>Status / issues</th></tr></thead><tbody>${preview.rows.map(r => `<tr><td>${r.number}</td><td>${esc(r.values.company_name || "—")}</td><td>${esc(r.values.website || "—")}</td><td>${esc(r.values.industry || "—")}</td><td><strong>${esc(r.status)}</strong>${r.issues.map(x => `<p class="muted">${esc(x)}</p>`).join("")}</td></tr>`).join("")}</tbody></table></div>` : "";
+    if (epoch !== state.epoch || workspaceId !== state.workspace?.id) return;
+    view.innerHTML = settingsNav() + card("Import preview — synthetic only", `${destination}<p>This is a demonstration using fake sample data. No file is uploaded, no workspace records are read or changed, and no import request is sent.</p>${mapping}${summary}${table}<div class="actions"><button type="button" disabled aria-describedby="import-disabled-help">Import (unavailable)</button></div><p id="import-disabled-help" class="muted">Preview only. The project owner must approve an import API contract before real imports can be enabled.</p>`);
   }
   async function loadSettings() {
     const view = document.querySelector("#view");
     if (!view) return;
+    if (state.settingsSection === "import-preview") { renderImportPreview(); return; }
     view.innerHTML = settingsNav() + empty("Loading settings…");
+    const renderEpoch = state.epoch;
+    const section = state.settingsSection;
+    const workspaceId = state.workspace?.id;
+    const organizationId = state.organization?.id;
+    const stillCurrent = () => renderEpoch === state.epoch &&
+      state.page === "settings" && section === state.settingsSection &&
+      workspaceId === state.workspace?.id && organizationId === state.organization?.id &&
+      document.querySelector("#view") === view;
     try {
-      const section = state.settingsSection;
       const oid = state.workspace?.organization_id || state.organization?.id;
       let html = "";
       if (section === "account") {
@@ -425,23 +524,25 @@
           request(`/settings/organizations/${encodeURIComponent(oid)}/members`, "GET", undefined, true),
           request(`/settings/organizations/${encodeURIComponent(oid)}/workspaces`, "GET", undefined, true),
         ]) : [[], []];
-        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Organization", `<p>${esc(state.organization?.name || "Create an organization")}</p><p>Your role: ${esc(state.organization?.role || "None")}</p>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<button id="settings-create-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create workspace</button><h3>Invite a member</h3><form id="invite-org">${field("email", "Email", "", "required", "email")}<label for="org-role">Organization role</label><select id="org-role" name="role"><option>MEMBER</option><option>ADMIN</option>${state.organization?.role === "OWNER" ? "<option>OWNER</option>" : ""}</select><div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Only organization owners and administrators can issue organization invitations. Member role changes also depend on your permissions. The server checks every action.</p>`);
         html += card("Manage organization", `<form id="organization-name">${field("name", "Organization name", state.organization?.name || "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Save name</button></form><h3>Member roles</h3>${members.map((m) => `<form data-org-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Role for ${esc(m.email)}" ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>${["MEMBER", "ADMIN", "OWNER"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""} ${role === "OWNER" && state.organization?.role !== "OWNER" ? "disabled" : ""}>${role}</option>`).join("")}</select><button ${state.organization?.role === "OWNER" || m.role !== "OWNER" && state.organization?.role === "ADMIN" ? "" : "disabled"}>Save role</button><div class="error" role="alert" hidden></div></form>`).join("")}`);
         html += card("Organization workspaces", organizationWorkspaces.map((w) => `<p>${esc(w.name)} · ${w.active ? "Active" : "Inactive"} ${!w.active ? `<button data-reactivate="${esc(w.id)}" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Reactivate</button>` : ""}</p>`).join("") || empty("Create a workspace to start product setup."));
         html += card("Create another organization", `<form id="new-organization">${field("name", "New organization name", "", "required minlength=2 maxlength=120")}<div class="error" role="alert" hidden></div><button>Create organization</button></form>`);
       } else if (section === "workspace") {
         const [profile, members] = await Promise.all([request("profile"), request("members")]);
-        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map((m) => `<p>${esc(m.email)} · ${esc(m.role)}</p>`).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><p id="invitation-result" class="muted"></p>`);
+        html = card("Workspace", `<form id="workspace-profile">${field("name", "Workspace name", profile.name, "required minlength=2 maxlength=120")}${area("description", "Description", profile.description, "maxlength=2000")}<p>Status: ${profile.active ? "Active" : "Inactive"} · Your role: ${esc(profile.role)}</p><div class="error" role="alert" hidden></div><button class="primary" ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save workspace</button></form><h3>Members</h3>${members.map(teamMemberDisplay).join("") || empty("No members yet.")}<h3>Invite a teammate</h3><form id="invite-workspace">${field("email", "Email", "", "required", "email")}<label for="workspace-role">Workspace role</label><select id="workspace-role" name="role"><option>VIEWER</option><option>REVIEWER</option><option>OPERATOR</option><option>ADMIN</option></select><div class="error" role="alert" hidden></div><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Create invitation</button></form><div id="invitation-result" class="team-invitation" role="status" aria-live="polite"></div>`);
+        html += card("Team permissions", `<p class="muted">Workspace administrators can invite members and change workspace roles. Other roles can view team information but cannot change it. The server makes the final permission decision.</p>`);
         html += card("Workspace roles", members.map((m) => `<form data-workspace-member="${esc(m.user_id)}"><span>${esc(m.email)}</span><select name="role" aria-label="Workspace role for ${esc(m.email)}" ${!isAdmin() ? "disabled" : ""}>${["VIEWER", "REVIEWER", "OPERATOR", "ADMIN"].map((role) => `<option value="${role}" ${role === m.role ? "selected" : ""}>${role}</option>`).join("")}</select><button ${!isAdmin() ? 'disabled title="Workspace administrator required"' : ""}>Save role</button><div class="error" role="alert" hidden></div></form>`).join(""));
         html += card("Deactivate workspace", `<p>Pause access to this workspace and stop its automation. Its records are retained.</p><button id="deactivate-workspace" ${!["OWNER", "ADMIN"].includes(state.organization?.role) ? 'disabled title="Organization owner or administrator required"' : ""}>Deactivate workspace</button>`);
       } else if (section === "connections") {
+        // Only the existing dashboard BFF is queried; no provider calls or writes.
         const [status, senders] = await Promise.all([request("connections"), request("senders")]);
-        const modelDraft = (status.provider_drafts || []).find((p) => p.kind === "MODEL");
-        html = card("Connections", `<p>Automation connection: ${esc(status.automation)}</p><p>Provider connection: ${esc(status.model)}</p><p>Search connection: ${esc(status.search)}</p><p class="muted">Saved provider credentials remain disabled and unverified until separate calibration. Saving them does not call a provider.</p><h3>Senders</h3>${senders.map((s) => `<p><strong>${esc(s.name)}</strong> · ${s.enabled ? "Enabled" : "Disabled"} · ${s.verified_at ? "Verified" : "Unverified"}<br>${esc(s.from_email)} ${isAdmin() && !s.verified_at ? command(`senders/${s.id}/verify`, "Verify connection (no email sent)") : ""}</p>`).join("") || empty("No sender connection configured.")}<p class="muted">Credentials are encrypted and never displayed. A sender must be enabled and verified before use.</p>`);
-        html += card("Model provider", `<form data-command="provider-connections/MODEL" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Model connection draft</legend>${field("base_url", "Public HTTPS model endpoint", modelDraft?.settings?.base_url || "", "required maxlength=500", "url")}${field("model_name", "Model name", modelDraft?.settings?.model_name || "", "required maxlength=200")}${field("secret", "API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Search provider", `<form data-command="provider-connections/SEARCH" data-method="PUT"><fieldset ${isAdmin() ? "" : "disabled"}><legend>Search connection draft</legend>${field("secret", "Search API key", "", "required minlength=8 maxlength=4096", "password")}</fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Save disabled draft</button></form>`);
-        html += card("Add sender connection", `<form data-command="senders" data-sender><fieldset ${isAdmin() ? "" : "disabled"}><legend>Sender credentials</legend>${field("name","Connection name","","required minlength=2 maxlength=120")}${field("from_email","From email","","required maxlength=254","email")}${field("from_name","From name","","required minlength=2 maxlength=120")}${field("host","SMTP host","","required minlength=3 maxlength=253")}${field("port","Port","587","required min=465 max=587","number")}<label for="sender-security">Security</label><select id="sender-security" name="security"><option value="STARTTLS">STARTTLS</option><option value="TLS">TLS</option></select>${field("username","Username","","required maxlength=254")}${field("password","Password","","required maxlength=4000","password")}<label class="sender-enabled"><input type="checkbox" name="enabled"> Enabled after verification</label></fieldset><div class="error" role="alert" hidden></div><button ${isAdmin() ? "" : 'disabled title="Workspace administrator required"'}>Add sender</button></form>${isAdmin() ? "" : '<p class="muted">Workspace administrator required.</p>'}`);
+        html = card("Connections", `<p class="muted">Read-only connection information for the selected workspace. A configured connection has not necessarily been verified or tested.</p><div class="connection-list">${connectionRow("Automation", status?.automation)}${connectionRow("Model provider", status?.model)}${connectionRow("Search provider", status?.search)}</div><p class="muted">To update a connection, ask a workspace administrator to use the project owner's approved configuration process. No credentials or provider tests are available from this page.</p>`);
+        html += card("Sender connections", `<p class="muted">These statuses are existing records, not results of a new connectivity test.</p><div class="connection-list">${Array.isArray(senders) ? senders.map((sender) => `<div class="connection-row"><h3>${esc(sender.name || "Unnamed sender")}</h3><p class="muted">${esc(sender.from_email || "Email address unavailable")}</p>${connectionStatus(sender.enabled ? (sender.verified_at ? "VERIFIED" : "UNVERIFIED") : "DISABLED")}</div>`).join("") || empty("No sender connections configured. A workspace administrator can follow the approved setup process.") : empty("Sender information is unavailable.")}</div>`);
       }
+      // Never render delayed team data after a workspace/organization/section switch.
+      if (!stillCurrent()) return;
       view.innerHTML = settingsNav() + html;
       document.querySelector("#settings-create-workspace")?.addEventListener("click", createWorkspaceFlow);
       document.querySelector("#new-organization")?.addEventListener("submit", async (event) => {
@@ -472,13 +573,39 @@
       for (const form of document.querySelectorAll("[data-org-member],[data-workspace-member]")) form.addEventListener("submit", async (event) => {
         event.preventDefault(); const button = form.querySelector("button"); button.disabled = true;
         const endpoint = form.dataset.orgMember ? `/settings/organizations/${encodeURIComponent(oid)}/members/${encodeURIComponent(form.dataset.orgMember)}` : `members/${encodeURIComponent(form.dataset.workspaceMember)}`;
-        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); state.dirty = false; await loadSettings(); notice("Role saved."); }
+        try { await request(endpoint, "PATCH", Object.fromEntries(new FormData(form)), !!form.dataset.orgMember); if (!stillCurrent()) return; state.dirty = false; await loadSettings(); notice("Role saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
       for (const [id, endpoint] of [["invite-org", `/settings/organizations/${encodeURIComponent(oid)}/invitations`], ["invite-workspace", `/settings/workspaces/${encodeURIComponent(state.workspace?.id || "")}/invitations`]]) {
         document.querySelector(`#${id}`)?.addEventListener("submit", async (event) => {
           event.preventDefault(); const form = event.target, button = form.querySelector("button"); button.disabled = true;
-          try { const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true); document.querySelector("#invitation-result").textContent = `Share this invitation code securely: ${invitation.token}`; form.reset(); state.dirty = false; }
+          try {
+            const invitation = await request(endpoint, "POST", Object.fromEntries(new FormData(form)), true);
+            if (!stillCurrent()) return;
+            const target = document.querySelector("#invitation-result");
+            // One-time response only: never store the code in state, storage or logs.
+            const code = typeof invitation.token === "string" ? invitation.token : "";
+            target.replaceChildren();
+            const instructions = document.createElement("p");
+            instructions.textContent = "Invitation created. Copy and share this code securely now. It will disappear when you leave this section.";
+            target.append(instructions);
+            if (code) {
+              const value = document.createElement("code");
+              value.className = "team-invitation-code";
+              value.textContent = code;
+              const copy = document.createElement("button");
+              copy.type = "button";
+              copy.textContent = "Copy invitation code";
+              copy.onclick = async () => {
+                try { await navigator.clipboard.writeText(code); instructions.textContent = "Code copied. Share it privately; it will not be shown again after leaving this section."; }
+                catch { instructions.textContent = "Copy is unavailable here. Select the displayed code and copy it manually."; }
+              };
+              target.append(value, copy);
+            } else {
+              instructions.textContent = "Invitation created, but no shareable code was returned. Ask the project owner to review the existing API response.";
+            }
+            form.reset(); state.dirty = false;
+          }
           catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; }
           finally { button.disabled = false; }
         });
@@ -500,7 +627,14 @@
         try { const profile = await request("profile", "PUT", Object.fromEntries(new FormData(form))); state.workspace.name = profile.name; state.dirty = false; state.workspaces.find((w) => w.id === profile.id).name = profile.name; shell(); await loadSettings(); notice("Workspace saved."); }
         catch (error) { form.querySelector(".error").hidden = false; form.querySelector(".error").textContent = error.message; button.disabled = false; }
       });
-    } catch (error) { view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`; }
+    } catch (error) {
+      if (error.name === "AbortError" || !stillCurrent()) return;
+      if (state.settingsSection === "connections") {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">Connection information is unavailable right now. Retry by reopening Connections, or ask a workspace administrator to check the approved setup process.</div>`;
+      } else {
+        view.innerHTML = settingsNav() + `<div class="error" role="alert">${esc(error.message)}</div>`;
+      }
+    }
   }
   async function load(poll = false) {
     const view = document.querySelector("#view"),
@@ -624,12 +758,35 @@
       const pending = d.approvals.filter(
           (a) => a.status === "PENDING" && !a.stale,
         ),
+        approved = d.approvals.filter((a) => a.status === "APPROVED"),
+        recentLeads = d.leads.slice(0, 3),
+        recentApprovals = [...d.approvals].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0, 4),
         stops = (d.operations.current_preparation || []).filter((r) =>
           ["FAILED", "NEEDS_REVIEW", "STALE", "CHANGES_REQUESTED"].includes(
             r.status,
           ),
         );
-      view.innerHTML = `<div class="grid">${card("Ready for human review", `<h1>${pending.length}</h1><p>Pending drafts in the latest 100 approvals.</p><button data-page="approvals" class="primary">Review drafts</button>`)}${card("Preparation needs attention", `<h1>${stops.length}</h1><p>Current runs with a failure or review stop.</p><button data-page="leads">Review leads</button>`)}</div>${card("Your next step", !d.catalog.some((x) => x.kind === "PRODUCT") ? `<p>Add actual offerings and activate your product.</p>${isAdmin() ? '<button data-page="settings" data-section="product" class="primary">Set up product</button>' : "<p>Ask an administrator to configure this workspace.</p>"}` : !d.operations.enabled ? `<p>Automation is paused. An administrator can resume it from Settings.</p>` : `<p>Automation is active. Find companies, prepare a lead, or review drafts.</p>${canWork() ? '<button data-page="discovery" class="primary">Find leads</button>' : ""}`)}${card("Workspace leads", leadTable(d.leads.slice(0, 5)))}`;
+      const actionTitle = pending.length ? "Review pending outreach" : stops.length ? "Review preparation needs" : d.catalog.some((x) => x.kind === "PRODUCT") && d.operations.enabled ? "Find your next customers" : "Set up your workspace";
+      const actionCopy = pending.length ? "Preparation runs stop for human approval. Approved outreach is not sent automatically." : stops.length ? "Some lead preparations need attention before they can continue." : !d.operations.enabled ? "Automation is paused. An administrator can resume it from Settings." : "Discover suitable companies, review their evidence, and prepare the next conversation.";
+      const actionPage = pending.length ? "approvals" : stops.length ? "leads" : d.catalog.some((x) => x.kind === "PRODUCT") ? "discovery" : "settings";
+      const actionLabel = pending.length ? "Open approval queue" : stops.length ? "Review leads" : actionPage === "settings" ? "Configure product" : "Find companies";
+      const approvalRows = pending.slice(0, 3).map((a) => {
+        const snapshot = a.snapshot || {}, draftValue = snapshot.draft || snapshot.DRAFTING || snapshot;
+        const company = snapshot.inputs?.company?.company_name || snapshot.company?.company_name || "Company awaiting review";
+        return `<a class="overview-list-row" href="#approvals" data-page="approvals"><span class="overview-row-copy"><strong>${esc(draftValue.subject || "Outreach draft")}</strong><small>${esc(company)}${draftValue.channel ? ` · ${esc(label(draftValue.channel))}` : ""}</small></span><span class="overview-pill is-pending">Pending</span></a>`;
+      }).join("");
+      const leadRows = recentLeads.map((lead) => {
+        const run = lead.current_preparation || (d.operations.current_preparation || []).find((r) => r.lead_id === lead.id);
+        const score = run?.results?.SCORING?.score;
+        return `<a class="overview-list-row overview-lead-row" href="#lead/${esc(lead.id)}" data-lead="${esc(lead.id)}"><span class="overview-row-copy"><strong>${esc(lead.company_name)}</strong><small>${esc(lead.primary_contact?.name || "Contact not selected")}${lead.website ? ` · ${esc(lead.website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}` : ""}</small></span><span class="overview-row-meta">${run ? badge(run.status) : '<span class="overview-pill">New</span>'}<strong>${score == null ? "—" : esc(score)}</strong></span></a>`;
+      }).join("");
+      const activityRows = recentApprovals.map((a) => {
+        const snapshot = a.snapshot || {}, draftValue = snapshot.draft || snapshot.DRAFTING || snapshot;
+        const company = snapshot.inputs?.company?.company_name || snapshot.company?.company_name || "Company";
+        const status = a.status === "PENDING" ? "PENDING APPROVAL" : label(a.status).toUpperCase();
+        return `<tr><td><strong>${esc(company)}</strong></td><td>${esc(label(draftValue.channel || "EMAIL"))}</td><td>${esc(draftValue.subject || "Outreach draft")}</td><td><span class="overview-pill ${a.status === "APPROVED" ? "is-approved" : a.status === "PENDING" ? "is-pending" : ""}">${esc(status)}</span></td><td>${esc(a.created_at ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(a.created_at)) : "—")}</td></tr>`;
+      }).join("");
+      view.innerHTML = `<section class="overview-hero"><div class="overview-hero-copy"><span class="overview-eyebrow">YOUR NEXT ACTION</span><h2>${esc(actionTitle)}</h2><p>${esc(actionCopy)}</p></div><button class="overview-hero-action" data-page="${actionPage}" ${actionPage === "settings" ? 'data-section="product"' : ""}>${esc(actionLabel)} ${icon("arrow")}</button></section><section class="overview-metrics" aria-label="Workspace summary"><article class="overview-metric metric-leads"><span>Active leads</span><strong>${esc(d.leadPage.total)}</strong><small>Companies in this workspace</small></article><article class="overview-metric metric-approvals"><span>Pending approvals</span><strong>${esc(pending.length)}</strong><small>Drafts waiting for review</small></article><article class="overview-metric metric-drafts"><span>Recent drafts</span><strong>${esc(d.approvals.length)}</strong><small>Latest ${d.approvals.length === 100 ? "100" : d.approvals.length} drafts</small></article><article class="overview-metric metric-approved"><span>Recently approved</span><strong>${esc(approved.length)}</strong><small>In recent review history</small></article></section><div class="overview-columns"><section class="overview-panel"><header class="overview-panel-heading"><h2>Recent leads</h2><button data-page="leads">View all ${icon("arrow")}</button></header><div class="overview-list">${leadRows || '<p class="overview-empty">No leads yet. Discover companies to get started.</p>'}</div></section><section class="overview-panel"><header class="overview-panel-heading"><h2>Pending approvals</h2><button data-page="approvals">Open queue ${icon("arrow")}</button></header><div class="overview-list">${approvalRows || '<p class="overview-empty">You’re all caught up. New drafts will appear here for review.</p>'}</div></section></div><section class="overview-panel overview-activity"><header class="overview-panel-heading"><div><h2>Recent outreach</h2><p>Draft activity and review decisions. Approval does not send messages.</p></div><button data-page="approvals">View all ${icon("arrow")}</button></header>${activityRows ? `<div class="overview-table-wrap"><table class="overview-table"><thead><tr><th>COMPANY</th><th>CHANNEL</th><th>SUBJECT</th><th>STATUS</th><th>CREATED</th></tr></thead><tbody>${activityRows}</tbody></table></div>` : '<p class="overview-empty">Outreach activity will appear after a draft is prepared.</p>'}</section>`;
     } else if (state.page === "leads")
       view.innerHTML = card(
         "Companies",
@@ -717,15 +874,48 @@
   function command(path, title, payload = {}, disabled = false) {
     return `<form data-command="${esc(path)}" data-payload="${esc(JSON.stringify(payload))}"><div class="error" hidden role="alert"></div><div class="actions"><button class="primary" ${disabled ? "disabled" : ""}>${esc(title)}</button></div></form>`;
   }
+  // Display-only explanation. The API is still authoritative about retries.
+  function jobExplanation(job) {
+    const status = String(job.status || "").toUpperCase();
+    const code = String(job.failure_code || "").toUpperCase();
+    if (status === "NEEDS_REVIEW") return "Human review is required before this work can continue. Review the saved evidence; retry does not replace approval.";
+    if (status === "PENDING_APPROVAL") return "Waiting for a person to review and approve the next step. No message is sent automatically.";
+    if (status === "PENDING") return "The job has been queued and has not started yet.";
+    if (status === "RUNNING") return "The job is in progress. Check back for its result.";
+    if (status === "COMPLETED") return "The job finished. Any candidate, contact, or draft still needs its separate review.";
+    if (status !== "FAILED") return "Check the saved job history for its current state.";
+    if (/BUDGET|LIMIT|QUOTA/.test(code)) return "The job stopped because of a usage or budget limit. Ask an administrator to check the approved configuration.";
+    if (/PROVIDER|CONFIG|MODEL|CREDENTIAL|AUTH/.test(code)) return "A required service or configuration was unavailable. Ask an administrator to check the approved setup process.";
+    if (/TIMEOUT|NETWORK|FETCH|HTTP_5/.test(code)) return "The job could not complete a service or website request. Review the saved context before trying again.";
+    return "The job failed. Review its saved details to understand the problem before requesting a retry.";
+  }
+  function jobRetryState(job) {
+    if (job.status !== "FAILED") return { allowed: false, reason: "Only failed jobs can be retried." };
+    if (!canWork()) return { allowed: false, reason: "Retry requires an Admin or Operator workspace role." };
+    if (!state.data.operations?.enabled) return { allowed: false, reason: "Automation is paused. An administrator must resume it before retrying." };
+    if (Number.isFinite(Number(job.max_attempts)) && Number(job.max_attempts) > 0 && Number(job.attempts) >= Number(job.max_attempts))
+      return { allowed: false, reason: "The maximum number of attempts has been reached. Ask an administrator to review this job." };
+    return { allowed: true, reason: "An Admin or Operator may request a retry. The server will check eligibility again." };
+  }
   function jobCards(jobs) {
-    return jobs.length
-      ? jobs
-          .map(
-            (j) =>
-              `<article class="card"><strong>${esc(label(j.kind))}</strong> ${badge(j.status)}<p class="muted">Attempt ${esc(j.attempts)} of ${esc(j.max_attempts)} · ${esc(j.created_at)}</p>${j.kind === "DISCOVERY" && j.result?.counts ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p><p>${esc(label(j.result.outcome))}. Suitable candidates await your acceptance.</p>` : ""}${j.failure_code ? `<p>${esc(label(j.failure_code))}. ${/PROVIDER|BUDGET|CONFIG|MODEL/.test(j.failure_code) ? "Ask an administrator to review configuration." : "Review the saved context before retrying."}</p>` : ""}<details><summary>Stage events & technical details</summary><pre>${esc(JSON.stringify({ history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>${canWork() && j.status === "FAILED" ? command(`jobs/${j.id}/retry`, "Retry failed job") : ""}</article>`,
-          )
-          .join("")
-      : empty("No jobs recorded yet.");
+    return jobs.length ? jobs.map((j) => {
+      const retry = jobRetryState(j);
+      const description = jobExplanation(j);
+      const counts = j.kind === "DISCOVERY" && j.result?.counts
+        ? `<p>Searches: ${esc(j.result.counts.searches_attempted)} · Websites: ${esc(j.result.counts.websites_attempted)} · Pages: ${esc(j.result.counts.pages_attempted)} · Assessments: ${esc(j.result.counts.assessments_attempted)} · Candidates: ${esc(j.result.counts.candidates_ready)}</p>` : "";
+      const action = j.status === "FAILED" && retry.allowed
+        ? command(`jobs/${j.id}/retry`, "Retry failed job")
+        : "";
+      return `<article class="card job-review" aria-label="${esc(label(j.kind))} job">
+        <div class="job-review__heading"><strong>${esc(label(j.kind))}</strong>${badge(j.status)}</div>
+        <p class="muted">Attempt ${esc(j.attempts ?? "?")} of ${esc(j.max_attempts ?? "?")} · ${esc(j.created_at || "Date unavailable")}</p>
+        <p class="job-review__explanation">${esc(description)}</p>${counts}
+        ${j.kind === "DISCOVERY" && j.result?.outcome ? `<p class="muted">Discovery outcome: ${esc(label(j.result.outcome))}. Candidates must be accepted separately.</p>` : ""}
+        <p class="muted job-review__eligibility">${esc(retry.reason)}</p>
+        ${action}
+        <details><summary>Stage events &amp; technical details</summary><pre>${esc(JSON.stringify({ failure_code: j.failure_code, history: j.history, result: j.result, available_at: j.available_at, lease_until: j.lease_until }, null, 2))}</pre></details>
+      </article>`;
+    }).join("") : empty("No jobs recorded yet.");
   }
   function researchFacts(facts) {
     return [...new Set(facts.map((f) => f.category))]
@@ -808,12 +998,35 @@
       "Outreach",
       "Activity",
     ];
-    let html = `<button data-page="leads">← Back to leads</button><div class="grid">${card(l.company_name, `${link(l.website, "Official website")}<p>${run ? badge(run.status) : "Preparation not started"}</p>`)}${card("Primary contact", contact ? `<strong>${esc(contact.name)}</strong><p>${esc(contact.role)}<br>${esc(contact.email || "No supported email")}</p>` : empty("No supported primary contact selected yet."))}</div><div class="tabs" role="tablist" aria-label="Lead sections">${tabs.map((t, i) => `<button id="tab-${i}" role="tab" aria-controls="lead-panel" aria-selected="${t === state.tab}" tabindex="${t === state.tab ? 0 : -1}" data-tab="${t}">${t}</button>`).join("")}</div><section id="lead-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(state.tab)}">`;
+    const stages = [
+      { name: "Research", result: "RESEARCH", tab: "Research", detail: "Company evidence" },
+      { name: "Contact review", result: "CONTACT_SEARCH", tab: "People", detail: "Public contacts", ready: Boolean(contact) },
+      { name: "Qualification", result: "SCORING", tab: "Qualification", detail: "Fit assessment" },
+      { name: "Product fit", result: "MATCHING", tab: "Qualification", detail: "Offering match" },
+      { name: "Outreach draft", result: "DRAFTING", tab: "Outreach", detail: "Human review" },
+    ];
+    const stageMarkup = stages.map((stage, i) => {
+      const complete = Boolean(results[stage.result]) && (stage.ready !== false);
+      const active = !complete && run && ["RUNNING", "PENDING"].includes(run.status) &&
+        (i === 0 || stages.slice(0, i).every((prior) => results[prior.result]));
+      const stageState = complete ? "Complete" : active ? "In progress" : "Not started";
+      return `<button class="lead-stage ${complete ? "is-complete" : ""} ${active ? "is-active" : ""}" data-tab="${stage.tab}" aria-label="${stage.name}: ${stageState}"><span class="lead-stage-number">${complete ? "✓" : String(i + 1).padStart(2, "0")}</span><span class="lead-stage-copy"><strong>${stage.name}</strong><small>${stage.detail}</small><small class="lead-stage-status">${stageState}</small></span></button>`;
+    }).join("");
+    const score = results.SCORING?.score;
+    const updated = run?.created_at || l.created_at;
+    const dateLabel = (value) => {
+      if (!value) return "No activity";
+      const date = new Date(value);
+      return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+    };
+    let html = `<a class="lead-back" href="#leads" data-page="leads">← All leads</a><header class="lead-hero"><div class="lead-hero-main"><div class="lead-kicker">LEAD PROFILE</div><h2>${esc(l.company_name)}</h2><div class="lead-hero-links">${link(l.website, "Visit company website")}${contact?.role ? `<span>·</span><span>${esc(contact.role)}</span>` : ""}</div></div><div class="lead-hero-status">${run ? badge(run.status) : '<span class="badge">Not prepared</span>'}${run?.stop_reason ? `<span class="muted">${esc(label(run.stop_reason))}</span>` : ""}</div></header><section class="lead-metrics" aria-label="Lead summary">${[["Fit score", score == null ? "—" : `${score}/100`], ["Preparation", run ? label(run.status) : "Not started"], ["Priority", score == null ? "Unscored" : score >= 70 ? "High fit" : score >= 40 ? "Review" : "Low fit"], ["Primary contact", contact?.name || "Not selected"], ["Last activity", dateLabel(updated)]].map(([name, value]) => `<div class="lead-metric"><span>${name}</span><strong>${esc(value)}</strong></div>`).join("")}</section><section class="lead-stage-panel" aria-labelledby="lead-stages-title"><div class="lead-section-heading"><div><span class="lead-kicker">WORKFLOW</span><h3 id="lead-stages-title">Preparation stages</h3></div><span class="muted">${stages.filter((s) => results[s.result] && s.ready !== false).length} of ${stages.length} complete</span></div><nav class="lead-stages" aria-label="Preparation stages">${stageMarkup}</nav></section><div class="lead-context-grid"><article class="lead-context-card"><span class="lead-kicker">COMPANY</span><h3>${esc(l.company_name)}</h3><p>${link(l.website, "Official website")}</p></article><article class="lead-context-card"><span class="lead-kicker">PRIMARY CONTACT</span>${contact ? `<h3>${esc(contact.name)}</h3><p>${esc(contact.role || "Role not established")}${contact.email ? ` · ${esc(contact.email)}` : ""}</p>` : `<h3>Contact review needed</h3><p>No supported primary contact has been selected.</p>`}<button class="text-action" data-tab="People">Review people →</button></article></div><div class="tabs" role="tablist" aria-label="Lead sections">${tabs.map((t, i) => `<button id="tab-${i}" role="tab" aria-controls="lead-panel" aria-selected="${t === state.tab}" tabindex="${t === state.tab ? 0 : -1}" data-tab="${t}">${t}</button>`).join("")}</div><section id="lead-panel" role="tabpanel" aria-labelledby="tab-${tabs.indexOf(state.tab)}">`;
     if (state.tab === "Overview")
       html += card(
         "Preparation",
         `<p>${run?.stop_reason ? esc(label(run.stop_reason)) : "Prepare this lead to collect evidence, qualify fit, and create a draft for review."}</p>${canWork() ? command(`leads/${l.id}/prepare`, "Start fresh preparation", {}, !d.operations.enabled) : ""}${!d.operations.enabled ? "<p>Automation is paused. Ask an administrator to resume it.</p>" : ""}<p class="muted">Stage results arrive progressively. Partial evidence remains available if work stops.</p>`,
       );
+    if (state.tab !== "Overview" && canWork())
+      html += `<div class="lead-page-action">${command(`leads/${l.id}/prepare`, "Start fresh preparation", {}, !d.operations.enabled)}</div>`;
     if (state.tab === "Research") {
       const r = results.RESEARCH;
       html += r
@@ -1159,7 +1372,9 @@
               ? "Candidate rejected. Your decision has been saved."
               : form.dataset.command.startsWith("candidates/") && form.dataset.command.endsWith("/retry")
                 ? "Company reassessment queued."
-                : "Request accepted. Check the current status below.",
+                : form.dataset.command.startsWith("jobs/") && form.dataset.command.endsWith("/retry")
+                  ? "Retry requested. Check the updated job status; any human review still applies."
+                  : "Request accepted. Check the current status below.",
       );
       state.busy = false;
       await load();
@@ -1196,7 +1411,12 @@
               3
           ];
       window.marketingTheme(next);
-      theme.textContent = "Theme: " + next;
+      document.querySelectorAll("button[data-theme]").forEach((button) => {
+        const label = button.querySelector("span");
+        if (label) label.textContent = "Theme: " + next;
+        button.setAttribute("aria-label", "Change theme, currently " + next);
+        button.title = "Theme: " + next;
+      });
     }
     const page = e.target.closest("[data-page]"),
       settings = e.target.closest("[data-settings]"),
