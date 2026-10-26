@@ -1,3 +1,4 @@
+import unittest
 """Real PostgreSQL candidate review and bounded synthetic discovery regression."""
 
 import uuid
@@ -29,6 +30,61 @@ from marketing_backend.research import ProviderFailure
 
 class DiscoveryTests(fixtures.BackendFixtures):
     drain = fixtures.NativeTests.drain
+
+
+    def test_transport_buyer_query_preserves_icp_intent(self):
+        """Check that transport-buyer searches preserve ICP targeting."""
+
+        catalog = [
+            {
+                "kind": "ICP",
+                "name": "Manufacturers With Delivery Fleets",
+            }
+        ]
+
+        queries = discovery_queries(
+            "Manufacturing companies managing deliveries",
+            catalog,
+            "MY",
+            set(),
+        )
+
+        self.assertTrue(
+            any(
+                "Manufacturers With Delivery Fleets" in query
+                for query in queries
+            )
+        )
+
+        self.assertTrue(
+            all("Malaysia" in query for query in queries)
+        )
+
+    @unittest.expectedFailure
+    def test_transport_buyer_query_avoids_forced_operator_label(self):
+        """Proposed targeting behavior requiring supervisor approval."""
+
+        catalog = [
+            {
+                "kind": "ICP",
+                "name": "Manufacturers With Delivery Fleets",
+            }
+        ]
+
+        queries = discovery_queries(
+            "Manufacturing companies managing deliveries",
+            catalog,
+            "MY",
+            set(),
+        )
+
+        self.assertTrue(
+            any(
+                "fleet operator company" not in query.lower()
+                for query in queries
+            ),
+            "Transport-buyer discovery forces fleet-operator terminology",
+        )
 
     def setUp(self):
         super().setUp()
