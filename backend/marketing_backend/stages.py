@@ -1,3 +1,4 @@
+
 """Shared, product-driven native preparation handlers. No approval or sending handler."""
 
 import re
@@ -184,7 +185,29 @@ def setup(job, providers):
         SetupOutput,
         providers.model(
             "setup",
-            "Prepare targeting from the real catalog and product description. Never invent capabilities. Search for companies that could buy the product: actual fleet operators, logistics/transport service providers, or businesses that operate/manage transport. Exclude software/platform vendors, consultants and technology suppliers that sell to those companies. Search observable customer business types and geography, not hypothetical buying needs. Return discovery_query and icps (code,name,description), at most five. Preserve existing ICPs by returning an empty icps array when ICPs already exist.",
+            (
+                "Prepare discovery targeting from the current workspace's actual "
+                "products, catalog descriptions and Ideal Customer Profiles (ICPs). "
+                "Do not assume the workspace sells transport, logistics, fleet "
+                "management or any other fixed product category. "
+                "Identify observable business types that could be customers of "
+                "the configured products based on their actual activities "
+                "and the selected market geography. "
+                "For transport products, relevant customers may include fleet "
+                "operators or businesses managing deliveries. For cosmetics "
+                "products, they may include cosmetics retailers or distributors, "
+                "but only when consistent with the supplied catalog. "
+                "Never copy these examples into unrelated workspaces. "
+                "Exclude unrelated businesses and companies acting only as "
+                "suppliers or consultants rather than the selected customer role. "
+                "Do not invent capabilities, company facts, ICP requirements, "
+                "operational needs or buying intent. "
+                "Search observable customer business types and geography, "
+                "not speculative purchasing needs. "
+                "Return discovery_query and icps (code,name,description), "
+                "at most five. Preserve existing ICPs by returning an empty "
+                "icps array when ICPs already exist."
+            ),
             job.payload["context"],
         ),
     )
@@ -229,7 +252,7 @@ def research(job, providers):
             domain(url) != domain(homepage["source_url"])
             or url in urls
             or not re.search(
-                r"about|service|contact|team|leadership|management|fleet|solution",
+                r"about|service|contact|team|leadership|management|fleet|solution|product|shop|collection|category|brand|retail|distribution",
                 url,
                 re.I,
             )
