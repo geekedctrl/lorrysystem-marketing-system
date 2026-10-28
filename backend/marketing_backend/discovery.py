@@ -2,8 +2,8 @@
 """Brave discovery, bounded Python crawling and evidence-backed xKiro assessment."""
 
 import re
-from urllib.parse import urljoin, urlsplit, urlunsplit
 from typing import Literal
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -50,6 +50,89 @@ COUNTRY_NAMES = {
     "AU": "Australia",
 }
 
+# Existing classifications remain supported for backward compatibility.
+# PRODUCT_BUYER supports buyers of non-transport product lines.
+ELIGIBLE_PROSPECT_TYPES = {
+    "FLEET_OPERATOR",
+    "LOGISTICS_PROVIDER",
+    "TRANSPORT_BUYER",
+    "PRODUCT_BUYER",
+}
+
+REJECTED_PROSPECT_TYPES = {
+    "SOFTWARE_VENDOR",
+    "CONSULTANT",
+    "OTHER",
+    "UNKNOWN",
+}
+
+ASSESSMENT_INSTRUCTIONS = (
+    "Assess ONE company's public evidence against the actual workspace "
+    "catalog, products and Ideal Customer Profiles (ICPs). "
+    "Evaluate the company as a potential customer of the configured "
+    "product line, not as a customer of a hardcoded industry. "
+    "A cosmetics workspace must be assessed using its cosmetics product "
+    "and ICP context, while a transport workspace must be assessed using "
+    "its transport product and ICP context. "
+    "Never reuse a different product line's target customer requirements. "
+
+    "Return exactly one JSON object with every required key: "
+    "suitable (boolean), prospect_type (string), company_name (string), "
+    "icp_code (string), confidence (integer 0-100), "
+    "official_company (boolean), excerpt_id (string), "
+    "industry (string), reasoning (string), unknowns (array of strings). "
+    "Do not omit fields or use markdown. "
+
+    "prospect_type must be one of: "
+    "FLEET_OPERATOR, LOGISTICS_PROVIDER, TRANSPORT_BUYER, "
+    "PRODUCT_BUYER, SOFTWARE_VENDOR, CONSULTANT, OTHER, UNKNOWN. "
+
+    "FLEET_OPERATOR means a company operating or managing vehicles "
+    "to provide commercial transport or passenger services. "
+    "LOGISTICS_PROVIDER means a company providing transport, "
+    "haulage or third-party logistics services itself. "
+    "TRANSPORT_BUYER means a manufacturer, distributor, retailer "
+    "or other business whose public evidence establishes that it "
+    "operates or manages its own delivery or transport operations. "
+
+    "PRODUCT_BUYER means a business with evidence-supported activities "
+    "matching the configured product's actual ICP, where an existing "
+    "transport-specific category is not appropriate. "
+    "For example, a cosmetics retailer may be a PRODUCT_BUYER "
+    "when its public evidence establishes the retail activities "
+    "required by a cosmetics product's selected ICP. "
+    "Do not assign PRODUCT_BUYER merely because a company operates "
+    "in the same broad industry. "
+
+    "SOFTWARE_VENDOR means a business whose relevant offering is "
+    "software or a platform sold to the target industry rather than "
+    "the actual operating or buying role requested by the selected ICP. "
+    "CONSULTANT means a business providing advisory or consulting "
+    "services instead of performing the selected customer role. "
+    "Classify unrelated businesses as OTHER or UNKNOWN. "
+
+    "Select icp_code from the actual ICP codes supplied in the context. "
+    "Do not invent an ICP or select one belonging to another workspace. "
+    "Only set suitable=true when the company's public evidence supports "
+    "its business identity, its classified role, and its relevance "
+    "to the selected product and ICP. "
+    "If the evidence is insufficient, set suitable=false, "
+    "use OTHER or UNKNOWN as appropriate, and describe missing "
+    "information in unknowns. "
+
+    "Select an existing excerpt_id from the supplied excerpts. "
+    "The chosen excerpt must contain the exact company name "
+    "and support the company's relevant business activities. "
+    "Do not fabricate evidence, company capabilities, contacts, "
+    "operating scale or buying intent. "
+    "Confidence must reflect the strength of the available evidence. "
+    "Assess potential customer relevance, not proof that the company "
+    "wants to purchase immediately. "
+
+    "All suitable companies are recommendations for human review only. "
+    "Do not automatically accept leads or authorize outreach."
+)
+
 
 def blocked(host):
     return any(
@@ -77,8 +160,8 @@ def listing(row):
 
 
 def search_query(query, known):
-    # Preserve existing query and provider-budget limits.
-    # Exclusion operators only use validated known domains.
+    # Preserve existing query length and provider budget limits.
+    # Domain exclusions originate from validated workspace domains.
     query = " ".join(str(query).split())[:300]
     query = " ".join(query.split()[:35])
 
@@ -102,11 +185,10 @@ def search_query(query, known):
 
 def discovery_queries(original, catalog, country, known):
     """
-    Generate product-neutral discovery queries using the
-    workspace's discovery target, ICPs and geography.
+    Generate product-neutral discovery queries from the configured
+    discovery target, ICP names, and country.
 
-    Do not force LorrySystem-specific transport terminology
-    into unrelated product searches.
+    Do not inject transport terminology into unrelated product lines.
     """
     country_name = COUNTRY_NAMES.get(country.upper(), country)
 
@@ -116,8 +198,8 @@ def discovery_queries(original, catalog, country, known):
         if item["kind"] == "ICP"
     ]
 
-    # Explicit geography matters even when the search provider
-    # also receives a country/region parameter.
+    # Keep geography explicit even when the search provider
+    # also receives the country parameter.
     raw = [
         f"{original} {country_name} company"
     ]
@@ -136,8 +218,6 @@ def discovery_queries(original, catalog, country, known):
                     item["name"] for item in group
                 )
 
-                # FIX: Use the current ICP names, not fixed
-                # transport fleet operator wording.
                 raw.append(
                     f"{country_name} ({labels}) company"
                 )
@@ -178,13 +258,12 @@ class Assessment(BaseModel):
 
     suitable: bool = Field(strict=True)
 
-    # Existing persisted classification contract.
-    # A product-neutral buyer classification requires
-    # review of downstream API/schema consumers.
+    # Keep existing classifications and add the generic buyer type.
     prospect_type: Literal[
         "FLEET_OPERATOR",
         "LOGISTICS_PROVIDER",
         "TRANSPORT_BUYER",
+        "PRODUCT_BUYER",
         "SOFTWARE_VENDOR",
         "CONSULTANT",
         "OTHER",
@@ -225,6 +304,15 @@ def excerpts(pages):
 
 
 def assess(raw, sources, icps, host):
+    """
+    Validate model output using the existing evidence rules.
+
+    Accept transport buyers and generic product buyers only when
+    model suitability, ICP membership, official company evidence,
+    and confidence checks succeed.
+
+    This function proposes candidates; it never accepts leads.
+    """
     try:
         value = Assessment.model_validate(raw).model_dump()
     except (ValueError, TypeError):
@@ -251,16 +339,12 @@ def assess(raw, sources, icps, host):
     ):
         raise ProviderFailure("CANDIDATE_NOT_SUPPORTED")
 
-    # Existing transport-specific acceptance policy.
-    # Keep unchanged until the product-neutral classification
-    # and its downstream contract receive approval.
-    if value["prospect_type"] not in {
-        "FLEET_OPERATOR",
-        "LOGISTICS_PROVIDER",
-        "TRANSPORT_BUYER",
-    }:
+    # Exclude software vendors, consultants, unrelated and unknown
+    # companies from the review-candidate list.
+    if value["prospect_type"] not in ELIGIBLE_PROSPECT_TYPES:
         return None
 
+    # Retain the original suitability and minimum confidence gates.
     if not value["suitable"] or value["confidence"] < 50:
         return None
 
@@ -308,7 +392,6 @@ def discover(job, providers):
 
     country = ctx["preferences"].get("country", "MY")
 
-    # Search terms now come from configured targeting and ICPs.
     queries = discovery_queries(
         original,
         ctx["catalog"],
@@ -318,6 +401,8 @@ def discover(job, providers):
 
     rows, search_errors = [], []
 
+    # Direct retry uses the original candidate URL and avoids
+    # unnecessary search-provider calls.
     if job.payload.get("retry_domain"):
         queries = []
         rows = [
@@ -354,9 +439,10 @@ def discover(job, providers):
             True,
         )
 
-    # Preserve directory filtering and bounded fetch budgets.
+    # Preserve directory and social-platform filtering.
     rows = [r for r in rows if not listing(r)]
 
+    # Prefer homepages; preserve provider order otherwise.
     rows.sort(
         key=lambda r: bool(
             urlsplit(r.get("url", "")).path.strip("/")
@@ -393,6 +479,7 @@ def discover(job, providers):
         if not host or host in known or host in seen:
             continue
 
+        # Retain existing resource and provider budgets.
         if (
             counters["pages_attempted"] >= 10
             or len(seen) >= min(10, max(3, target * 2))
@@ -485,6 +572,7 @@ def discover(job, providers):
 
             pages.append(fetched)
 
+            # Crawl a bounded set of same-domain pages.
             for href in fetched.get("links", []):
                 try:
                     following = urljoin(
@@ -521,33 +609,8 @@ def discover(job, providers):
 
         counters["assessments_attempted"] += 1
 
-        # The original assessment policy is intentionally preserved.
-        # Product-neutral assessment requires approved classification
-        # and contract changes before enabling non-transport buyers.
-        instructions = (
-            "Assess ONE company's public evidence against the actual catalog and ICPs "
-            "as a potential customer. Return exactly one JSON object with every key: "
-            "suitable (boolean), prospect_type (string), company_name (string), "
-            "icp_code (string), confidence (integer 0-100), official_company (boolean), "
-            "excerpt_id (string), industry (string), reasoning (string), unknowns "
-            "(array of strings). Do not omit keys or use markdown. prospect_type must "
-            "be one of FLEET_OPERATOR, LOGISTICS_PROVIDER, TRANSPORT_BUYER, SOFTWARE_VENDOR, "
-            "CONSULTANT, OTHER, UNKNOWN. FLEET_OPERATOR means it operates/owns/manages "
-            "vehicles to sell transport or passenger services. LOGISTICS_PROVIDER means "
-            "it provides transport/3PL/haulage services itself, not software for providers. "
-            "TRANSPORT_BUYER means a manufacturer, distributor, retailer or other business "
-            "whose own evidence shows it operates or manages delivery/transport. "
-            "SOFTWARE_VENDOR means it sells software, platforms, telematics, fleet "
-            "technology or consulting to transport operators; never recommend this type "
-            "as a LorrySystem lead. A company merely describing software for bus operators "
-            "(such as a transit-management SaaS) is a vendor, not a bus operator. "
-            "If direct evidence does not establish an operator/buyer role, use UNKNOWN "
-            "or OTHER and set suitable=false. Select an existing excerpt_id containing "
-            "the exact company name and supporting both its identity and buyer/operator "
-            "role. Never write a quote or invent capabilities, contacts or buying intent. "
-            "Assess customer relevance, not proof of purchase interest. These are "
-            "recommendations for human review only."
-        )
+        # Product-independent instructions use the current context.
+        instructions = ASSESSMENT_INSTRUCTIONS
 
         assessment_data = {
             "context": ctx,
@@ -584,13 +647,14 @@ def discover(job, providers):
                 }:
                     raise
 
-                # Preserve the existing single bounded correction.
+                # Retain one separately-accounted repair attempt
+                # for formatting or schema errors only.
                 repair_instructions = (
                     instructions
                     + " Your previous response did not satisfy the required JSON contract. "
                     + "Return one compact valid JSON object now. Include every required key, "
                     + "use exact boolean/integer/array types, and use UNKNOWN with suitable=false "
-                    + "when the evidence does not prove an operator or buyer role."
+                    + "when the evidence does not prove relevance to the selected ICP."
                 )
 
                 raw = providers.model(

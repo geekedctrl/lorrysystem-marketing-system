@@ -34,12 +34,153 @@ class DiscoveryTests(fixtures.BackendFixtures):
     drain = fixtures.NativeTests.drain
 
     # ============================================================
-    # NEW TEST 1: Preserve the selected ICP in discovery queries
+    # NEW TEST 1: Cosmetics PRODUCT_BUYER is supported
+    # ============================================================
+
+    def test_cosmetics_product_buyer_is_supported(self):
+        sources = [
+            {
+                "excerpt_id": "P1_E1",
+                "source_url": "https://beauty.example.com/",
+                "text": (
+                    "Beauty Retail Sdn Bhd operates cosmetics retail "
+                    "stores selling skincare products in Malaysia."
+                ),
+            }
+        ]
+
+        raw = {
+            "suitable": True,
+            "prospect_type": "PRODUCT_BUYER",
+            "company_name": "Beauty Retail Sdn Bhd",
+            "icp_code": "COSMETICS_RETAIL",
+            "confidence": 85,
+            "official_company": True,
+            "excerpt_id": "P1_E1",
+            "industry": "Cosmetics Retail",
+            "reasoning": (
+                "The official company evidence supports its cosmetics "
+                "retail activities and customer relevance."
+            ),
+            "unknowns": ["Buying intent not established"],
+        }
+
+        candidate = assess(
+            raw,
+            sources,
+            {"COSMETICS_RETAIL"},
+            "beauty.example.com",
+        )
+
+        self.assertIsNotNone(candidate)
+        self.assertEqual(
+            candidate["prospect_type"],
+            "PRODUCT_BUYER",
+        )
+        self.assertEqual(
+            candidate["icp_code"],
+            "COSMETICS_RETAIL",
+        )
+
+    # ============================================================
+    # NEW TEST 2: Unrelated companies are rejected
+    # ============================================================
+
+    def test_unrelated_company_is_not_supported(self):
+        sources = [
+            {
+                "excerpt_id": "P1_E1",
+                "source_url": "https://unrelated.example.com/",
+                "text": (
+                    "Unrelated Company provides industrial "
+                    "repair services."
+                ),
+            }
+        ]
+
+        raw = {
+            "suitable": False,
+            "prospect_type": "OTHER",
+            "company_name": "Unrelated Company",
+            "icp_code": "COSMETICS_RETAIL",
+            "confidence": 95,
+            "official_company": True,
+            "excerpt_id": "P1_E1",
+            "industry": "Industrial Services",
+            "reasoning": (
+                "The company does not operate in the configured "
+                "cosmetics retail customer segment."
+            ),
+            "unknowns": [
+                "Cosmetics retail activities not supported"
+            ],
+        }
+
+        self.assertIsNone(
+            assess(
+                raw,
+                sources,
+                {"COSMETICS_RETAIL"},
+                "unrelated.example.com",
+            )
+        )
+
+    # ============================================================
+    # NEW TEST 3: PRODUCT_BUYER requires valid evidence and ICP
+    # ============================================================
+
+    def test_product_buyer_requires_valid_evidence_and_icp(self):
+        sources = [
+            {
+                "excerpt_id": "P1_E1",
+                "source_url": "https://beauty.example.com/",
+                "text": (
+                    "Beauty Retail Sdn Bhd operates cosmetics retail "
+                    "stores selling skincare products in Malaysia."
+                ),
+            }
+        ]
+
+        raw = {
+            "suitable": True,
+            "prospect_type": "PRODUCT_BUYER",
+            "company_name": "Beauty Retail Sdn Bhd",
+            "icp_code": "COSMETICS_RETAIL",
+            "confidence": 85,
+            "official_company": True,
+            "excerpt_id": "P1_E1",
+            "industry": "Cosmetics Retail",
+            "reasoning": (
+                "Official website evidence supports the "
+                "configured cosmetics retailer ICP."
+            ),
+            "unknowns": [],
+        }
+
+        for change in [
+            {"icp_code": "FOREIGN_ICP"},
+            {"excerpt_id": "INVENTED"},
+            {"company_name": "Fake Business"},
+            {"official_company": False},
+        ]:
+            with self.assertRaises(ProviderFailure):
+                assess(
+                    {**raw, **change},
+                    sources,
+                    {"COSMETICS_RETAIL"},
+                    "beauty.example.com",
+                )
+
+    # ============================================================
+    # EXISTING TEST 1: Preserve selected ICP in queries
     # ============================================================
 
     def test_transport_buyer_query_preserves_icp_intent(self):
         catalog = [
-            {"kind": "ICP", "name": "Manufacturers With Delivery Fleets"}
+            {
+                "kind": "ICP",
+                "name": "Manufacturers With Delivery Fleets",
+            }
         ]
 
         queries = discovery_queries(
@@ -61,12 +202,15 @@ class DiscoveryTests(fixtures.BackendFixtures):
         )
 
     # ============================================================
-    # NEW TEST 2: Do not force fleet-operator wording
+    # EXISTING TEST 2: No forced fleet operator label
     # ============================================================
 
     def test_transport_buyer_query_avoids_forced_operator_label(self):
         catalog = [
-            {"kind": "ICP", "name": "Manufacturers With Delivery Fleets"}
+            {
+                "kind": "ICP",
+                "name": "Manufacturers With Delivery Fleets",
+            }
         ]
 
         queries = discovery_queries(
@@ -85,7 +229,7 @@ class DiscoveryTests(fixtures.BackendFixtures):
         )
 
     # ============================================================
-    # NEW TEST 3: Cosmetics should use its own ICP
+    # EXISTING TEST 3: Cosmetics queries use cosmetics ICP
     # ============================================================
 
     def test_cosmetics_queries_use_cosmetics_icp(self):
@@ -169,13 +313,19 @@ class DiscoveryTests(fixtures.BackendFixtures):
                     company_name=name,
                     website="https://candidate.example.com/",
                     source_url="https://candidate.example.com/",
-                    evidence_quote=name
-                    + " provides commercial transport and delivery services.",
+                    evidence_quote=(
+                        name
+                        + " provides commercial transport "
+                        "and delivery services."
+                    ),
                     prospect_type="FLEET_OPERATOR",
                     icp_code="ICP",
                     confidence=80,
                     industry="Logistics",
-                    reasoning="Supported services fit the catalog customer segment.",
+                    reasoning=(
+                        "Supported services fit the catalog "
+                        "customer segment."
+                    ),
                     unknowns=[],
                 ),
             )
@@ -1048,7 +1198,6 @@ class DiscoveryTests(fixtures.BackendFixtures):
             2,
         )
 
-        # Updated for product-neutral discovery queries.
         self.assertTrue(
             all(
                 "Malaysia" in q
