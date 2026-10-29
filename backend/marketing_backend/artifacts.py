@@ -22,7 +22,7 @@ FailureCode = Literal[
     "CONFIGURATION_ERROR", "PROVIDER_TRANSPORT", "PROVIDER_THROTTLED",
     "PROVIDER_SCHEMA_INVALID", "EVIDENCE_INVALID", "BUDGET_EXHAUSTED",
     "STALE_CONTEXT", "LEASE_LOST", "UNSUPPORTED_CONTRACT", "HANDLER_ERROR",
-    "TASK_ENVELOPE_INVALID", "STAGE_PAYLOAD_INVALID", "ARTIFACT_HASH_MISMATCH",
+    "TASK_ENVELOPE_INVALID", "TASK_INPUT_INVALID", "STAGE_PAYLOAD_INVALID", "ARTIFACT_HASH_MISMATCH",
     "ARTIFACT_SCOPE_MISMATCH", "ARTIFACT_METADATA_INVALID", "ARTIFACT_CONFLICT",
 ]
 
@@ -39,11 +39,12 @@ class Provenance(Strict):
 
 
 class EventData(Strict):
-    event: Literal["CLAIM", "CHECKPOINT", "RETRY", "COMPLETION", "FAILURE", "LEASE_LOSS", "QUARANTINE", "REPLAY"]
-    pool: Stage
+    event: Literal["CLAIM", "CHECKPOINT", "RETRY", "COMPLETION", "FAILURE", "LEASE_LOSS", "QUARANTINE", "REPLAY", "HUMAN_RESOLUTION"]
+    actor_id: UUID | None = None
+    pool: Literal["LEGACY", "APPLICATION", "SETUP", "DISCOVERY", "RESEARCH", "CONTACT_SEARCH", "SCORING", "MATCHING", "DRAFTING"]
     stage: Stage
     attempt: int = Field(ge=0, le=5)
-    schema_version: int = Field(ge=1, le=2)
+    schema_version: int = Field(ge=0, le=2147483647)
     trace_id: UUID
     error_code: FailureCode | None = None
     duration_ms: int | None = Field(default=None, ge=0)
@@ -81,6 +82,9 @@ def _references(db, envelope, payload):
                 or artifact.context_hash != envelope.context_hash
                 or artifact.context_version != envelope.context_version
                 or content_hash(validate_payload(artifact.contract_name, artifact.schema_version, artifact.payload)) != ref.content_hash):
+            raise ContractViolation("ARTIFACT_SCOPE_MISMATCH")
+        parent=validate_envelope(artifact.envelope)
+        if parent.lead_id is not None and parent.lead_id!=envelope.lead_id:
             raise ContractViolation("ARTIFACT_SCOPE_MISMATCH")
     allowed = {str(ref.artifact_id) for ref in envelope.prior_artifacts}
     if not set(payload.get("source_artifact_ids", [])).issubset(allowed):
@@ -171,10 +175,12 @@ def append_event(db, job_id, workspace_id, product_line_id, data):
         Job.id == job_id, Job.workspace_id == workspace_id,
         Job.product_line_id == product_line_id,
     ).with_for_update())
-    if (not job or job.kind != value["stage"] or value["pool"] != value["stage"]
+    if (not job or job.kind != value["stage"] or value["pool"] not in (value["stage"], "LEGACY", "APPLICATION")
             or job.attempts != value["attempt"]):
         raise ContractViolation("ARTIFACT_SCOPE_MISMATCH")
     value["trace_id"] = UUID(value["trace_id"])
+    if value["actor_id"] is not None:
+        value["actor_id"] = UUID(value["actor_id"])
     event = StageEvent(job_id=job_id, workspace_id=workspace_id, product_line_id=product_line_id, **value)
     db.add(event)
     db.flush()

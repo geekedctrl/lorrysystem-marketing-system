@@ -14,6 +14,7 @@ from marketing_backend.models import (
     Job, Lead, LoginAttempt, LoginSession, Membership, PreparationRun, ProviderUsage,
     SenderConnection, User, Workspace, Organization, OrganizationMembership, WorkspaceCreation, Invitation, ProviderConnection, now,
     ExecutorOwnership,
+    JobReplay,StageEvent,StageArtifact,CompanyEvidence,
 )
 from marketing_backend.sending import HandoffError, claim_attempt, encrypt_secret, execute_attempt, recover_expired
 
@@ -24,7 +25,7 @@ if os.getenv("APP_ENV") != "test" or engine.url.database != "marketing_rebuild_t
 class NativeSendingTests(unittest.TestCase):
     def setUp(self):
         with Session() as db:
-            for model in (DeliveryAttempt, Delivery, EmailSuppression, SenderConnection, Approval, ProviderUsage, DiscoveryMemory, Job, PreparationRun, Lead, Catalog, Membership, Invitation, ProviderConnection, WorkspaceCreation, OrganizationMembership, LoginSession, LoginAttempt, ExecutorOwnership, Workspace, Organization, User):
+            for model in (JobReplay,StageEvent,StageArtifact,CompanyEvidence,DeliveryAttempt, Delivery, EmailSuppression, SenderConnection, Approval, ProviderUsage, DiscoveryMemory, Job, PreparationRun, Lead, Catalog, Membership, Invitation, ProviderConnection, WorkspaceCreation, OrganizationMembership, LoginSession, LoginAttempt, ExecutorOwnership, Workspace, Organization, User):
                 db.execute(delete(model))
             self.password = secrets.token_urlsafe(20)
             actor = User(email="sender@example.test", password_hash=hash_password(self.password))

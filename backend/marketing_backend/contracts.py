@@ -17,7 +17,7 @@ RunStatus = Literal[
     "FAILED",
     "STALE",
 ]
-JobStatus = Literal["PENDING", "RUNNING", "COMPLETED", "NEEDS_REVIEW", "FAILED"]
+JobStatus = Literal["PENDING", "RUNNING", "COMPLETED", "NEEDS_REVIEW", "FAILED", "QUARANTINED"]
 DecisionStatus = Literal["APPROVED", "REJECTED", "CHANGES_REQUESTED"]
 
 
@@ -153,6 +153,7 @@ class DiscoveryBatchSize(Public):
 
 
 class CatalogResponse(Public):
+    product_line_id: UUID | None = None
     id: UUID
     kind: Literal["PRODUCT", "ICP"]
     code: str
@@ -184,6 +185,7 @@ class LeadResponse(Public):
 
 
 class DiscoveryCandidate(Public):
+    product_line_id: UUID | None = None
     id: UUID
     domain: str
     status: str
@@ -293,6 +295,7 @@ class MatchResult(Public):
 
 
 class DraftResult(Public):
+    asset_type: Literal["EMAIL_TEXT", "SOCIAL_TEXT"] | None = None
     subject: str
     body: str
     evidence: list[Citation]
@@ -311,6 +314,7 @@ class StageResults(Public):
 
 
 class PreparationResponse(Public):
+    product_line_id: UUID | None = None
     id: UUID
     lead_id: UUID
     status: RunStatus
@@ -339,6 +343,14 @@ class JobEvent(Public):
 class JobResponse(Public):
     id: UUID
     workspace_id: UUID
+    product_line_id: UUID
+    trace_id: UUID
+    pool: Literal["LEGACY"]
+    contract_mode: Literal["LEGACY", "VERSIONED"]
+    contract_name: str | None
+    schema_version: int
+    quarantine_reason: str | None
+    replay_generation: int
     lead_id: UUID | None
     kind: Literal[
         "SETUP",
@@ -367,11 +379,42 @@ class JobQueued(Public):
     status: JobStatus
 
 
+class WorkerEventResponse(Public):
+    id: UUID
+    event: Literal["CLAIM", "CHECKPOINT", "RETRY", "COMPLETION", "FAILURE", "LEASE_LOSS", "QUARANTINE", "REPLAY", "HUMAN_RESOLUTION"]
+    actor_id: UUID | None = None
+    stage: str
+    pool: str
+    product_line_id: UUID
+    attempt: int
+    schema_version: int
+    trace_id: UUID
+    error_code: str | None
+    error_category: str | None
+    duration_ms: int | None
+    created_at: datetime
+
+
+class ReplayResponse(Public):
+    replay_id: UUID
+    job_id: UUID
+    generation: int
+    already_recorded: bool
+    created_at: datetime
+
+
 class Enabled(Public):
     enabled: bool
 
 
+class LineContext(Public):
+    id: UUID
+    version: int
+    context_hash: str
+
+
 class ApprovalInputs(Public):
+    product_line: LineContext | None = None
     catalog: list[dict[str, Any]]
     preferences: dict[str, Any]
     company: dict[str, str]

@@ -7,7 +7,7 @@ from test_backend import BackendFixtures
 from test_stage_contracts import envelope, research
 from marketing_backend import artifacts, queue
 from marketing_backend.db import Session
-from marketing_backend.models import ProductLine, StageArtifact, StageEvent, Job
+from marketing_backend.models import ProductLine, StageArtifact, StageEvent, Job, JobReplay
 from marketing_backend.stage_contracts import ContractViolation
 
 
@@ -16,6 +16,7 @@ class WorkerFoundationTests(BackendFixtures):
         # Only the disposable test owner can perform maintenance cleanup;
         # runtime roles have no UPDATE/DELETE grants on either history table.
         with Session() as db:
+            db.execute(delete(JobReplay))
             db.execute(delete(StageEvent))
             db.execute(delete(StageArtifact))
             db.commit()
@@ -39,6 +40,7 @@ class WorkerFoundationTests(BackendFixtures):
 
     def tearDown(self):
         with Session() as db:
+            db.execute(delete(JobReplay))
             db.execute(delete(StageEvent))
             db.execute(delete(StageArtifact))
             db.commit()

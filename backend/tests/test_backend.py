@@ -30,6 +30,10 @@ from marketing_backend.models import (
     DeliveryAttempt,
     SenderConnection,
     EmailSuppression,
+    JobReplay,
+    StageEvent,
+    StageArtifact,
+    CompanyEvidence,
 )
 from marketing_backend.auth import hash_password
 from marketing_backend.api import app
@@ -46,6 +50,10 @@ class BackendFixtures(unittest.TestCase):
     def setUp(self):
         with Session() as db:
             for model in (
+                JobReplay,
+                StageEvent,
+                StageArtifact,
+                CompanyEvidence,
                 DeliveryAttempt,
                 Delivery,
                 EmailSuppression,

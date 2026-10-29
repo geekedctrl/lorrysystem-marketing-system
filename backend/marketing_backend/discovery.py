@@ -375,24 +375,27 @@ def discover(job, providers):
             m.domain
             for m in db.scalars(
                 select(DiscoveryMemory).where(
-                    DiscoveryMemory.workspace_id == job.workspace_id
+                    DiscoveryMemory.workspace_id == job.workspace_id,
+                    DiscoveryMemory.product_line_id == job.product_line_id,
                 )
             )
             if excluded(m, job.payload["context_hash"])
         }
 
-        known.update(
+        from .product_lines import line_mode
+        known.update([] if line_mode(job) else (
             domain(l.website)
             for l in db.scalars(
                 select(Lead).where(
                     Lead.workspace_id == job.workspace_id
                 )
             )
-        )
+        ))
 
     country = ctx["preferences"].get("country", "MY")
 
-    queries = discovery_queries(
+    from . import discovery_strategies as strategies
+    queries = strategies.queries.queries(
         original,
         ctx["catalog"],
         country,
@@ -509,7 +512,7 @@ def discover(job, providers):
             visited.add(current)
             counters["pages_attempted"] += 1
 
-            fetched = page(providers, current)
+            fetched = strategies.fetcher.fetch(providers, current)
 
             if (
                 domain(fetched["source_url"]) != host
@@ -538,7 +541,7 @@ def discover(job, providers):
 
                         rendered = {
                             "text": (
-                                readable(body)
+                                strategies.extractor.extract(body)
                                 or normalize(
                                     " ".join(parser.parts)
                                 )[:12000]
@@ -631,7 +634,7 @@ def discover(job, providers):
                     assessment_data,
                 )
 
-                candidate = assess(
+                candidate = strategies.assessment.assess(
                     raw,
                     sources,
                     icps,
@@ -663,7 +666,7 @@ def discover(job, providers):
                     assessment_data,
                 )
 
-                candidate = assess(
+                candidate = strategies.assessment.assess(
                     raw,
                     sources,
                     icps,

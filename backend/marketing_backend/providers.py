@@ -33,7 +33,12 @@ class Providers:
 
     def reserve(self, provider, operation, estimate):
         with Session() as db:
-            owned(db, self.job.id, self.job.lease_token)
+            current=owned(db, self.job.id, self.job.lease_token)
+            from .product_lines import line_mode, line_for
+            if line_mode(current):
+                from .worker_contracts import validate_task
+                from .pipeline import valid_context
+                validate_task(db,current);valid_context(db,current)
             # All workers share one monthly allowance; uncertain calls stay reserved.
             db.execute(text("SELECT pg_advisory_xact_lock(7164042026)"))
             instant = now()
@@ -48,6 +53,17 @@ class Providers:
             cap = int(Decimal(os.getenv("PROVIDER_MONTHLY_BUDGET_USD", "50")) * 1000000)
             if estimate > cap - spent:
                 raise ProviderFailure("PROVIDER_BUDGET_EXHAUSTED")
+            if line_mode(current):
+                from datetime import timedelta
+                line=line_for(db,current.workspace_id,current.product_line_id)
+                line_spent=db.scalar(select(func.coalesce(func.sum(ProviderUsage.estimated_microusd),0)).where(
+                    ProviderUsage.product_line_id==line.id, ProviderUsage.created_at>=instant.replace(day=1,hour=0,minute=0,second=0,microsecond=0)))
+                if estimate>line.limits.get("monthly_budget_microusd",50000000)-line_spent:
+                    raise ProviderFailure("PRODUCT_LINE_BUDGET_EXHAUSTED")
+                recent=db.scalar(select(func.count()).select_from(ProviderUsage).where(
+                    ProviderUsage.product_line_id==line.id,ProviderUsage.created_at>=instant-timedelta(minutes=1)))
+                if recent>=line.limits.get("provider_requests_per_minute",60):
+                    raise ProviderFailure("PRODUCT_LINE_RATE_LIMITED",True)
             count = db.scalar(
                 select(func.count())
                 .select_from(ProviderUsage)

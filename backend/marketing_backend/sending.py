@@ -130,6 +130,12 @@ def execute_attempt(db, attempt_id, token, transport=None):
     if delivery: sender = db.get(SenderConnection, delivery.sender_id)
     if not delivery or not sender:
         return False
+    from .approval_context import valid_delivery
+    if not valid_delivery(db,delivery,require_send=True):
+        attempt.status,attempt.failure_code,attempt.finished_at="FAILED","STALE_APPROVAL_CONTEXT",now()
+        attempt.lease_token=attempt.lease_until=None
+        delivery.status,delivery.updated_at="FAILED",now()
+        db.commit();return True
     if not sender.enabled or not sender.verified_at:
         attempt.status, attempt.failure_code, attempt.finished_at = "FAILED", "SENDER_NOT_VERIFIED", now()
         attempt.lease_token = attempt.lease_until = None
