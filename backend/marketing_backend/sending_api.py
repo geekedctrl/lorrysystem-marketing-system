@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from .auth import user, scope
 from .db import session
-from .models import Approval, Delivery, DeliveryAttempt, EmailSuppression, PreparationRun, SenderConnection, now
+from .models import Approval, Delivery, DeliveryAttempt, EmailSuppression, PreparationRun, SenderConnection, DeliveryEvent, Job, now
+from .diagnostics import delivery_failure
 from .sending import decrypt_secret, encrypt_secret, normalized_email, smtp_handoff, HandoffError
 
 router = APIRouter(prefix="/workspaces/{wid}", tags=["Controlled email delivery"])
@@ -31,6 +32,10 @@ class SenderWrite(Strict):
         if (self.security,self.port) not in (("TLS",465),("STARTTLS",587)): raise ValueError("Use TLS on 465 or STARTTLS on 587")
         return self
 class CreateDelivery(Strict): approval_id: UUID; sender_id: UUID; idempotency_key: str = Field(min_length=8,max_length=120)
+class ChannelDelivery(Strict):
+    approval_id: UUID
+    idempotency_key: str = Field(min_length=8,max_length=120)
+
 class ApproveSend(Strict): confirmed: Literal[True]
 class RetryDelivery(Strict): confirmed: Literal[True]
 class Suppress(Strict):
@@ -43,7 +48,7 @@ def sender_read(x):
     return {k:getattr(x,k) for k in ("id","name","from_email","from_name","host","port","security","username","enabled","verified_at","created_at")}
 def delivery_read(x,db):
     attempts=list(db.scalars(select(DeliveryAttempt).where(DeliveryAttempt.delivery_id==x.id).order_by(DeliveryAttempt.attempt_number)))
-    return {"id":x.id,"approval_id":x.approval_id,"sender_id":x.sender_id,"status":x.status,"snapshot":x.snapshot,"requested_by":x.requested_by,"send_approved_by":x.send_approved_by,"send_approved_at":x.send_approved_at,"created_at":x.created_at,"attempts":[{"id":a.id,"number":a.attempt_number,"status":a.status,"message_id":a.message_id,"failure_code":a.failure_code,"created_at":a.created_at,"finished_at":a.finished_at} for a in attempts]}
+    return {"id":x.id,"channel":x.channel,"product_line_id":x.product_line_id,"trace_id":x.trace_id,"approval_id":x.approval_id,"sender_id":x.sender_id,"status":x.status,"snapshot":x.snapshot,"requested_by":x.requested_by,"send_approved_by":x.send_approved_by,"send_approved_at":x.send_approved_at,"created_at":x.created_at,"attempts":[{"id":a.id,"number":a.attempt_number,"status":a.status,"message_id":a.message_id,"failure_code":a.failure_code,"error_category":delivery_failure(a.failure_code,a.attempt_number).category if a.failure_code else None,"retryable":a.status=="FAILED" and delivery_failure(a.failure_code,a.attempt_number).retryable,"automatic_retry":False,"created_at":a.created_at,"finished_at":a.finished_at} for a in attempts]}
 
 @router.get("/senders")
 def senders(wid:UUID,actor=Depends(user),db=Depends(session)):
@@ -90,10 +95,80 @@ def create_delivery(wid:UUID,data:CreateDelivery,actor=Depends(user),db=Depends(
     run=db.scalar(select(PreparationRun).where(PreparationRun.workspace_id==wid,PreparationRun.id==approval.run_id))
     if not run or run.status!="APPROVED" or run.context_hash!=approval.snapshot.get("context_hash"): raise HTTPException(409,"Approved draft context is stale")
     snap={"recipient":recipient,"subject":draft["subject"],"body":draft["body"],"channel":"EMAIL","approval_version":approval.version,"approval_id":str(approval.id),"context_hash":run.context_hash}
-    x=Delivery(workspace_id=wid,approval_id=approval.id,sender_id=sender.id,create_key=data.idempotency_key,snapshot=snap,requested_by=actor.id); db.add(x)
+    if run.snapshot.get("product_line"):
+        from .product_lines import for_run,line_for
+        from .pipeline import fingerprint
+        from .stage_contracts import content_hash
+        if line_for(db,wid,run.product_line_id).paused or fingerprint(for_run(db,run))!=run.context_hash:
+            raise HTTPException(409,"Product-line approval context is stale")
+        snap.update(product_line_id=str(run.product_line_id),asset_hash=content_hash(draft),asset_type=draft.get("asset_type","EMAIL_TEXT"))
+    x=Delivery(workspace_id=wid,approval_id=approval.id,channel="EMAIL",trace_id=approval_trace(db,approval),sender_id=sender.id,create_key=data.idempotency_key,snapshot=snap,requested_by=actor.id); db.add(x)
     try: db.commit()
     except IntegrityError: db.rollback(); raise HTTPException(409,"Delivery already exists for this approval") from None
     return delivery_read(x,db)
+
+def approval_trace(db, approval):
+    from uuid import uuid4
+    value=db.scalar(select(Job.trace_id).where(Job.run_id==approval.run_id)
+        .order_by(Job.created_at.desc(),Job.id.desc()).limit(1))
+    return value or uuid4()
+
+
+@router.post("/channel-deliveries",status_code=201)
+def create_channel_delivery(wid:UUID,data:ChannelDelivery,actor=Depends(user),db=Depends(session)):
+    """Queue an approved social/message asset; adapters are synthetic-only."""
+    scope(wid,actor,db,["ADMIN","OPERATOR"])
+    existing=db.scalar(select(Delivery).where(Delivery.workspace_id==wid,Delivery.create_key==data.idempotency_key))
+    if existing:
+        if existing.approval_id!=data.approval_id or existing.channel=="EMAIL":
+            raise HTTPException(409,"Idempotency key belongs to another delivery")
+        return delivery_read(existing,db)
+    approval=db.scalar(select(Approval).where(Approval.workspace_id==wid,Approval.id==data.approval_id).with_for_update())
+    if not approval or approval.status!="APPROVED":raise HTTPException(409,"An approved draft is required")
+    run=db.get(PreparationRun,approval.run_id)
+    draft=approval.snapshot.get("draft",{})
+    if draft.get("channel") not in ("LINKEDIN","MESSAGING"):
+        raise HTTPException(409,"An approved social or messaging asset is required")
+    if not run or not run.snapshot.get("product_line"):
+        raise HTTPException(409,"A versioned product-line content snapshot is required")
+    from .product_lines import line_for,for_run
+    from .pipeline import fingerprint
+    from .stage_contracts import content_hash
+    if line_for(db,wid,run.product_line_id).paused or fingerprint(for_run(db,run))!=run.context_hash:
+        raise HTTPException(409,"Product-line approval context is stale")
+    if not all(isinstance(draft.get(k),str) and draft[k] for k in ("recipient","subject","body")):
+        raise HTTPException(409,"Approved content is incomplete")
+    snap={k:draft[k] for k in ("recipient","subject","body","channel")}
+    snap.update(approval_version=approval.version,approval_id=str(approval.id),context_hash=run.context_hash,
+        product_line_id=str(run.product_line_id),asset_hash=content_hash(draft),asset_type=draft.get("asset_type","SOCIAL_TEXT"))
+    delivery=Delivery(workspace_id=wid,approval_id=approval.id,product_line_id=run.product_line_id,
+        sender_id=None,channel=draft["channel"],trace_id=approval_trace(db,approval),
+        create_key=data.idempotency_key,snapshot=snap,requested_by=actor.id)
+    try:
+        db.add(delivery);db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing=db.scalar(select(Delivery).where(Delivery.workspace_id==wid,Delivery.create_key==data.idempotency_key))
+        if existing and existing.approval_id==data.approval_id:return delivery_read(existing,db)
+        raise HTTPException(409,"Delivery already exists for this approval") from None
+    from .approval_context import valid_delivery
+    if not valid_delivery(db,delivery):raise HTTPException(409,"Approved product-line snapshot is stale")
+    try:db.commit()
+    except IntegrityError:
+        db.rollback();raise HTTPException(409,"Delivery already exists for this approval") from None
+    return delivery_read(delivery,db)
+
+
+@router.get("/deliveries/{did}/events")
+def delivery_events(wid:UUID,did:UUID,actor=Depends(user),db=Depends(session)):
+    scope(wid,actor,db)
+    if not db.scalar(select(Delivery.id).where(Delivery.id==did,Delivery.workspace_id==wid)):
+        raise HTTPException(404,"Delivery not found")
+    from .delivery_events import event_read
+    return [event_read(e) for e in db.scalars(select(DeliveryEvent).where(
+        DeliveryEvent.workspace_id==wid,DeliveryEvent.delivery_id==did)
+        .order_by(DeliveryEvent.created_at,DeliveryEvent.id))]
+
 
 @router.get("/deliveries")
 def deliveries(wid:UUID,approval_id:UUID|None=None,actor=Depends(user),db=Depends(session)):
@@ -106,6 +181,8 @@ def deliveries(wid:UUID,approval_id:UUID|None=None,actor=Depends(user),db=Depend
 def approve_send(wid:UUID,did:UUID,data:ApproveSend,actor=Depends(user),db=Depends(session)):
     scope(wid,actor,db,["ADMIN","OPERATOR"]); x=db.scalar(select(Delivery).where(Delivery.workspace_id==wid,Delivery.id==did).with_for_update())
     if not x: raise HTTPException(404,"Delivery not found")
+    from .approval_context import valid_delivery
+    if not valid_delivery(db,x):raise HTTPException(409,"Approved product-line snapshot is stale")
     if x.status!="PENDING_SEND_APPROVAL":
         if x.send_approved_by: return delivery_read(x,db)
         raise HTTPException(409,"Delivery cannot be approved")
@@ -115,6 +192,8 @@ def approve_send(wid:UUID,did:UUID,data:ApproveSend,actor=Depends(user),db=Depen
 def retry_delivery(wid:UUID,did:UUID,data:RetryDelivery,actor=Depends(user),db=Depends(session)):
     scope(wid,actor,db,["ADMIN","OPERATOR"]); x=db.scalar(select(Delivery).where(Delivery.workspace_id==wid,Delivery.id==did).with_for_update())
     if not x: raise HTTPException(404,"Delivery not found")
+    from .approval_context import valid_delivery
+    if not valid_delivery(db,x):raise HTTPException(409,"Approved product-line snapshot is stale")
     attempts=list(db.scalars(select(DeliveryAttempt).where(DeliveryAttempt.delivery_id==did).order_by(DeliveryAttempt.attempt_number)))
     if x.status!="FAILED" or not attempts or len(attempts)>=3: raise HTTPException(409,"Only known pre-handoff failures can be retried, up to three attempts")
     x.status,x.updated_at="QUEUED",now(); db.add(DeliveryAttempt(workspace_id=wid,delivery_id=x.id,attempt_number=len(attempts)+1,status="READY",message_id=attempts[0].message_id)); db.commit(); return delivery_read(x,db)

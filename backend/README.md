@@ -75,3 +75,77 @@ The separate `compose.native-integration.yml` runs actual native API/workers/Pos
 Discovery now waits for explicit user acceptance before lead creation/research. See [native lead discovery](../docs/native-lead-discovery.md) for candidate APIs, native UI/BFF adapters, migration008, worker libraries/limits, local acceptance and coordinated release requirements. Earlier automatic discovery acceptance guidance is superseded.
 
 Native controlled sending is implemented in migration009 with encrypted workspace sender connections, immutable delivery snapshots, separate send approval, a transactional outbox, bounded known-failure retries and fail-closed uncertain handoffs. See [native controlled sending](../docs/native-sending.md). Synthetic transport tests only; no DEV executor ownership or outbound message is enabled.
+
+## Independent worker pools
+
+The worker command now selects exactly one pool with `--pool` (or `WORKER_POOL`).
+The seven stage pools are SETUP, DISCOVERY, RESEARCH, CONTACT_SEARCH, SCORING,
+MATCHING and DRAFTING. EMAIL, SOCIAL and MESSAGING are separate delivery pools;
+SCHEDULER alone handles due discovery and expired job/delivery recovery. The
+existing `backend-worker` Compose service is the RESEARCH pool. Every pool serves
+all product lines; line concurrency and provider controls remain database scoped.
+
+Merge `compose.worker-pools.yml` with `compose.backend.yml` to start the full
+pipeline. Start the API, backend-worker and the backend-setup, backend-discovery,
+backend-contacts, backend-scoring, backend-matching, backend-content, backend-email,
+backend-social, backend-messaging and backend-scheduler services. The base Compose
+file alone starts only the research pool. It is not a full pipeline deployment.
+Each pool has an independent restart policy and a process/database readiness
+probe. `WORKER_<POOL>_CONCURRENCY` configures 1–8 local execution slots; the scheduler
+requires one. Database line limits still bound concurrent work across replicas.
+
+Social currently routes approved LINKEDIN assets. MESSAGING provides an adapter
+boundary and synthetic acceptance fixtures; the existing content producer does
+not generate messaging assets. There are no live social or messaging adapters.
+The synthetic adapters require explicit `DELIVERY_ADAPTER_MODE=synthetic` and a
+test/acceptance APP_ENV. Normal runtime fails closed as CHANNEL_NOT_CONFIGURED.
+Email retains verified sender, suppression, exact approval, separate send approval
+and uncertain handoff checks. A timed-out delivery is never automatically resent.
+
+`POST /workspaces/{wid}/channel-deliveries` prepares an outbox record for an
+explicitly approved versioned product-line social/message snapshot. The existing
+approve-send endpoint authorizes execution separately. Delivery events are exposed
+through `GET /workspaces/{wid}/deliveries/{id}/events`; sensitive content is excluded.
+Migration 017 preserves existing email snapshots/decisions, adds immutable channel
+routing and trace identity, and introduces append-only delivery diagnostics. Runtime
+roles cannot edit or delete that history. Downgrade requires a forward recovery plan.
+
+For local synthetic runtime validation also merge `compose.worker-day2-test.yml`.
+This clears provider/sender credentials and makes backend-smoke exercise a normal
+API research task plus quarantine before execution in all seven stage pools. The
+backend-test suite separately starts restricted subprocesses with guarded fake
+providers, fake channels, concurrent claims, restart recovery and a synthetic query
+strategy canary. No live provider or outbound-send test is required.
+
+Product-line settings accept discovery_query_strategy=baseline (icp-queries.1) or
+explicit canary opt-in official (icp-queries.2). Both produce the same candidate
+contract. Roll back by selecting baseline for new work. A setting edit creates a
+new context and invalidates in-flight old work; historical artifacts and human
+acceptance/approval decisions are retained. Synthetic canary results are not proof
+of real-world provider quality or paid usage.
+
+
+## Delivery diagnostics and canary acceptance evidence
+
+Delivery logs, event reads and attempt reads now use the shared failure taxonomy.
+The additive error_category and retryable fields are derived from persisted safe
+codes, so existing immutable audit rows are not rewritten and no new migration is
+needed. Only SMTP_CONNECTION_FAILED can indicate bounded human retry eligibility
+before the third attempt. Uncertain handoffs, stale context, suppression and
+configuration errors do not advertise retryability. automatic_retry is always
+false for delivery; existing authorization, context and retry endpoint checks
+remain authoritative.
+
+The guarded test command `python -m tests.run_worker_canary --output-dir /evidence`
+exports canary-comparison.json and canary-comparison.md from measured fixture jobs.
+Run it only in the backend-test service after migrations; it resets the disposable
+marketing_rebuild_test fixtures and refuses other databases/environments. Compare
+candidate counts, evidence validity, duplicate rate, failure/quarantine counts,
+counted fake provider requests and ledger reservations. It also verifies downstream
+research compatibility and history/acceptance preservation after rollback. CI
+exports and uploads this comparison after the full suite.
+
+The report clearly distinguishes fake adapter requests from external provider
+calls and reserved test ledger amounts from bills. It does not establish real-world
+search quality, conversion rates or costs. Live channels and live rollout remain
+outside synthetic acceptance.

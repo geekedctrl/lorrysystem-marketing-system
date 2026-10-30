@@ -130,13 +130,14 @@ class Membership(Base):
 class Catalog(Base):
     __tablename__ = "catalog"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "kind", "code"),
+        UniqueConstraint("workspace_id", "product_line_id", "kind", "code", name="catalog_line_code"),
         CheckConstraint("kind IN ('PRODUCT','ICP')"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workspaces.id"), index=True
     )
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     kind: Mapped[str] = mapped_column(String(8))
     code: Mapped[str] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(120))
@@ -165,6 +166,14 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         UniqueConstraint("workspace_id", "id"),
+        CheckConstraint("replay_generation BETWEEN 0 AND 3"),
+        CheckConstraint("(status='QUARANTINED')=(quarantine_reason IS NOT NULL)", name="jobs_quarantine_state"),
+        UniqueConstraint("workspace_id", "product_line_id", "id", name="job_line_identity"),
+        ForeignKeyConstraint(
+            ["workspace_id", "product_line_id"],
+            ["product_lines.workspace_id", "product_lines.id"],
+            name="job_product_line_scope",
+        ),
         UniqueConstraint("workspace_id", "idempotency_key"),
         ForeignKeyConstraint(
             ["workspace_id", "lead_id"], ["leads.workspace_id", "leads.id"]
@@ -194,7 +203,7 @@ class Job(Base):
             "(kind IN ('SETUP','DISCOVERY') AND lead_id IS NULL AND run_id IS NULL) OR (kind NOT IN ('SETUP','DISCOVERY') AND lead_id IS NOT NULL)"
         ),
         CheckConstraint(
-            "status IN ('PENDING','RUNNING','COMPLETED','NEEDS_REVIEW','FAILED')"
+            "status IN ('PENDING','RUNNING','COMPLETED','NEEDS_REVIEW','FAILED','QUARANTINED')"
         ),
         CheckConstraint("attempts >= 0 AND max_attempts BETWEEN 1 AND 5"),
         CheckConstraint(
@@ -204,6 +213,7 @@ class Job(Base):
         Index(
             "one_active_lead_job",
             "workspace_id",
+            "product_line_id",
             "lead_id",
             unique=True,
             postgresql_where=text("status IN ('PENDING','RUNNING')"),
@@ -211,6 +221,16 @@ class Job(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    # The foundation migration backfills this and supplies the default line
+    # for legacy inserts. Explicit product-line API selection follows later.
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("gen_random_uuid()"))
+    task_envelope: Mapped[dict | None] = mapped_column(JSONB)
+    quarantine_reason: Mapped[str | None] = mapped_column(String(80))
+    quarantined_task_hash: Mapped[str | None] = mapped_column(String(64))
+    quarantined_input_hash: Mapped[str | None] = mapped_column(String(64))
+    output_generation: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    replay_generation: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     lead_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
     run_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
     managed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -244,6 +264,7 @@ class PreparationRun(Base):
         Index(
             "one_preparing_run",
             "workspace_id",
+            "product_line_id",
             "lead_id",
             unique=True,
             postgresql_where=text("status = 'PREPARING'"),
@@ -251,6 +272,7 @@ class PreparationRun(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     lead_id: Mapped[uuid.UUID] = mapped_column(UUID)
     context_hash: Mapped[str] = mapped_column(String(64))
     snapshot: Mapped[dict] = mapped_column(JSONB)
@@ -263,7 +285,7 @@ class PreparationRun(Base):
 class DiscoveryMemory(Base):
     __tablename__ = "discovery_memory"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "domain"),
+        UniqueConstraint("workspace_id", "product_line_id", "domain", name="discovery_line_domain"),
         UniqueConstraint("workspace_id", "id", name="discovery_identity"),
         ForeignKeyConstraint(
             ["workspace_id", "source_job_id"],
@@ -278,6 +300,7 @@ class DiscoveryMemory(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     domain: Mapped[str] = mapped_column(String(254))
     candidate: Mapped[dict] = mapped_column(JSONB)
     outcome: Mapped[str] = mapped_column(String(24))
@@ -301,6 +324,7 @@ class ProviderUsage(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     job_id: Mapped[uuid.UUID] = mapped_column(UUID)
     provider: Mapped[str] = mapped_column(String(24))
     operation: Mapped[str] = mapped_column(String(120))
@@ -331,6 +355,7 @@ class Approval(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"))
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     run_id: Mapped[uuid.UUID] = mapped_column(UUID)
     snapshot: Mapped[dict] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(24), default="PENDING")
@@ -377,8 +402,11 @@ class Delivery(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     approval_id: Mapped[uuid.UUID] = mapped_column(UUID)
-    sender_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    sender_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    channel: Mapped[str] = mapped_column(String(24), default="EMAIL")
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID, default=uuid.uuid4)
     create_key: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(24), default="PENDING_SEND_APPROVAL")
     snapshot: Mapped[dict] = mapped_column(JSONB)
@@ -399,6 +427,7 @@ class DeliveryAttempt(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     delivery_id: Mapped[uuid.UUID] = mapped_column(UUID, index=True)
     attempt_number: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(12), default="READY")
@@ -418,4 +447,146 @@ class EmailSuppression(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
     email: Mapped[str] = mapped_column(String(254))
     reason: Mapped[str] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ProductLine(Base):
+    """Ownership foundation; settings selection is wired in a later patch."""
+    __tablename__ = "product_lines"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id"),
+        UniqueConstraint("workspace_id", "code"),
+        CheckConstraint("context_version >= 1"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(80))
+    name: Mapped[str] = mapped_column(String(120))
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    paused: Mapped[bool] = mapped_column(Boolean, default=True)
+    context_version: Mapped[int] = mapped_column(Integer, default=1)
+    context_hash: Mapped[str] = mapped_column(String(64))
+    limits: Mapped[dict] = mapped_column(JSONB, default=lambda: {"per_pool_concurrency": 1})
+    next_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    versioned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class StageArtifact(Base):
+    __tablename__ = "stage_artifacts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "product_line_id", "job_id"],
+            ["jobs.workspace_id", "jobs.product_line_id", "jobs.id"],
+        ),
+        UniqueConstraint("job_id", "artifact_key"),
+        CheckConstraint("schema_version IN (1,2)"),
+        Index("stage_artifact_line", "workspace_id", "product_line_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    artifact_key: Mapped[str] = mapped_column(String(120))
+    contract_name: Mapped[str] = mapped_column(String(80))
+    schema_version: Mapped[int] = mapped_column(Integer)
+    producer_version: Mapped[str] = mapped_column(String(80))
+    context_version: Mapped[int] = mapped_column(Integer)
+    context_hash: Mapped[str] = mapped_column(String(64))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    envelope: Mapped[dict] = mapped_column(JSONB)
+    payload: Mapped[dict] = mapped_column(JSONB)
+    evidence_refs: Mapped[list] = mapped_column(JSONB, default=list)
+    strategy_versions: Mapped[dict] = mapped_column(JSONB, default=dict)
+    input_hashes: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class StageEvent(Base):
+    __tablename__ = "job_stage_events"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "product_line_id", "job_id", "id", name="job_stage_event_scope"),
+        CheckConstraint("schema_version >= 0", name="job_event_contract_version"),
+        ForeignKeyConstraint(
+            ["workspace_id", "product_line_id", "job_id"],
+            ["jobs.workspace_id", "jobs.product_line_id", "jobs.id"],
+        ),
+        Index("job_stage_event_history", "workspace_id", "job_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    event: Mapped[str] = mapped_column(String(24))
+    stage: Mapped[str] = mapped_column(String(30))
+    pool: Mapped[str] = mapped_column(String(30))
+    attempt: Mapped[int] = mapped_column(Integer)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class JobReplay(Base):
+    __tablename__ = "job_replays"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "job_id", "idempotency_key"),
+        UniqueConstraint("job_id", "generation"),
+        ForeignKeyConstraint(
+            ["workspace_id", "product_line_id", "job_id", "event_id"],
+            ["job_stage_events.workspace_id", "job_stage_events.product_line_id",
+             "job_stage_events.job_id", "job_stage_events.id"],
+        ),
+        CheckConstraint("generation BETWEEN 1 AND 3"),
+        CheckConstraint("previous_attempts BETWEEN 0 AND 5"),
+        Index("job_replay_history", "workspace_id", "job_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    idempotency_key: Mapped[str] = mapped_column(String(120))
+    generation: Mapped[int] = mapped_column(Integer)
+    previous_attempts: Mapped[int] = mapped_column(Integer)
+    envelope_hash: Mapped[str] = mapped_column(String(64))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    consumer_version: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CompanyEvidence(Base):
+    __tablename__="company_evidence"
+    __table_args__=(ForeignKeyConstraint(["workspace_id","lead_id"],["leads.workspace_id","leads.id"]),
+                   UniqueConstraint("workspace_id","lead_id","input_hash","content_hash"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID,primary_key=True,default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    lead_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    source_url: Mapped[str] = mapped_column(Text)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict] = mapped_column(JSONB)
+    fetch_version: Mapped[str] = mapped_column(String(80))
+    extract_version: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),default=now)
+
+
+class DeliveryEvent(Base):
+    __tablename__ = "delivery_events"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    delivery_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    event: Mapped[str] = mapped_column(String(30))
+    pool: Mapped[str] = mapped_column(String(30))
+    channel: Mapped[str] = mapped_column(String(24))
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    attempt: Mapped[int] = mapped_column(Integer)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

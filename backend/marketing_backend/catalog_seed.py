@@ -1,3 +1,4 @@
+from .product_lines import default_id
 """Restore the documented LorrySystem starter catalog into one native workspace."""
 
 import argparse
@@ -205,6 +206,7 @@ def restore_catalog(db, workspace):
         existing = db.scalar(
             select(Catalog).where(
                 Catalog.workspace_id == workspace.id,
+                Catalog.product_line_id == default_id(db, workspace.id),
                 Catalog.kind == values["kind"],
                 Catalog.code == values["code"],
             )

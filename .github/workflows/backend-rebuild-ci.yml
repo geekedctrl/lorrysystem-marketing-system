@@ -1,9 +1,9 @@
 name: Backend Rebuild CI
 on:
   pull_request:
-    paths: ['backend/**', 'compose.backend.yml', 'compose.native-integration.yml', 'docs/contracts/native-backend-openapi.json', '.github/workflows/backend-rebuild-ci.yml']
+    paths: ['backend/**', 'compose.backend.yml', 'compose.worker-pools.yml', 'compose.worker-day2-test.yml', 'compose.native-integration.yml', 'docs/contracts/native-backend-openapi.json', '.github/workflows/backend-rebuild-ci.yml']
   push:
-    branches: ['rebuild/**']
+    branches: ['rebuild/**', 'feature/python-lead-worker-revamp']
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -24,9 +24,18 @@ jobs:
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test build
       - name: Test PostgreSQL isolation and durable jobs
         run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm backend-test
-      - name: Start restricted API and native worker
+      - name: Export measured synthetic canary comparison
         run: |
-          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml up -d backend-api backend-worker
+          mkdir -p worker-canary-evidence
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm --user "$(id -u):$(id -g)" --volume "$PWD/worker-canary-evidence:/evidence" backend-test python -m tests.run_worker_canary --output-dir /evidence
+      - name: Upload synthetic canary comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-worker-canary
+          path: worker-canary-evidence/canary-comparison.*
+      - name: Start restricted API and all independent worker pools
+        run: |
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml up -d --build --wait backend-api backend-worker backend-setup backend-discovery backend-contacts backend-scoring backend-matching backend-content backend-email backend-social backend-messaging backend-scheduler
           python3 - <<'PY'
           import time,urllib.request
           for attempt in range(30):
@@ -38,8 +47,8 @@ jobs:
                   if attempt==29: raise
                   time.sleep(1)
           PY
-      - name: Test running API and worker roles
-        run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm backend-smoke
+      - name: Test running API and seven stage pool boundaries
+        run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test run --no-deps --rm --build backend-smoke
       - name: Verify exported native API contract
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml exec -T backend-api python -c "import json; from marketing_backend.api import app; print(json.dumps(app.openapi()))" > native-openapi.json
@@ -50,4 +59,4 @@ jobs:
           PY
       - name: Stop isolated test containers
         if: always()
-        run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test down
+        run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test down

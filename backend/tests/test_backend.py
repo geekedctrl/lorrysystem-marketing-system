@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text
 from marketing_backend.db import Session, engine
 from marketing_backend.models import (
+    DeliveryEvent,
     User,
     LoginSession,
     LoginAttempt,
@@ -30,6 +31,10 @@ from marketing_backend.models import (
     DeliveryAttempt,
     SenderConnection,
     EmailSuppression,
+    JobReplay,
+    StageEvent,
+    StageArtifact,
+    CompanyEvidence,
 )
 from marketing_backend.auth import hash_password
 from marketing_backend.api import app
@@ -46,6 +51,11 @@ class BackendFixtures(unittest.TestCase):
     def setUp(self):
         with Session() as db:
             for model in (
+                JobReplay,
+                StageEvent,
+                StageArtifact,
+                CompanyEvidence,
+                DeliveryEvent,
                 DeliveryAttempt,
                 Delivery,
                 EmailSuppression,
@@ -266,6 +276,7 @@ class BackendTests(BackendFixtures):
             with self.assertRaises(queue.LeaseLost):
                 queue.complete(db, jid, token, {"stale": True})
         with Session() as db:
+            queue.recover_expired(db)
             self.assertIsNone(queue.claim(db))
             self.assertEqual(db.get(Job, jid).status, "FAILED")
         r = self.client.post(
