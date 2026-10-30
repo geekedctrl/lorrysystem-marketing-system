@@ -404,7 +404,9 @@ class Delivery(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
     product_line_id: Mapped[uuid.UUID] = mapped_column(UUID, server_default=text("NULL"))
     approval_id: Mapped[uuid.UUID] = mapped_column(UUID)
-    sender_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    sender_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    channel: Mapped[str] = mapped_column(String(24), default="EMAIL")
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID, default=uuid.uuid4)
     create_key: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(24), default="PENDING_SEND_APPROVAL")
     snapshot: Mapped[dict] = mapped_column(JSONB)
@@ -570,3 +572,21 @@ class CompanyEvidence(Base):
     fetch_version: Mapped[str] = mapped_column(String(80))
     extract_version: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),default=now)
+
+
+class DeliveryEvent(Base):
+    __tablename__ = "delivery_events"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    product_line_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    delivery_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(UUID)
+    event: Mapped[str] = mapped_column(String(30))
+    pool: Mapped[str] = mapped_column(String(30))
+    channel: Mapped[str] = mapped_column(String(24))
+    trace_id: Mapped[uuid.UUID] = mapped_column(UUID)
+    attempt: Mapped[int] = mapped_column(Integer)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

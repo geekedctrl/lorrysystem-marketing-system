@@ -22,6 +22,7 @@ class Strict(BaseModel):
 
 
 class Settings(Strict):
+    discovery_query_strategy: Literal["baseline", "official"] = "baseline"
     product_description: str = Field(default="", max_length=5000)
     target_customers: str = Field(default="", max_length=2000)
     discovery_query: str = Field(default="", max_length=300)

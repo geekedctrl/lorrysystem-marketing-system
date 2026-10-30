@@ -12,7 +12,8 @@ class LeaseLost(Exception):
     pass
 
 
-def claim(db):
+def recover_expired(db):
+    """Scheduler-only recovery; claims never recover unrelated pool work."""
     instant = now()
     expired = list(
         db.scalars(
@@ -42,7 +43,16 @@ def claim(db):
 
             run = db.get(PreparationRun, job.run_id)
             run.status, run.stop_reason = "FAILED", "LEASE_EXPIRED"
-    db.flush()
+    db.commit()
+    return len(expired)
+
+
+def claim(db, pool=None):
+    from .pools import get_pool, STAGES
+    stages = STAGES if pool is None else get_pool(pool).stages
+    if not stages:
+        raise ValueError("A stage pool is required for job claims")
+    instant = now()
     running = aliased(Job)
     count = select(func.count()).where(running.product_line_id == Job.product_line_id,
         running.kind == Job.kind, running.status == "RUNNING").correlate(Job).scalar_subquery()
@@ -55,6 +65,7 @@ def claim(db):
                   (Job.kind == 'SETUP', 'SETUP'), (Job.kind == 'DISCOVERY', 'DISCOVERY'),
                   else_='PREPARATION')))
         .where(
+            Job.kind.in_(stages),
             Job.status == "PENDING",
             Job.available_at <= instant,
             Workspace.active.is_(True),

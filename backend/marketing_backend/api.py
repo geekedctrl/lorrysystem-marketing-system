@@ -94,7 +94,7 @@ def job_read(j):
             "lease_until",
         )
     }
-    result.update(pool="LEGACY", contract_mode="LEGACY" if j.task_envelope is None else "VERSIONED",
+    result.update(pool=j.kind, contract_mode="LEGACY" if j.task_envelope is None else "VERSIONED",
                   schema_version=event_version(j), contract_name=None)
     if isinstance(j.task_envelope, dict):
         name = j.task_envelope.get("contract_name")

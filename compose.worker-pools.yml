@@ -1,0 +1,183 @@
+# Merge with compose.backend.yml. Shared pools serve every product line.
+services:
+  backend-worker:
+    environment: &stage-env
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+      MODEL_BASE_URL: ${BACKEND_MODEL_BASE_URL:-https://api.xkiro.com/v1}
+      MODEL_NAME: ${BACKEND_MODEL_NAME:-mistralai/mistral-large-2512}
+      MODEL_AUTH_HEADER: ${BACKEND_MODEL_AUTH_HEADER:-Authorization}
+      MODEL_API_KEY: ${BACKEND_MODEL_API_KEY:-}
+      BRAVE_SEARCH_API_KEY: ${BACKEND_BRAVE_SEARCH_API_KEY:-}
+      MODEL_INPUT_USD_PER_MILLION: ${BACKEND_MODEL_INPUT_USD_PER_MILLION:-}
+      MODEL_OUTPUT_USD_PER_MILLION: ${BACKEND_MODEL_OUTPUT_USD_PER_MILLION:-}
+      SEARCH_USD_PER_REQUEST: ${BACKEND_SEARCH_USD_PER_REQUEST:-}
+      PROVIDER_MONTHLY_BUDGET_USD: ${BACKEND_PROVIDER_MONTHLY_BUDGET_USD:-50}
+      DISCOVERY_BROWSER_FALLBACK: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+  backend-setup:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "SETUP", "--concurrency", "${WORKER_SETUP_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "SETUP"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-discovery:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "DISCOVERY", "--concurrency", "${WORKER_DISCOVERY_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "DISCOVERY"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-contacts:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "CONTACT_SEARCH", "--concurrency", "${WORKER_CONTACT_SEARCH_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "CONTACT_SEARCH"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-scoring:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "SCORING", "--concurrency", "${WORKER_SCORING_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "SCORING"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-matching:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "MATCHING", "--concurrency", "${WORKER_MATCHING_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "MATCHING"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-content:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "DRAFTING", "--concurrency", "${WORKER_DRAFTING_CONCURRENCY:-1}"]
+    environment: *stage-env
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "DRAFTING"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-email:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "EMAIL", "--concurrency", "${WORKER_EMAIL_CONCURRENCY:-1}"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ${SENDER_CREDENTIAL_ENCRYPTION_KEY:-}
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "EMAIL"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-social:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "SOCIAL", "--concurrency", "${WORKER_SOCIAL_CONCURRENCY:-1}"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+      DELIVERY_ADAPTER_MODE: disabled
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "SOCIAL"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-messaging:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "MESSAGING", "--concurrency", "${WORKER_MESSAGING_CONCURRENCY:-1}"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+      DELIVERY_ADAPTER_MODE: disabled
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "MESSAGING"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+  backend-scheduler:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
+    restart: unless-stopped
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "SCHEDULER", "--concurrency", "${WORKER_SCHEDULER_CONCURRENCY:-1}"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@backend-db:5432/marketing_rebuild
+    depends_on:
+      backend-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "SCHEDULER"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s

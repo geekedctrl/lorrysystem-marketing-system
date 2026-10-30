@@ -104,57 +104,116 @@ def build_message(delivery, sender):
     return message
 
 
-def claim_attempt(db, lease_seconds=120):
-    attempt = db.scalar(select(DeliveryAttempt).where(DeliveryAttempt.status == "READY", DeliveryAttempt.available_at <= now()).order_by(DeliveryAttempt.created_at).with_for_update(skip_locked=True).limit(1))
-    if not attempt: return None
-    from .models import ExecutorOwnership
-    authority = db.scalar(select(ExecutorOwnership).where(
-        ExecutorOwnership.workspace_id == attempt.workspace_id,
-        ExecutorOwnership.capability == "SENDING").with_for_update())
-    if not authority or authority.owner != "PYTHON" or authority.state != "ACTIVE": return None
-    delivery = db.get(Delivery, attempt.delivery_id)
-    if not delivery or delivery.status != "QUEUED": return None
+def claim_attempt(db, lease_seconds=120, pool="EMAIL"):
+    from sqlalchemy import func, Integer, or_, text
+    from sqlalchemy.orm import aliased
+    from .models import ExecutorOwnership, ProductLine, Workspace
+    from .pools import get_pool
+    selected = get_pool(pool)
+    if selected.kind != "delivery":
+        raise ValueError("A delivery pool is required")
+    active_attempt, active_delivery = aliased(DeliveryAttempt), aliased(Delivery)
+    active = select(func.count()).select_from(active_attempt).join(active_delivery,
+        active_delivery.id == active_attempt.delivery_id).where(
+        active_delivery.product_line_id == Delivery.product_line_id,
+        active_delivery.channel == Delivery.channel,
+        active_attempt.status == "SENDING").correlate(Delivery).scalar_subquery()
+    attempt = db.scalar(select(DeliveryAttempt).join(Delivery, Delivery.id == DeliveryAttempt.delivery_id)
+        .join(ProductLine, ProductLine.id == Delivery.product_line_id)
+        .join(Workspace, Workspace.id == Delivery.workspace_id)
+        .join(ExecutorOwnership, (ExecutorOwnership.workspace_id == Delivery.workspace_id) &
+            (ExecutorOwnership.capability == "SENDING"))
+        .where(DeliveryAttempt.status == "READY", DeliveryAttempt.available_at <= now(),
+            Delivery.status == "QUEUED", Delivery.channel.in_(selected.channels),
+            Workspace.active.is_(True),
+            or_(ProductLine.versioned.is_(False), ProductLine.paused.is_(False)),
+            ExecutorOwnership.owner == "PYTHON", ExecutorOwnership.state == "ACTIVE",
+            active < func.coalesce(ProductLine.limits["per_pool_concurrency"].astext.cast(Integer),1))
+        .order_by(DeliveryAttempt.created_at,DeliveryAttempt.id)
+        .with_for_update(of=DeliveryAttempt,skip_locked=True).limit(1))
+    if not attempt:
+        return None
+    delivery = db.scalar(select(Delivery).where(Delivery.id == attempt.delivery_id).with_for_update())
+    key = "delivery:"+str(delivery.product_line_id)+":"+delivery.channel
+    if not db.scalar(text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key,0))"), {"key":key}):
+        db.commit(); return None
+    count = db.scalar(select(func.count()).select_from(DeliveryAttempt).join(Delivery,
+        Delivery.id == DeliveryAttempt.delivery_id).where(Delivery.product_line_id == delivery.product_line_id,
+        Delivery.channel == delivery.channel,DeliveryAttempt.status == "SENDING"))
+    if count >= db.get(ProductLine,delivery.product_line_id).limits.get("per_pool_concurrency",1):
+        db.commit(); return None
     attempt.status, attempt.lease_token = "SENDING", secrets.token_hex(24)
     attempt.lease_until = now() + timedelta(seconds=lease_seconds)
     delivery.status, delivery.updated_at = "SENDING", now()
+    from .delivery_events import record
+    record(db,delivery,attempt,"CLAIM")
     db.commit()
     return attempt.id, attempt.lease_token
 
 
-def execute_attempt(db, attempt_id, token, transport=None):
-    attempt = db.scalar(select(DeliveryAttempt).where(DeliveryAttempt.id == attempt_id, DeliveryAttempt.lease_token == token, DeliveryAttempt.status == "SENDING").with_for_update())
-    if not attempt or attempt.lease_until <= now(): return False
+def execute_attempt(db, attempt_id, token, transport=None, pool="EMAIL", adapter=None):
+    import time
+    from .pools import get_pool
+    from .models import Workspace, ProductLine, EmailSuppression
+    from .delivery_events import record
+    selected = get_pool(pool)
+    if selected.kind != "delivery":
+        raise ValueError("A delivery pool is required")
+    started = time.monotonic()
+    attempt = db.scalar(select(DeliveryAttempt).where(DeliveryAttempt.id == attempt_id,
+        DeliveryAttempt.lease_token == token,DeliveryAttempt.status == "SENDING").with_for_update())
+    if not attempt or attempt.lease_until <= now():
+        return False
+    delivery = db.get(Delivery, attempt.delivery_id)
+    if not delivery or delivery.channel not in selected.channels:
+        return False
     from .ownership import active_python
-    if not active_python(db, attempt.workspace_id, "SENDING"): return False
-    delivery, sender = db.get(Delivery, attempt.delivery_id), None
-    if delivery: sender = db.get(SenderConnection, delivery.sender_id)
-    if not delivery or not sender:
+    if not active_python(db,attempt.workspace_id,"SENDING"):
         return False
     from .approval_context import valid_delivery
-    if not valid_delivery(db,delivery,require_send=True):
-        attempt.status,attempt.failure_code,attempt.finished_at="FAILED","STALE_APPROVAL_CONTEXT",now()
-        attempt.lease_token=attempt.lease_until=None
-        delivery.status,delivery.updated_at="FAILED",now()
-        db.commit();return True
-    if not sender.enabled or not sender.verified_at:
-        attempt.status, attempt.failure_code, attempt.finished_at = "FAILED", "SENDER_NOT_VERIFIED", now()
-        attempt.lease_token = attempt.lease_until = None
-        delivery.status, delivery.updated_at = "FAILED", now()
-        db.commit()
-        return True
-    message = build_message(delivery, sender)
-    attempt.message_id = message["Message-ID"]
-    try:
-        (transport or smtp_handoff)(sender, decrypt_secret(sender), message, delivery.snapshot["recipient"])
-        attempt.status, delivery.status = "ACCEPTED", "ACCEPTED"
-    except HandoffError as exc:
-        attempt.status = "UNCERTAIN" if exc.uncertain else "FAILED"
-        delivery.status, attempt.failure_code = attempt.status, exc.code
-    except Exception:
-        attempt.status = delivery.status = "UNCERTAIN"
-        attempt.failure_code = "SMTP_HANDOFF_UNCERTAIN"
-    attempt.finished_at, attempt.lease_token, attempt.lease_until = now(), None, None
+    workspace = db.get(Workspace,attempt.workspace_id)
+    line = db.get(ProductLine,attempt.product_line_id)
+    code = None
+    if not workspace or not workspace.active or not line or (line.versioned and line.paused):
+        code = "PRODUCT_PAUSED"
+    elif not valid_delivery(db,delivery,require_send=True):
+        code = "STALE_APPROVAL_CONTEXT"
+    elif delivery.channel == "EMAIL" and db.scalar(select(EmailSuppression.id).where(
+        EmailSuppression.workspace_id == delivery.workspace_id,
+        EmailSuppression.email == delivery.snapshot.get("recipient"))):
+        code = "RECIPIENT_SUPPRESSED"
+    sender = db.get(SenderConnection,delivery.sender_id) if delivery.sender_id else None
+    if not code and delivery.channel == "EMAIL" and (not sender or not sender.enabled or not sender.verified_at):
+        code = "SENDER_NOT_VERIFIED"
+    if code:
+        attempt.status,attempt.failure_code,delivery.status = "FAILED",code,"FAILED"
+    else:
+        try:
+            if delivery.channel == "EMAIL":
+                message = build_message(delivery,sender)
+                attempt.message_id = message["Message-ID"]
+                (transport or smtp_handoff)(sender,decrypt_secret(sender),message,delivery.snapshot["recipient"])
+            else:
+                from .channels import adapter_for
+                receipt = (adapter or adapter_for(delivery.channel)).handoff(delivery)
+                attempt.message_id = receipt.reference
+            attempt.status = delivery.status = "ACCEPTED"
+        except HandoffError as exc:
+            from .delivery_events import KNOWN
+            attempt.status = delivery.status = "UNCERTAIN" if exc.uncertain else "FAILED"
+            attempt.failure_code = exc.code if exc.code in KNOWN else "HANDLER_ERROR"
+        except Exception as exc:
+            from .channels import AdapterUnavailable
+            if isinstance(exc,AdapterUnavailable):
+                attempt.status = delivery.status = "FAILED"
+                attempt.failure_code = "CHANNEL_NOT_CONFIGURED"
+            else:
+                attempt.status = delivery.status = "UNCERTAIN"
+                attempt.failure_code = "SMTP_HANDOFF_UNCERTAIN" if delivery.channel == "EMAIL" else "CHANNEL_HANDOFF_UNCERTAIN"
+    attempt.finished_at,attempt.lease_token,attempt.lease_until = now(),None,None
     delivery.updated_at = now()
+    record(db,delivery,attempt,"COMPLETION" if attempt.status == "ACCEPTED" else "FAILURE",
+        attempt.failure_code,max(0,int((time.monotonic()-started)*1000)))
     db.commit()
     return True
 
@@ -167,4 +226,6 @@ def recover_expired(db):
         delivery = db.get(Delivery, attempt.delivery_id)
         if delivery:
             delivery.status, delivery.updated_at = "UNCERTAIN", now()
+            from .delivery_events import record
+            record(db,delivery,attempt,"LEASE_LOSS","WORKER_TERMINATED_DURING_HANDOFF")
     db.commit()

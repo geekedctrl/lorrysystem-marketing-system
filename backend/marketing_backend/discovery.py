@@ -395,7 +395,7 @@ def discover(job, providers):
     country = ctx["preferences"].get("country", "MY")
 
     from . import discovery_strategies as strategies
-    queries = strategies.queries.queries(
+    queries = strategies.select_queries(job).queries(
         original,
         ctx["catalog"],
         country,

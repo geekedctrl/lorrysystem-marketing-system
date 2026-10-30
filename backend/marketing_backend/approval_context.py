@@ -10,6 +10,16 @@ def valid_delivery(db,delivery,require_send=False):
     approval=db.get(Approval,delivery.approval_id)
     run=db.get(PreparationRun,approval.run_id) if approval else None
     if not run:return False
+    draft=approval.snapshot.get("draft",{})
+    if (approval.status!="APPROVED" or run.status!="APPROVED" or not approval.decision.get("actor_id")
+        or delivery.product_line_id!=run.product_line_id
+        or delivery.channel!=draft.get("channel")
+        or delivery.snapshot.get("approval_version")!=approval.version
+        or delivery.snapshot.get("context_hash")!=run.context_hash
+        or approval.snapshot.get("context_hash")!=run.context_hash):return False
+    for field in ("recipient","subject","body","channel"):
+        if delivery.snapshot.get(field)!=draft.get(field):return False
+    if require_send and not (delivery.send_approved_by and delivery.send_approved_at):return False
     if not run.snapshot.get("product_line"):return True
     if require_send:
         db.execute(text("SELECT worker_lock_product_line(:wid,:lid)"),{"wid":run.workspace_id,"lid":run.product_line_id})

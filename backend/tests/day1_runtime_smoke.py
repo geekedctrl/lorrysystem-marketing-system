@@ -4,7 +4,8 @@ from uuid import UUID
 import httpx
 from sqlalchemy import select,delete
 from marketing_backend.db import Session,engine
-from marketing_backend.models import (User,Organization,Workspace,Membership,OrganizationMembership,ExecutorOwnership,
+from marketing_backend.models import (
+    DeliveryEvent,User,Organization,Workspace,Membership,OrganizationMembership,ExecutorOwnership,
     JobReplay,StageEvent,StageArtifact,CompanyEvidence,ProviderUsage,DiscoveryMemory,Job,Approval,PreparationRun,
     DeliveryAttempt,Delivery,Lead,Catalog,ProductLine,LoginSession)
 from marketing_backend.auth import hash_password
@@ -21,7 +22,7 @@ with Session() as db:
     db.query(ExecutorOwnership).filter(ExecutorOwnership.workspace_id==wid).update({ExecutorOwnership.owner:"PYTHON"},synchronize_session=False)
     db.commit()
 try:
-    with httpx.Client(base_url="http://backend-api:8000",timeout=15) as client:
+    with httpx.Client(base_url=os.getenv("NATIVE_API_URL","http://backend-api:8000"),timeout=15) as client:
         response=client.post("/auth/login",json=dict(email=email,password=password));response.raise_for_status()
         client.headers["Authorization"]="Bearer "+response.json()["token"]
         response=client.post(f"/workspaces/{wid}/product-lines",json=dict(code="SMOKE",name="Synthetic smoke line",settings=dict(discovery_query="Synthetic customers Malaysia")))
@@ -50,7 +51,7 @@ try:
         print("PASS: restricted running API/worker, line-specific typed job, persisted trace/events, no provider calls or messages.")
 finally:
     with Session() as db:
-        for model in (JobReplay,StageEvent,StageArtifact,CompanyEvidence,DeliveryAttempt,Delivery,Approval,ProviderUsage,DiscoveryMemory,Job,PreparationRun,Lead,Catalog):
+        for model in (DeliveryEvent,JobReplay,StageEvent,StageArtifact,CompanyEvidence,DeliveryAttempt,Delivery,Approval,ProviderUsage,DiscoveryMemory,Job,PreparationRun,Lead,Catalog):
             db.execute(delete(model).where(model.workspace_id==wid))
         db.execute(delete(Membership).where(Membership.workspace_id==wid))
         db.execute(delete(ExecutorOwnership).where(ExecutorOwnership.workspace_id==wid))

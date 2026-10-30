@@ -14,7 +14,7 @@ from .stage_contracts import (
 )
 from .diagnostics import classify
 
-IMPLEMENTATION = "native.day1.1"
+IMPLEMENTATION = "native.day2.1"
 
 
 class EvaluatedDomain(Strict):
@@ -49,7 +49,7 @@ def event_version(job):
 
 def record(db, job, event, code=None, duration_ms=None, actor_id=None):
     return artifacts.append_event(db, job.id, job.workspace_id, job.product_line_id, dict(
-        event=event, stage=job.kind, pool="LEGACY", attempt=job.attempts,
+        event=event, stage=job.kind, pool=job.kind, attempt=job.attempts,
         schema_version=event_version(job), trace_id=str(job.trace_id),
         error_code=classify(code).code if code else None, duration_ms=duration_ms,
         actor_id=str(actor_id) if actor_id else None,
@@ -120,7 +120,7 @@ def store_output(db, job, result):
         strategies = {"worker": IMPLEMENTATION}
         if value.contract_name == "discovery.candidate":
             from .discovery_strategies import versions
-            strategies.update(versions())
+            strategies.update(versions(job))
         artifacts.persist_artifact(db, job.id, job.lease_token, envelope, output, key, dict(
             evidence_refs=evidence, strategy_versions=strategies,
             input_hashes={"task_input": content_hash(job.payload)},

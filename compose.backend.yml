@@ -57,8 +57,13 @@ services:
       MODEL_OUTPUT_USD_PER_MILLION: ${BACKEND_MODEL_OUTPUT_USD_PER_MILLION:-}
       SEARCH_USD_PER_REQUEST: ${BACKEND_SEARCH_USD_PER_REQUEST:-}
       PROVIDER_MONTHLY_BUDGET_USD: ${BACKEND_PROVIDER_MONTHLY_BUDGET_USD:-50}
-      SENDER_CREDENTIAL_ENCRYPTION_KEY: ${SENDER_CREDENTIAL_ENCRYPTION_KEY:-}
-    command: ["python", "-m", "marketing_backend.worker"]
+    command: ["python", "-m", "marketing_backend.worker", "--pool", "RESEARCH", "--concurrency", "${WORKER_RESEARCH_CONCURRENCY:-1}"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "marketing_backend.runtime_health", "--pool", "RESEARCH"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
   dashboard-dev:

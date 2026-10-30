@@ -345,7 +345,7 @@ class JobResponse(Public):
     workspace_id: UUID
     product_line_id: UUID
     trace_id: UUID
-    pool: Literal["LEGACY"]
+    pool: Literal["LEGACY", "SETUP", "DISCOVERY", "RESEARCH", "CONTACT_SEARCH", "SCORING", "MATCHING", "DRAFTING"]
     contract_mode: Literal["LEGACY", "VERSIONED"]
     contract_name: str | None
     schema_version: int

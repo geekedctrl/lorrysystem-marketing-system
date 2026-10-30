@@ -13,7 +13,7 @@ def execution_log(job, event, started, code=None, retryable=False):
     from .worker_contracts import event_version
     failure = classify(code, retryable) if code else None
     log.info(json.dumps(dict(
-        event=event, pool="LEGACY", stage=job.kind, job_id=str(job.id),
+        event=event, pool=job.kind, stage=job.kind, job_id=str(job.id),
         workspace_id=str(job.workspace_id), product_line_id=str(job.product_line_id),
         attempt=job.attempts, duration_ms=max(0, int((time.monotonic()-started)*1000)),
         contract_version=event_version(job), trace_id=str(job.trace_id),
@@ -76,10 +76,6 @@ def execute(job, handler=None):
             execution_log(job, "LEASE_LOSS", started, "LEASE_LOST")
     except ProviderFailure as exc:
         try:
-            from .pipeline import schedule
-
-            with Session() as db:
-                schedule(db)
             with Session() as db:
                 queue.fail(db, job.id, job.lease_token, exc.code, exc.retryable,
                            duration_ms=max(0, int((time.monotonic()-started)*1000)))
@@ -101,30 +97,9 @@ def execute(job, handler=None):
         renewer.join(timeout=2)
 
 
-def main():
-    logging.basicConfig(level=logging.INFO)
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, lambda *_: stop.set())
-    while not stop.is_set():
-        try:
-            with Session() as db:
-                from .pipeline import schedule
-                from .sending import recover_expired, claim_attempt
-                schedule(db)
-                recover_expired(db)
-                delivery_attempt = claim_attempt(db)
-                job = queue.claim(db)
-            if delivery_attempt:
-                from .sending import execute_attempt
-                with Session() as db:
-                    execute_attempt(db, *delivery_attempt)
-            elif job:
-                execute(job)
-            else:
-                stop.wait(2)
-        except Exception:
-            log.error("Queue unavailable; waiting before reconnect")
-            stop.wait(5)
+def main(argv=None):
+    from .runner import main as run
+    return run(argv)
 
 
 if __name__ == "__main__":

@@ -29,6 +29,22 @@ class ExistingQueries:
         return discovery_queries(*args)
 
 
+class OfficialQueries(ExistingQueries):
+    version="icp-queries.2"
+    def queries(self,*args):
+        rows=super().queries(*args)
+        return [q+" official website" if len(q)+17<=400 and len(q.split())+2<=50 else q for q in rows]
+
+
+def select_queries(job=None):
+    settings=job.payload.get("context",{}).get("preferences",{}) if job else {}
+    name=settings.get("discovery_query_strategy","baseline")
+    if name not in ("baseline","official"):
+        from .research import ProviderFailure
+        raise ProviderFailure("CONFIGURATION_ERROR")
+    return OfficialQueries() if name=="official" else queries
+
+
 class GuardedPages:
     version="guarded-pages.1"
     def fetch(self,*args):
@@ -56,5 +72,5 @@ extractor=ReadableExtraction()
 assessment=EvidenceAssessment()
 
 
-def versions():
-    return dict(query=queries.version,fetch=fetcher.version,extraction=extractor.version,assessment=assessment.version)
+def versions(job=None):
+    return dict(query=select_queries(job).version,fetch=fetcher.version,extraction=extractor.version,assessment=assessment.version)

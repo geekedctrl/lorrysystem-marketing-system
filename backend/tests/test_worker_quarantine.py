@@ -221,6 +221,7 @@ class WorkerQuarantineTests(BackendFixtures):
             with self.assertRaises(queue.LeaseLost):
                 queue.complete(db, self.jid, token, research())
         with Session() as db:
+            queue.recover_expired(db)
             self.assertIsNone(queue.claim(db))
             self.assertEqual(list(db.scalars(select(StageArtifact))), [])
         self.assertEqual([row.event for row in self.events()], ["CLAIM", "LEASE_LOSS", "RETRY"])
