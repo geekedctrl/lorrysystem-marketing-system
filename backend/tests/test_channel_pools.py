@@ -116,3 +116,7 @@ class ChannelPoolTests(BackendFixtures):
                 self.assertTrue(execute_attempt(db,*task,pool="SOCIAL"))
                 self.assertEqual(db.get(DeliveryAttempt,task[0]).failure_code,"CHANNEL_NOT_CONFIGURED")
                 self.assertEqual(db.scalar(select(func.count()).select_from(Delivery)),1)
+        response=self.client.get(f"/workspaces/{self.wid}/deliveries/{did}/events",headers=self.headers)
+        failure=response.json()[-1]
+        self.assertEqual(failure["error_category"],"configuration")
+        self.assertFalse(failure["retryable"]);self.assertFalse(failure["automatic_retry"])

@@ -24,6 +24,15 @@ jobs:
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test build
       - name: Test PostgreSQL isolation and durable jobs
         run: docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm backend-test
+      - name: Export measured synthetic canary comparison
+        run: |
+          mkdir -p worker-canary-evidence
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml --profile test run --rm --user "$(id -u):$(id -g)" --volume "$PWD/worker-canary-evidence:/evidence" backend-test python -m tests.run_worker_canary --output-dir /evidence
+      - name: Upload synthetic canary comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-worker-canary
+          path: worker-canary-evidence/canary-comparison.*
       - name: Start restricted API and all independent worker pools
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml up -d --build --wait backend-api backend-worker backend-setup backend-discovery backend-contacts backend-scoring backend-matching backend-content backend-email backend-social backend-messaging backend-scheduler

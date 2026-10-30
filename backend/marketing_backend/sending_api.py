@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from .auth import user, scope
 from .db import session
 from .models import Approval, Delivery, DeliveryAttempt, EmailSuppression, PreparationRun, SenderConnection, DeliveryEvent, Job, now
+from .diagnostics import delivery_failure
 from .sending import decrypt_secret, encrypt_secret, normalized_email, smtp_handoff, HandoffError
 
 router = APIRouter(prefix="/workspaces/{wid}", tags=["Controlled email delivery"])
@@ -47,7 +48,7 @@ def sender_read(x):
     return {k:getattr(x,k) for k in ("id","name","from_email","from_name","host","port","security","username","enabled","verified_at","created_at")}
 def delivery_read(x,db):
     attempts=list(db.scalars(select(DeliveryAttempt).where(DeliveryAttempt.delivery_id==x.id).order_by(DeliveryAttempt.attempt_number)))
-    return {"id":x.id,"channel":x.channel,"product_line_id":x.product_line_id,"trace_id":x.trace_id,"approval_id":x.approval_id,"sender_id":x.sender_id,"status":x.status,"snapshot":x.snapshot,"requested_by":x.requested_by,"send_approved_by":x.send_approved_by,"send_approved_at":x.send_approved_at,"created_at":x.created_at,"attempts":[{"id":a.id,"number":a.attempt_number,"status":a.status,"message_id":a.message_id,"failure_code":a.failure_code,"created_at":a.created_at,"finished_at":a.finished_at} for a in attempts]}
+    return {"id":x.id,"channel":x.channel,"product_line_id":x.product_line_id,"trace_id":x.trace_id,"approval_id":x.approval_id,"sender_id":x.sender_id,"status":x.status,"snapshot":x.snapshot,"requested_by":x.requested_by,"send_approved_by":x.send_approved_by,"send_approved_at":x.send_approved_at,"created_at":x.created_at,"attempts":[{"id":a.id,"number":a.attempt_number,"status":a.status,"message_id":a.message_id,"failure_code":a.failure_code,"error_category":delivery_failure(a.failure_code,a.attempt_number).category if a.failure_code else None,"retryable":a.status=="FAILED" and delivery_failure(a.failure_code,a.attempt_number).retryable,"automatic_retry":False,"created_at":a.created_at,"finished_at":a.finished_at} for a in attempts]}
 
 @router.get("/senders")
 def senders(wid:UUID,actor=Depends(user),db=Depends(session)):
@@ -163,10 +164,10 @@ def delivery_events(wid:UUID,did:UUID,actor=Depends(user),db=Depends(session)):
     scope(wid,actor,db)
     if not db.scalar(select(Delivery.id).where(Delivery.id==did,Delivery.workspace_id==wid)):
         raise HTTPException(404,"Delivery not found")
-    return [{k:getattr(e,k) for k in ("id","delivery_id","product_line_id","event","pool","channel",
-        "trace_id","attempt","schema_version","error_code","duration_ms","created_at")}
-        for e in db.scalars(select(DeliveryEvent).where(DeliveryEvent.workspace_id==wid,DeliveryEvent.delivery_id==did)
-            .order_by(DeliveryEvent.created_at,DeliveryEvent.id))]
+    from .delivery_events import event_read
+    return [event_read(e) for e in db.scalars(select(DeliveryEvent).where(
+        DeliveryEvent.workspace_id==wid,DeliveryEvent.delivery_id==did)
+        .order_by(DeliveryEvent.created_at,DeliveryEvent.id))]
 
 
 @router.get("/deliveries")

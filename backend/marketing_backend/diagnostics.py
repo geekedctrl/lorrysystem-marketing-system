@@ -9,9 +9,27 @@ class Failure:
     retryable: bool = False
 
 
+DELIVERY_CATEGORIES = {
+    "STALE_APPROVAL_CONTEXT": "context", "PRODUCT_PAUSED": "context",
+    "SENDER_NOT_VERIFIED": "configuration", "CHANNEL_NOT_CONFIGURED": "configuration",
+    "SMTP_AUTHENTICATION_FAILED": "configuration", "RECIPIENT_SUPPRESSED": "policy",
+    "SMTP_SENDER_REJECTED": "provider_response", "SMTP_RECIPIENT_REJECTED": "provider_response",
+    "SMTP_DATA_REJECTED": "provider_response", "SMTP_CONNECTION_FAILED": "provider_transport",
+    "SMTP_HANDOFF_UNCERTAIN": "delivery_uncertainty", "CHANNEL_HANDOFF_UNCERTAIN": "delivery_uncertainty",
+    "WORKER_TERMINATED_DURING_HANDOFF": "lease",
+}
+
+
+def delivery_failure(code, attempt=1):
+    # Advisory eligibility for a separate human retry, never an automatic send.
+    return classify(code, retryable=type(attempt) is int and 1 <= attempt < 3)
+
+
 def classify(code, retryable=False):
     if not isinstance(code, str):
         return Failure("HANDLER_ERROR", "internal")
+    if code in DELIVERY_CATEGORIES:
+        return Failure(code, DELIVERY_CATEGORIES[code], bool(retryable) and code == "SMTP_CONNECTION_FAILED")
     if code in {"UNSUPPORTED_CONTRACT", "TASK_ENVELOPE_INVALID", "TASK_INPUT_INVALID", "STAGE_PAYLOAD_INVALID",
                 "ARTIFACT_HASH_MISMATCH", "ARTIFACT_SCOPE_MISMATCH", "ARTIFACT_METADATA_INVALID", "ARTIFACT_CONFLICT"}:
         return Failure(code, "contract")

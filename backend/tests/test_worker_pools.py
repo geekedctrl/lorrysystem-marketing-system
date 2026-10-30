@@ -142,6 +142,10 @@ class WorkerPoolTests(BackendFixtures):
                 self.assertEqual(job.result["counts"]["candidates_ready"],1)
                 self.assertEqual(job.status,"COMPLETED")
             original_ids={r.id for r in rows}
+            groups={"baseline":[r.job_id for r in rows if r.product_line_id==a],
+                "canary":[r.job_id for r in rows if r.product_line_id==b]}
+            from canary_report import collect,evaluate,export
+            report=collect(db,groups)
             candidates=list(db.scalars(select(DiscoveryMemory)))
             candidate_ids=[r.id for r in candidates]
             self.assertEqual(len(candidates),2)
@@ -153,7 +157,9 @@ class WorkerPoolTests(BackendFixtures):
                 process=self.child("RESEARCH",folder,once=True)
                 self.assertEqual(process.wait(timeout=25),0)
         with Session() as db:
-            self.assertEqual(db.scalar(select(func.count()).select_from(StageArtifact).where(StageArtifact.contract_name=="research.output")),2)
+            research_outputs=db.scalar(select(func.count()).select_from(StageArtifact).where(StageArtifact.contract_name=="research.output"))
+            self.assertEqual(research_outputs,2)
+            report["proof"]["downstream_research_outputs"]=research_outputs
         response=self.client.patch(f"/workspaces/{self.wid}/product-lines/{b}",headers=self.headers,
             json=dict(settings=dict(discovery_query="CANARY transport buyers",discovery_query_strategy="baseline")))
         self.assertEqual(response.status_code,200,response.text)
@@ -161,6 +167,13 @@ class WorkerPoolTests(BackendFixtures):
             self.assertTrue(original_ids.issubset({r.id for r in db.scalars(select(StageArtifact))}))
             self.assertTrue(all(db.get(DiscoveryMemory,cid).outcome=="ACCEPTED" for cid in candidate_ids))
             self.assertEqual(db.scalar(select(func.count()).select_from(ProviderUsage)),0)
+            report["proof"].update(historical_artifacts_retained=original_ids.issubset({r.id for r in db.scalars(select(StageArtifact))}),
+                human_acceptance_retained=all(db.get(DiscoveryMemory,cid).outcome=="ACCEPTED" for cid in candidate_ids),
+                rollback_query_strategy=db.get(ProductLine,b).settings["discovery_query_strategy"])
+        evaluate(report)
+        self.assertTrue(report["passed"],report["checks"])
+        if os.getenv("SYNTHETIC_CANARY_REPORT_DIR"):
+            export(report,os.environ["SYNTHETIC_CANARY_REPORT_DIR"])
 
     def test_another_pool_process_runs_while_research_is_stopped(self):
         ids=self.make_jobs()

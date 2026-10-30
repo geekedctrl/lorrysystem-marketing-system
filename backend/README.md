@@ -123,3 +123,29 @@ contract. Roll back by selecting baseline for new work. A setting edit creates a
 new context and invalidates in-flight old work; historical artifacts and human
 acceptance/approval decisions are retained. Synthetic canary results are not proof
 of real-world provider quality or paid usage.
+
+
+## Delivery diagnostics and canary acceptance evidence
+
+Delivery logs, event reads and attempt reads now use the shared failure taxonomy.
+The additive error_category and retryable fields are derived from persisted safe
+codes, so existing immutable audit rows are not rewritten and no new migration is
+needed. Only SMTP_CONNECTION_FAILED can indicate bounded human retry eligibility
+before the third attempt. Uncertain handoffs, stale context, suppression and
+configuration errors do not advertise retryability. automatic_retry is always
+false for delivery; existing authorization, context and retry endpoint checks
+remain authoritative.
+
+The guarded test command `python -m tests.run_worker_canary --output-dir /evidence`
+exports canary-comparison.json and canary-comparison.md from measured fixture jobs.
+Run it only in the backend-test service after migrations; it resets the disposable
+marketing_rebuild_test fixtures and refuses other databases/environments. Compare
+candidate counts, evidence validity, duplicate rate, failure/quarantine counts,
+counted fake provider requests and ledger reservations. It also verifies downstream
+research compatibility and history/acceptance preservation after rollback. CI
+exports and uploads this comparison after the full suite.
+
+The report clearly distinguishes fake adapter requests from external provider
+calls and reserved test ledger amounts from bills. It does not establish real-world
+search quality, conversion rates or costs. Live channels and live rollout remain
+outside synthetic acceptance.

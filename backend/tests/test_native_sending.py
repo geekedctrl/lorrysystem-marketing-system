@@ -93,6 +93,10 @@ class NativeSendingTests(unittest.TestCase):
         self.client.post(f"/workspaces/{self.wid}/deliveries/{did}/approve-send",headers=self.headers,json={"confirmed":True})
         with Session() as db: claimed=claim_attempt(db)
         with Session() as db: execute_attempt(db,*claimed,transport=lambda *_: (_ for _ in ()).throw(HandoffError("SMTP_CONNECTION_FAILED")))
+        detail=self.client.get(f"/workspaces/{self.wid}/deliveries/{did}",headers=self.headers).json()
+        self.assertEqual(detail["attempts"][-1]["error_category"],"provider_transport")
+        self.assertTrue(detail["attempts"][-1]["retryable"])
+        self.assertFalse(detail["attempts"][-1]["automatic_retry"])
         retry=self.client.post(f"/workspaces/{self.wid}/deliveries/{did}/retry",headers=self.headers,json={"confirmed":True})
         self.assertEqual(retry.status_code,202,retry.text); self.assertEqual(len(retry.json()["attempts"]),2)
         with Session() as db:
