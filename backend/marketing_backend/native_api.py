@@ -1,3 +1,4 @@
+from .product_lines import default_id, for_run, enabled
 """Product commands and review APIs; no sending endpoint."""
 
 from datetime import timedelta
@@ -45,7 +46,12 @@ class Activation(Request):
 
 
 class PrepareRequest(Request):
+    product_line_id: UUID | None = None
     icp_code: str | None = Field(default=None, max_length=80)
+
+
+class DiscoveryRequest(Request):
+    product_line_id: UUID | None = None
 
 
 class ContactChoice(Strict):
@@ -77,11 +83,15 @@ def workspace_lock(db, wid):
 def public_run(run):
     return {
         k: getattr(run, k)
-        for k in ("id", "lead_id", "status", "stop_reason", "results", "created_at")
+        for k in ("id", "product_line_id", "lead_id", "status", "stop_reason", "results", "created_at")
     }
 
 
 def enqueue_workspace(db, workspace, kind, key):
+    from .product_lines import line_for, enqueue
+    line=line_for(db,workspace.id,default_id(db,workspace.id))
+    if line.versioned:
+        return enqueue(db,line,kind,key)
     old = db.scalar(
         select(Job).where(Job.workspace_id == workspace.id, Job.idempotency_key == key)
     )
@@ -92,6 +102,7 @@ def enqueue_workspace(db, workspace, kind, key):
     if db.scalar(
         select(Job.id).where(
             Job.workspace_id == workspace.id,
+            Job.product_line_id == line.id,
             Job.lead_id.is_(None),
             Job.status.in_(["PENDING", "RUNNING"]),
         )
@@ -116,7 +127,8 @@ def activate(wid: UUID, data: Activation, actor=Depends(user), db=Depends(sessio
     workspace = workspace_lock(db, wid)
     old = db.scalar(
         select(Job).where(
-            Job.workspace_id == wid, Job.idempotency_key == data.idempotency_key
+            Job.workspace_id == wid,
+            Job.product_line_id == default_id(db,wid), Job.idempotency_key == data.idempotency_key
         )
     )
     if old:
@@ -129,6 +141,7 @@ def activate(wid: UUID, data: Activation, actor=Depends(user), db=Depends(sessio
     if db.scalar(
         select(Job.id).where(
             Job.workspace_id == wid,
+            Job.product_line_id == default_id(db,wid),
             Job.managed.is_(True),
             Job.status.in_(["PENDING", "RUNNING"]),
         )
@@ -137,6 +150,7 @@ def activate(wid: UUID, data: Activation, actor=Depends(user), db=Depends(sessio
     if not db.scalar(
         select(Catalog.id).where(
             Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid),
             Catalog.kind == "PRODUCT",
             Catalog.active.is_(True),
         )
@@ -186,7 +200,8 @@ def resume(wid: UUID, actor=Depends(user), db=Depends(session)):
         active_kinds = set(
             db.scalars(
                 select(Catalog.kind).where(
-                    Catalog.workspace_id == wid, Catalog.active.is_(True)
+                    Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid), Catalog.active.is_(True)
                 )
             )
         )
@@ -213,8 +228,11 @@ def resume(wid: UUID, actor=Depends(user), db=Depends(session)):
 
 
 @router.post("/discovery", status_code=202, response_model=out.JobQueued)
-def discover(wid: UUID, data: Request, actor=Depends(user), db=Depends(session)):
+def discover(wid: UUID, data: DiscoveryRequest, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
+    if data.product_line_id:
+        from .line_api import discover as line_discover, Command
+        return line_discover(wid,data.product_line_id,Command(idempotency_key=data.idempotency_key),actor,db)
     workspace = workspace_lock(db, wid)
     if not workspace.automation_enabled or not workspace.automation.get(
         "discovery_query"
@@ -233,6 +251,11 @@ def prepare(
     wid: UUID, lid: UUID, data: PrepareRequest, actor=Depends(user), db=Depends(session)
 ):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
+    from .product_lines import line_for
+    selected=data.product_line_id or default_id(db,wid)
+    if data.product_line_id or line_for(db,wid,selected).versioned:
+        from .line_api import prepare as line_prepare, Prepare
+        return line_prepare(wid,selected,lid,Prepare(idempotency_key=data.idempotency_key,icp_code=data.icp_code),actor,db)
     lead = db.scalar(
         select(Lead).where(Lead.workspace_id == wid, Lead.id == lid).with_for_update()
     )
@@ -286,7 +309,7 @@ def runs(wid: UUID, lid: UUID, actor=Depends(user), db=Depends(session)):
             db.scalars(
                 select(PreparationRun)
                 .where(
-                    PreparationRun.workspace_id == wid, PreparationRun.lead_id == lid
+                    PreparationRun.workspace_id == wid, PreparationRun.lead_id == lid, PreparationRun.product_line_id == default_id(db,wid)
                 )
                 .order_by(PreparationRun.created_at.desc(), PreparationRun.id.desc())
                 .limit(50)
@@ -327,8 +350,8 @@ def contact(
     ):
         raise HTTPException(409, "Run is not waiting for contact resolution")
     if (
-        not db.get(Workspace, wid).automation_enabled
-        or fingerprint(context(db, wid, item.lead_id)) != item.context_hash
+        not enabled(db,item)
+        or fingerprint(for_run(db, item)) != item.context_hash
     ):
         raise HTTPException(
             409, "Resume product or start fresh preparation after context changes"
@@ -394,6 +417,9 @@ def contact(
             "stop_reason": None,
         },
     }
+    if contact_job and item.snapshot.get("product_line"):
+        from .human_artifacts import contact_resolution
+        contact_resolution(db,contact_job,item,actor.id,item.results["CONTACT_SEARCH"])
     item.status, item.stop_reason = "PREPARING", None
     if contact_job:
         previous_reason = contact_job.failure_code
@@ -411,9 +437,10 @@ def contact(
     research_job = db.scalar(
         select(Job).where(Job.run_id == item.id, Job.kind == "RESEARCH")
     )
-    db.add(
-        Job(
+    child=Job(
             workspace_id=wid,
+            product_line_id=item.product_line_id,
+            trace_id=research_job.trace_id,
             lead_id=item.lead_id,
             run_id=item.id,
             kind="SCORING",
@@ -421,7 +448,10 @@ def contact(
             idempotency_key=f"{item.id}:SCORING",
             payload=research_job.payload,
         )
-    )
+    db.add(child)
+    if item.snapshot.get("product_line"):
+        from .product_lines import bind_task
+        bind_task(db,child)
     db.commit()
     return {"run_id": item.id, "status": item.status}
 
@@ -451,12 +481,15 @@ def retry_contacts(wid: UUID, rid: UUID, actor=Depends(user), db=Depends(session
     ):
         raise HTTPException(409, "Run is not waiting for contact resolution")
     if (
-        not workspace.automation_enabled
-        or fingerprint(context(db, wid, item.lead_id)) != item.context_hash
+        not enabled(db,item)
+        or fingerprint(for_run(db, item)) != item.context_hash
     ):
         raise HTTPException(
             409, "Resume product or start fresh preparation after context changes"
         )
+    if item.snapshot.get("product_line"):
+        if job.output_generation>=3:raise HTTPException(409,"Contact retry limit reached; start fresh work")
+        job.output_generation+=1
     item.status, item.stop_reason = "PREPARING", None
     job.status, job.failure_code = "PENDING", None
     job.attempts = 0
@@ -496,6 +529,7 @@ def approvals(wid: UUID, actor=Depends(user), db=Depends(session)):
             .where(
                 PreparationRun.workspace_id == wid,
                 PreparationRun.lead_id == item.lead_id,
+                PreparationRun.product_line_id == item.product_line_id,
             )
             .order_by(PreparationRun.created_at.desc(), PreparationRun.id.desc())
             .limit(1)
@@ -515,7 +549,7 @@ def approvals(wid: UUID, actor=Depends(user), db=Depends(session)):
                 },
                 "version": a.version,
                 "stale": item.context_hash
-                != fingerprint(context(db, wid, item.lead_id))
+                != fingerprint(for_run(db, item))
                 or latest != item.id,
             }
         )
@@ -550,13 +584,13 @@ def decide(
     latest = db.scalar(
         select(PreparationRun.id)
         .where(
-            PreparationRun.workspace_id == wid, PreparationRun.lead_id == item.lead_id
+            PreparationRun.workspace_id == wid, PreparationRun.lead_id == item.lead_id, PreparationRun.product_line_id == item.product_line_id
         )
         .order_by(PreparationRun.created_at.desc(), PreparationRun.id.desc())
         .limit(1)
     )
     if data.decision == "APPROVED" and (
-        fingerprint(context(db, wid, item.lead_id)) != item.context_hash
+        fingerprint(for_run(db, item)) != item.context_hash
         or latest != item.id
         or item.status != "PENDING_APPROVAL"
     ):

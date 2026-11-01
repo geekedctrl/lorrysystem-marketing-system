@@ -1,0 +1,51 @@
+services:
+  backend-worker:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-setup:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-discovery:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-contacts:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-scoring:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-matching:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-content:
+    environment:
+      MODEL_API_KEY: ""
+      BRAVE_SEARCH_API_KEY: ""
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+      DISCOVERY_BROWSER_FALLBACK: "false"
+  backend-api:
+    environment:
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+  backend-email:
+    environment:
+      SENDER_CREDENTIAL_ENCRYPTION_KEY: ""
+  backend-smoke:
+    command: ["python", "-m", "tests.day2_runtime_smoke"]

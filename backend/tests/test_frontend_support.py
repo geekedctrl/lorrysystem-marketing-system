@@ -355,21 +355,13 @@ class FrontendSupportTests(BackendFixtures):
         self.assertEqual(run["status"], "FAILED")
         self.assertEqual(run["stop_reason"], "CATALOG_CHANGED")
 
-    def test_idle_worker_loop_schedules_discovery(self):
-        import threading
-        from marketing_backend import worker
+    def test_independent_scheduler_enqueues_due_discovery(self):
         from marketing_backend.models import now, Job
-
+        from marketing_backend.runner import scheduler_tick
         with Session() as db:
             db.get(Workspace, self.wid).next_discovery_at = now()
             db.commit()
-        stop = threading.Event()
-        with patch.object(worker, "stop", stop), patch.object(
-            worker.signal, "signal"
-        ), patch.object(worker.logging, "basicConfig"), patch.object(
-            worker, "execute", side_effect=lambda job: stop.set()
-        ):
-            worker.main()
+        scheduler_tick()
         with Session() as db:
             job = db.scalar(select(Job).where(Job.kind == "DISCOVERY"))
-            self.assertEqual(job.status, "RUNNING")
+            self.assertEqual(job.status, "PENDING")

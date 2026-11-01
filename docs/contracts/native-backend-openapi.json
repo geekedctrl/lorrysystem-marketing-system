@@ -668,6 +668,163 @@
         }
       }
     },
+    "/workspaces/{wid}/jobs/{jid}/events": {
+      "get": {
+        "summary": "Job Events",
+        "operationId": "job_events_workspaces__wid__jobs__jid__events_get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "jid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Jid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkerEventResponse"
+                  },
+                  "title": "Response Job Events Workspaces  Wid  Jobs  Jid  Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/jobs/{jid}/replay": {
+      "post": {
+        "summary": "Replay Job",
+        "operationId": "replay_job_workspaces__wid__jobs__jid__replay_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "jid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Jid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/me": {
       "get": {
         "summary": "Me",
@@ -1269,7 +1426,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Request"
+                "$ref": "#/components/schemas/DiscoveryRequest"
               }
             }
           }
@@ -1850,6 +2007,23 @@
               "minimum": 0,
               "default": 0,
               "title": "Offset"
+            }
+          },
+          {
+            "name": "product_line_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Line Id"
             }
           },
           {
@@ -2516,6 +2690,129 @@
         }
       }
     },
+    "/workspaces/{wid}/channel-deliveries": {
+      "post": {
+        "tags": [
+          "Controlled email delivery"
+        ],
+        "summary": "Create Channel Delivery",
+        "description": "Queue an approved social/message asset; adapters are synthetic-only.",
+        "operationId": "create_channel_delivery_workspaces__wid__channel_deliveries_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelDelivery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/deliveries/{did}/events": {
+      "get": {
+        "tags": [
+          "Controlled email delivery"
+        ],
+        "summary": "Delivery Events",
+        "operationId": "delivery_events_workspaces__wid__deliveries__did__events_get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Did"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{wid}/deliveries/{did}/approve-send": {
       "post": {
         "tags": [
@@ -3119,6 +3416,818 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines": {
+      "get": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "List Lines",
+        "operationId": "list_lines_workspaces__wid__product_lines_get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LineResponse"
+                  },
+                  "title": "Response List Lines Workspaces  Wid  Product Lines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Create Line",
+        "operationId": "create_line_workspaces__wid__product_lines_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}": {
+      "get": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Detail",
+        "operationId": "detail_workspaces__wid__product_lines__lid__get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Update Line",
+        "operationId": "update_line_workspaces__wid__product_lines__lid__patch",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/catalog": {
+      "get": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Catalog",
+        "operationId": "catalog_workspaces__wid__product_lines__lid__catalog_get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogState"
+                  },
+                  "title": "Response Catalog Workspaces  Wid  Product Lines  Lid  Catalog Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Save Catalog",
+        "operationId": "save_catalog_workspaces__wid__product_lines__lid__catalog_put",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/pause": {
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Pause",
+        "operationId": "pause_workspaces__wid__product_lines__lid__pause_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/resume": {
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Resume",
+        "operationId": "resume_workspaces__wid__product_lines__lid__resume_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/setup": {
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Setup",
+        "operationId": "setup_workspaces__wid__product_lines__lid__setup_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/discovery": {
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Discover",
+        "operationId": "discover_workspaces__wid__product_lines__lid__discovery_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/leads/{lead_id}/prepare": {
+      "post": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Prepare",
+        "operationId": "prepare_workspaces__wid__product_lines__lid__leads__lead_id__prepare_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "lead_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lead Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Prepare"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationStarted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{wid}/product-lines/{lid}/preparation": {
+      "get": {
+        "tags": [
+          "Product lines"
+        ],
+        "summary": "Runs",
+        "operationId": "runs_workspaces__wid__product_lines__lid__preparation_get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PreparationResponse"
+                  },
+                  "title": "Response Runs Workspaces  Wid  Product Lines  Lid  Preparation Get"
+                }
               }
             }
           },
@@ -4394,6 +5503,16 @@
       },
       "ApprovalInputs": {
         "properties": {
+          "product_line": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LineContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "catalog": {
             "items": {
               "additionalProperties": true,
@@ -4701,6 +5820,18 @@
       },
       "CatalogResponse": {
         "properties": {
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -4766,6 +5897,18 @@
       },
       "CatalogState": {
         "properties": {
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -4819,6 +5962,78 @@
         ],
         "title": "CatalogState"
       },
+      "CatalogWrite": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PRODUCT",
+              "ICP"
+            ],
+            "title": "Kind"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9_]+$",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 10,
+            "title": "Description"
+          },
+          "rules": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Rules"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "code",
+          "name",
+          "description"
+        ],
+        "title": "CatalogWrite"
+      },
+      "ChannelDelivery": {
+        "properties": {
+          "approval_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Approval Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "approval_id",
+          "idempotency_key"
+        ],
+        "title": "ChannelDelivery"
+      },
       "Citation": {
         "properties": {
           "source_url": {
@@ -4841,6 +6056,22 @@
           "evidence_quote"
         ],
         "title": "Citation"
+      },
+      "Command": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "Command"
       },
       "ConnectionStatus": {
         "properties": {
@@ -5115,6 +6346,36 @@
         ],
         "title": "CreateDelivery"
       },
+      "CreateLine": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "pattern": "^[A-Z0-9_]+$",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Name"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "CreateLine"
+      },
       "CreateWorkspace": {
         "properties": {
           "name": {
@@ -5279,6 +6540,18 @@
       },
       "DiscoveryCandidate": {
         "properties": {
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -5542,8 +6815,51 @@
         ],
         "title": "DiscoveryPreferences"
       },
+      "DiscoveryRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "DiscoveryRequest"
+      },
       "DraftResult": {
         "properties": {
+          "asset_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "EMAIL_TEXT",
+                  "SOCIAL_TEXT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Type"
+          },
           "subject": {
             "type": "string",
             "title": "Subject"
@@ -5793,7 +7109,8 @@
               "RUNNING",
               "COMPLETED",
               "NEEDS_REVIEW",
-              "FAILED"
+              "FAILED",
+              "QUARANTINED"
             ],
             "title": "Status"
           }
@@ -5817,6 +7134,68 @@
             "type": "string",
             "format": "uuid",
             "title": "Workspace Id"
+          },
+          "product_line_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Line Id"
+          },
+          "trace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Trace Id"
+          },
+          "pool": {
+            "type": "string",
+            "enum": [
+              "LEGACY",
+              "SETUP",
+              "DISCOVERY",
+              "RESEARCH",
+              "CONTACT_SEARCH",
+              "SCORING",
+              "MATCHING",
+              "DRAFTING"
+            ],
+            "title": "Pool"
+          },
+          "contract_mode": {
+            "type": "string",
+            "enum": [
+              "LEGACY",
+              "VERSIONED"
+            ],
+            "title": "Contract Mode"
+          },
+          "contract_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Name"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "quarantine_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantine Reason"
+          },
+          "replay_generation": {
+            "type": "integer",
+            "title": "Replay Generation"
           },
           "lead_id": {
             "anyOf": [
@@ -5866,7 +7245,8 @@
               "RUNNING",
               "COMPLETED",
               "NEEDS_REVIEW",
-              "FAILED"
+              "FAILED",
+              "QUARANTINED"
             ],
             "title": "Status"
           },
@@ -5929,6 +7309,14 @@
         "required": [
           "id",
           "workspace_id",
+          "product_line_id",
+          "trace_id",
+          "pool",
+          "contract_mode",
+          "contract_name",
+          "schema_version",
+          "quarantine_reason",
+          "replay_generation",
           "lead_id",
           "kind",
           "run_id",
@@ -6090,6 +7478,129 @@
           "website"
         ],
         "title": "LeadResponse"
+      },
+      "Limits": {
+        "properties": {
+          "per_pool_concurrency": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Per Pool Concurrency",
+            "default": 1
+          },
+          "provider_requests_per_minute": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Provider Requests Per Minute",
+            "default": 60
+          },
+          "monthly_budget_microusd": {
+            "type": "integer",
+            "maximum": 50000000.0,
+            "minimum": 0.0,
+            "title": "Monthly Budget Microusd",
+            "default": 50000000
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Limits"
+      },
+      "LineContext": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "context_hash": {
+            "type": "string",
+            "title": "Context Hash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "context_hash"
+        ],
+        "title": "LineContext"
+      },
+      "LineResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "paused": {
+            "type": "boolean",
+            "title": "Paused"
+          },
+          "versioned": {
+            "type": "boolean",
+            "title": "Versioned"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          },
+          "limits": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Limits"
+          },
+          "context_version": {
+            "type": "integer",
+            "title": "Context Version"
+          },
+          "context_hash": {
+            "type": "string",
+            "title": "Context Hash"
+          },
+          "next_discovery_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Discovery At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "paused",
+          "versioned",
+          "settings",
+          "limits",
+          "context_version",
+          "context_hash",
+          "next_discovery_at"
+        ],
+        "title": "LineResponse"
       },
       "Login": {
         "properties": {
@@ -6567,6 +8078,46 @@
         ],
         "title": "PasswordChange"
       },
+      "PatchLine": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Settings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Limits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PatchLine"
+      },
       "Person": {
         "properties": {
           "source_url": {
@@ -6660,6 +8211,18 @@
       },
       "PreparationHistory": {
         "properties": {
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -6723,6 +8286,18 @@
       },
       "PreparationResponse": {
         "properties": {
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -6794,6 +8369,34 @@
         ],
         "title": "PreparationStarted"
       },
+      "Prepare": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "icp_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icp Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "Prepare"
+      },
       "PrepareRequest": {
         "properties": {
           "idempotency_key": {
@@ -6801,6 +8404,18 @@
             "maxLength": 120,
             "minLength": 8,
             "title": "Idempotency Key"
+          },
+          "product_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Line Id"
           },
           "icp_code": {
             "anyOf": [
@@ -6991,7 +8606,7 @@
         ],
         "title": "ProviderHealth"
       },
-      "Request": {
+      "ReplayRequest": {
         "properties": {
           "idempotency_key": {
             "type": "string",
@@ -7005,7 +8620,44 @@
         "required": [
           "idempotency_key"
         ],
-        "title": "Request"
+        "title": "ReplayRequest"
+      },
+      "ReplayResponse": {
+        "properties": {
+          "replay_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Replay Id"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "already_recorded": {
+            "type": "boolean",
+            "title": "Already Recorded"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "replay_id",
+          "job_id",
+          "generation",
+          "already_recorded",
+          "created_at"
+        ],
+        "title": "ReplayResponse"
       },
       "ResearchRequest": {
         "properties": {
@@ -7447,6 +9099,87 @@
         ],
         "title": "SenderWrite"
       },
+      "Settings": {
+        "properties": {
+          "discovery_query_strategy": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "official"
+            ],
+            "title": "Discovery Query Strategy",
+            "default": "baseline"
+          },
+          "product_description": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Product Description",
+            "default": ""
+          },
+          "target_customers": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Target Customers",
+            "default": ""
+          },
+          "discovery_query": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Discovery Query",
+            "default": ""
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "title": "Country",
+            "default": "MY"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Language",
+            "default": "English"
+          },
+          "brand_voice": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Brand Voice",
+            "default": "Professional and concise"
+          },
+          "batch_size": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "default": 3
+          },
+          "discovery_interval_minutes": {
+            "type": "integer",
+            "maximum": 43200.0,
+            "minimum": 60.0,
+            "title": "Discovery Interval Minutes",
+            "default": 1440
+          },
+          "qualification_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Qualification Score",
+            "default": 60
+          },
+          "matching_fit": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Matching Fit",
+            "default": 60
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Settings"
+      },
       "StageResults": {
         "properties": {
           "RESEARCH": {
@@ -7622,6 +9355,123 @@
           "expected_version"
         ],
         "title": "Version"
+      },
+      "WorkerEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "CLAIM",
+              "CHECKPOINT",
+              "RETRY",
+              "COMPLETION",
+              "FAILURE",
+              "LEASE_LOSS",
+              "QUARANTINE",
+              "REPLAY",
+              "HUMAN_RESOLUTION"
+            ],
+            "title": "Event"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "pool": {
+            "type": "string",
+            "title": "Pool"
+          },
+          "product_line_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Line Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "trace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Trace Id"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Category"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "event",
+          "stage",
+          "pool",
+          "product_line_id",
+          "attempt",
+          "schema_version",
+          "trace_id",
+          "error_code",
+          "error_category",
+          "duration_ms",
+          "created_at"
+        ],
+        "title": "WorkerEventResponse"
       },
       "WorkspaceCreated": {
         "properties": {

@@ -20,6 +20,10 @@ from marketing_backend.models import (
     DiscoveryMemory,
     PreparationRun,
     ExecutorOwnership,
+    JobReplay,
+    StageEvent,
+    StageArtifact,
+    CompanyEvidence,
 )
 from marketing_backend.auth import hash_password
 
@@ -125,6 +129,10 @@ try:
 finally:
     with Session() as db:
         for model in (
+            JobReplay,
+            StageEvent,
+            StageArtifact,
+            CompanyEvidence,
             Approval,
             ProviderUsage,
             Job,

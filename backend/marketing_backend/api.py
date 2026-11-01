@@ -1,7 +1,8 @@
+from .product_lines import default_id
 import secrets
 from uuid import UUID
 from datetime import timedelta
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Query
 from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func, text
@@ -67,11 +68,17 @@ def lead_for(db, wid, lid):
 
 
 def job_read(j):
-    return {
+    from .worker_contracts import event_version
+    from .stage_contracts import SCHEMAS
+    result = {
         k: getattr(j, k)
         for k in (
             "id",
             "workspace_id",
+            "product_line_id",
+            "trace_id",
+            "quarantine_reason",
+            "replay_generation",
             "lead_id",
             "kind",
             "run_id",
@@ -87,6 +94,13 @@ def job_read(j):
             "lease_until",
         )
     }
+    result.update(pool=j.kind, contract_mode="LEGACY" if j.task_envelope is None else "VERSIONED",
+                  schema_version=event_version(j), contract_name=None)
+    if isinstance(j.task_envelope, dict):
+        name = j.task_envelope.get("contract_name")
+        if isinstance(name, str) and any(key[0] == name for key in SCHEMAS):
+            result["contract_name"] = name
+    return result
 
 
 @app.get("/health")
@@ -198,7 +212,8 @@ def catalog(wid: UUID, actor=Depends(user), db=Depends(session)):
             "rules": c.rules,
         }
         for c in db.scalars(
-            select(Catalog).where(Catalog.workspace_id == wid, Catalog.active.is_(True))
+            select(Catalog).where(Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid), Catalog.active.is_(True))
         )
     ]
 
@@ -217,6 +232,7 @@ def save_catalog(
         select(Catalog)
         .where(
             Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid),
             Catalog.kind == data.kind,
             Catalog.code == data.code,
         )
@@ -304,6 +320,7 @@ def research(
         select(Job).where(
             Job.workspace_id == wid,
             Job.lead_id == lid,
+            Job.product_line_id == default_id(db,wid),
             Job.status.in_(["PENDING", "RUNNING"]),
         )
     )
@@ -318,7 +335,8 @@ def research(
             "rules": c.rules,
         }
         for c in db.scalars(
-            select(Catalog).where(Catalog.workspace_id == wid, Catalog.active.is_(True))
+            select(Catalog).where(Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid), Catalog.active.is_(True))
         )
     ]
     if not any(c["kind"] == "PRODUCT" for c in context) or not any(
@@ -388,6 +406,7 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
     if db.scalar(
         select(Job.id).where(
             Job.workspace_id == wid,
+            Job.product_line_id == item.product_line_id,
             Job.lead_id == item.lead_id,
             Job.status.in_(["PENDING", "RUNNING"]),
         )
@@ -414,7 +433,8 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
         from .research import ProviderFailure
         from .models import PreparationRun
 
-        if not db.get(Workspace, wid).automation_enabled:
+        from .product_lines import line_mode, line_for
+        if line_for(db,wid,item.product_line_id).paused if line_mode(item) else not db.get(Workspace, wid).automation_enabled:
             raise HTTPException(409, "Resume automation before retrying")
         try:
             valid_context(db, item)
@@ -426,6 +446,8 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
             run = db.get(PreparationRun, item.run_id)
             run.status, run.stop_reason = "PREPARING", None
     try:
+        from .worker_contracts import record
+        record(db, item, "RETRY")
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -433,6 +455,41 @@ def retry(wid: UUID, jid: UUID, actor=Depends(user), db=Depends(session)):
             409, "Another preparation attempt is already active"
         ) from None
     return job_read(item)
+
+
+class ReplayRequest(Strict):
+    idempotency_key: str = Field(min_length=8, max_length=120)
+
+
+@app.get("/workspaces/{wid}/jobs/{jid}/events", response_model=list[out.WorkerEventResponse])
+def job_events(wid: UUID, jid: UUID, limit: int = Query(default=50, ge=1, le=200),
+               offset: int = Query(default=0, ge=0), actor=Depends(user), db=Depends(session)):
+    from .models import StageEvent
+    from .worker_contracts import event_read
+    scope(wid, actor, db)
+    if not db.scalar(select(Job.id).where(Job.workspace_id == wid, Job.id == jid)):
+        raise HTTPException(404, "Job not found")
+    return [event_read(event) for event in db.scalars(select(StageEvent).where(
+        StageEvent.workspace_id == wid, StageEvent.job_id == jid,
+    ).order_by(StageEvent.created_at, StageEvent.id).offset(offset).limit(limit))]
+
+
+@app.post("/workspaces/{wid}/jobs/{jid}/replay", status_code=202, response_model=out.ReplayResponse)
+def replay_job(wid: UUID, jid: UUID, body: ReplayRequest, actor=Depends(user), db=Depends(session)):
+    from .replay import replay, ReplayConflict
+    from .stage_contracts import ContractViolation
+    scope(wid, actor, db, ["ADMIN", "OPERATOR"])
+    try:
+        row, repeated = replay(db, wid, jid, actor.id, body.idempotency_key)
+        db.commit()
+    except (ReplayConflict, ContractViolation) as exc:
+        db.rollback()
+        raise HTTPException(404 if exc.code == "JOB_NOT_FOUND" else 409, exc.code) from None
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Concurrent replay; retry using the same idempotency key") from None
+    return dict(replay_id=row.id, job_id=row.job_id, generation=row.generation,
+                already_recorded=repeated, created_at=row.created_at)
 
 
 from .frontend_api import router as frontend_router
@@ -453,6 +510,9 @@ app.include_router(sending_router)
 
 from .ownership_api import router as ownership_router
 app.include_router(ownership_router)
+
+from .line_api import router as line_router
+app.include_router(line_router)
 
 from .organization_api import router as organization_router
 app.include_router(organization_router)

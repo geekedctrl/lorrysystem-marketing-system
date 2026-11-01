@@ -1,3 +1,4 @@
+from .product_lines import default_id, default_expr, for_run
 """Additive native frontend contracts, lead paging and audited draft revisions."""
 
 import base64
@@ -32,10 +33,10 @@ from .catalog_policy import lock_catalog_change
 router = APIRouter()
 
 
-def latest_query(wid, lid):
+def latest_query(wid, lid, product_line_id=None):
     return (
         select(PreparationRun)
-        .where(PreparationRun.workspace_id == wid, PreparationRun.lead_id == lid)
+        .where(PreparationRun.workspace_id == wid, PreparationRun.lead_id == lid, PreparationRun.product_line_id == (product_line_id or default_expr(wid)))
         .order_by(PreparationRun.created_at.desc(), PreparationRun.id.desc())
     )
 
@@ -43,7 +44,7 @@ def latest_query(wid, lid):
 def public_run(run):
     return {
         k: getattr(run, k)
-        for k in ("id", "lead_id", "status", "stop_reason", "results", "created_at")
+        for k in ("id", "product_line_id", "lead_id", "status", "stop_reason", "results", "created_at")
     }
 
 
@@ -209,7 +210,7 @@ def all_catalog(wid: UUID, actor=Depends(user), db=Depends(session)):
         }
         for c in db.scalars(
             select(Catalog)
-            .where(Catalog.workspace_id == wid)
+            .where(Catalog.workspace_id == wid, Catalog.product_line_id == default_id(db, wid))
             .order_by(Catalog.kind, Catalog.code)
         )
     ]
@@ -230,7 +231,8 @@ def catalog_active(
     active_kinds = set(
         db.scalars(
             select(Catalog.kind).where(
-                Catalog.workspace_id == wid, Catalog.active.is_(True)
+                Catalog.workspace_id == wid,
+                    Catalog.product_line_id == default_id(db, wid), Catalog.active.is_(True)
             )
         )
     )
@@ -301,15 +303,16 @@ def revise(
         .where(Lead.workspace_id == wid, Lead.id == run.lead_id)
         .with_for_update()
     )
-    current = db.scalar(latest_query(wid, run.lead_id).limit(1))
+    current = db.scalar(latest_query(wid, run.lead_id,run.product_line_id).limit(1))
     if current.id != run.id or run.context_hash != fingerprint(
-        context(db, wid, run.lead_id)
+        for_run(db, run)
     ):
         raise HTTPException(409, "Draft context is stale; prepare a fresh draft")
     if db.scalar(
         select(Job.id).where(
             Job.workspace_id == wid,
             Job.lead_id == run.lead_id,
+            Job.product_line_id == run.product_line_id,
             Job.status.in_(["PENDING", "RUNNING"]),
         )
     ):
@@ -341,6 +344,7 @@ def revise(
     results = {**copy.deepcopy(run.results), "DRAFTING": draft}
     fresh = PreparationRun(
         workspace_id=wid,
+        product_line_id=run.product_line_id,
         lead_id=run.lead_id,
         context_hash=run.context_hash,
         snapshot=copy.deepcopy(run.snapshot),

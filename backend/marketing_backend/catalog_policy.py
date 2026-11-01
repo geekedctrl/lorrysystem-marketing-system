@@ -1,3 +1,4 @@
+from .product_lines import default_id
 """One catalog mutation policy for edits and soft lifecycle changes."""
 
 from fastapi import HTTPException
@@ -11,6 +12,7 @@ def lock_catalog_change(db, wid, *, kind=None, code=None, cid=None, desired=None
             select(Job)
             .where(
                 Job.workspace_id == wid,
+                Job.product_line_id == default_id(db,wid),
                 Job.managed.is_(True),
                 Job.status.in_(["PENDING", "RUNNING"]),
             )
@@ -20,7 +22,7 @@ def lock_catalog_change(db, wid, *, kind=None, code=None, cid=None, desired=None
     workspace = db.scalar(
         select(Workspace).where(Workspace.id == wid).with_for_update()
     )
-    filters = [Catalog.workspace_id == wid]
+    filters = [Catalog.workspace_id == wid, Catalog.product_line_id == default_id(db, wid)]
     filters += (
         [Catalog.id == cid] if cid else [Catalog.kind == kind, Catalog.code == code]
     )

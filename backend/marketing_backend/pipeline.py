@@ -24,8 +24,11 @@ def domain(url):
     return host.removeprefix("www.")
 
 
-def context(db, wid, lead_id=None):
+def context(db, wid, lead_id=None, product_line_id=None):
     workspace = db.get(Workspace, wid)
+    from .product_lines import default_id, line_for
+    lid = product_line_id or default_id(db, wid)
+    line = line_for(db, wid, lid)
     catalog = [
         dict(
             kind=c.kind,
@@ -37,11 +40,13 @@ def context(db, wid, lead_id=None):
         )
         for c in db.scalars(
             select(Catalog)
-            .where(Catalog.workspace_id == wid, Catalog.active.is_(True))
+            .where(Catalog.workspace_id == wid, Catalog.product_line_id == lid, Catalog.active.is_(True))
             .order_by(Catalog.kind, Catalog.code)
         )
     ]
-    snapshot = {"catalog": catalog, "preferences": workspace.automation}
+    snapshot = {"catalog": catalog, "preferences": line.settings if product_line_id else workspace.automation}
+    if product_line_id:
+        snapshot["product_line"] = dict(id=str(line.id), version=line.context_version, context_hash=line.context_hash)
     if lead_id:
         lead = db.scalar(
             select(Lead).where(Lead.workspace_id == wid, Lead.id == lead_id)
@@ -62,8 +67,15 @@ def fingerprint(value):
     ).hexdigest()
 
 
-def start(db, lead, key, icp_code=None):
-    snapshot = context(db, lead.workspace_id, lead.id)
+def start(db, lead, key, icp_code=None, product_line_id=None, candidate_id=None):
+    from .product_lines import default_id, line_for, scoped_key, bind_task
+    lid = product_line_id or default_id(db, lead.workspace_id)
+    line = line_for(db, lead.workspace_id, lid)
+    if product_line_id:
+        if line.paused:
+            raise ProviderFailure("PRODUCT_LINE_PAUSED")
+        key = scoped_key(line, key)
+    snapshot = context(db, lead.workspace_id, lead.id, product_line_id)
     if not any(c["kind"] == "PRODUCT" for c in snapshot["catalog"]) or not any(
         c["kind"] == "ICP" for c in snapshot["catalog"]
     ):
@@ -77,6 +89,7 @@ def start(db, lead, key, icp_code=None):
             select(DiscoveryMemory)
             .where(
                 DiscoveryMemory.workspace_id == lead.workspace_id,
+                DiscoveryMemory.product_line_id == lid,
                 DiscoveryMemory.accepted_lead_id == lead.id,
                 DiscoveryMemory.outcome == "ACCEPTED",
             )
@@ -92,15 +105,16 @@ def start(db, lead, key, icp_code=None):
         raise ProviderFailure("ICP_NOT_SUPPORTED")
     run = PreparationRun(
         workspace_id=lead.workspace_id,
+        product_line_id=lid,
         lead_id=lead.id,
         context_hash=fingerprint(snapshot),
         snapshot=snapshot,
     )
     db.add(run)
     db.flush()
-    db.add(
-        Job(
+    job = Job(
             workspace_id=lead.workspace_id,
+            product_line_id=lid,
             lead_id=lead.id,
             run_id=run.id,
             managed=True,
@@ -114,23 +128,34 @@ def start(db, lead, key, icp_code=None):
                 "icp_code": icp_code,
             },
         )
-    )
+    if product_line_id:
+        job.payload = {**job.payload, "product_line_id": str(lid)}
+        if candidate_id:
+            job.payload={**job.payload,"source_candidate_id":str(candidate_id)}
+            candidate=db.get(DiscoveryMemory,candidate_id)
+            if candidate and candidate.source_job_id:
+                job.trace_id=db.get(Job,candidate.source_job_id).trace_id
+    db.add(job)
+    if product_line_id:
+        bind_task(db, job)
     return run
 
 
 def valid_context(db, job):
+    from .product_lines import line_mode
     if (
         job.managed
-        and fingerprint(context(db, job.workspace_id, job.lead_id))
+        and fingerprint(context(db, job.workspace_id, job.lead_id, job.product_line_id if line_mode(job) else None))
         != job.payload["context_hash"]
     ):
         raise ProviderFailure("CONTEXT_CHANGED")
 
 
 def next_job(db, job, kind):
-    db.add(
-        Job(
+    child = Job(
             workspace_id=job.workspace_id,
+            product_line_id=job.product_line_id,
+            trace_id=job.trace_id,
             lead_id=job.lead_id,
             run_id=job.run_id,
             managed=True,
@@ -138,7 +163,11 @@ def next_job(db, job, kind):
             idempotency_key=f"{job.run_id}:{kind}",
             payload=job.payload,
         )
-    )
+    db.add(child)
+    from .product_lines import line_mode, bind_task
+    if line_mode(job):
+        bind_task(db, child)
+    return child
 
 
 def finalize(db, job, result):
@@ -148,12 +177,22 @@ def finalize(db, job, result):
             if not db.scalar(
                 select(Catalog.id).where(
                     Catalog.workspace_id == job.workspace_id,
+                    Catalog.product_line_id == job.product_line_id,
                     Catalog.kind == "ICP",
                     Catalog.code == item["code"],
                 )
             ):
-                db.add(Catalog(workspace_id=job.workspace_id, kind="ICP", **item))
+                db.add(Catalog(workspace_id=job.workspace_id, product_line_id=job.product_line_id, kind="ICP", **item))
         db.flush()
+        from .product_lines import line_mode, line_for, mirror_default
+        if line_mode(job):
+            line = line_for(db, job.workspace_id, job.product_line_id)
+            db.refresh(line)
+            line.settings = {**line.settings, "discovery_query": result["discovery_query"]}
+            line.next_discovery_at = now()
+            db.flush()
+            mirror_default(db, line)
+            return
         workspace = db.get(Workspace, job.workspace_id)
         workspace.automation = {
             **workspace.automation,
@@ -165,7 +204,8 @@ def finalize(db, job, result):
         from datetime import timedelta
         from .discovery import excluded
 
-        existing_domains = {
+        from .product_lines import line_mode
+        existing_domains = set() if line_mode(job) else {
             domain(lead.website)
             for lead in db.scalars(
                 select(Lead).where(Lead.workspace_id == job.workspace_id)
@@ -179,6 +219,7 @@ def finalize(db, job, result):
                 select(DiscoveryMemory)
                 .where(
                     DiscoveryMemory.workspace_id == job.workspace_id,
+                    DiscoveryMemory.product_line_id == job.product_line_id,
                     DiscoveryMemory.domain == host,
                 )
                 .with_for_update()
@@ -186,7 +227,7 @@ def finalize(db, job, result):
             if memory and excluded(memory, job.payload["context_hash"]):
                 continue
             if not memory:
-                memory = DiscoveryMemory(workspace_id=job.workspace_id, domain=host)
+                memory = DiscoveryMemory(workspace_id=job.workspace_id, product_line_id=job.product_line_id, domain=host)
                 db.add(memory)
             memory.candidate = item
             memory.source_job_id = job.id
@@ -258,7 +299,7 @@ def finalize(db, job, result):
 
 
 def schedule(db):
-    from .models import ExecutorOwnership
+    from .models import ExecutorOwnership, ProductLine
     for workspace in db.scalars(
         select(Workspace)
         .join(ExecutorOwnership, (ExecutorOwnership.workspace_id == Workspace.id) &
@@ -267,6 +308,7 @@ def schedule(db):
             Workspace.active.is_(True),
             Workspace.automation_enabled.is_(True),
             Workspace.next_discovery_at <= now(),
+            ~select(ProductLine.id).where(ProductLine.workspace_id == Workspace.id, ProductLine.code == "DEFAULT", ProductLine.versioned.is_(True)).exists(),
             ExecutorOwnership.owner == 'PYTHON', ExecutorOwnership.state == 'ACTIVE',
         )
         .with_for_update(of=Workspace, skip_locked=True)
@@ -293,4 +335,20 @@ def schedule(db):
             )
         )
         workspace.next_discovery_at = now() + timedelta(days=1)
+    db.commit()
+    # New line-owned schedules share the same durable job queue.
+    from .product_lines import enqueue, mirror_default
+    for line in db.scalars(select(ProductLine).join(Workspace, Workspace.id == ProductLine.workspace_id)
+        .join(ExecutorOwnership, (ExecutorOwnership.workspace_id == ProductLine.workspace_id) & (ExecutorOwnership.capability == "DISCOVERY"))
+        .where(ProductLine.versioned.is_(True), ProductLine.paused.is_(False), Workspace.active.is_(True),
+               ProductLine.next_discovery_at <= now(), ExecutorOwnership.owner == "PYTHON", ExecutorOwnership.state == "ACTIVE")
+        .with_for_update(of=ProductLine, skip_locked=True)):
+        try:
+            enqueue(db, line, "DISCOVERY", "scheduled:"+line.next_discovery_at.isoformat())
+        except ProviderFailure as exc:
+            if exc.code != "PRODUCT_LINE_BUSY":
+                raise
+            continue
+        line.next_discovery_at = now()+timedelta(minutes=line.settings.get("discovery_interval_minutes",1440))
+        mirror_default(db, line)
     db.commit()

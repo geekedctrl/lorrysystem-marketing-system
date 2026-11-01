@@ -129,6 +129,17 @@ def evidence_pages(pages):
 
 def result(job, kind):
     with Session() as db:
+        from .models import StageArtifact, Job
+        from .artifacts import consume_artifact
+        artifact = db.scalar(select(StageArtifact).join(Job, Job.id == StageArtifact.job_id).where(
+            StageArtifact.workspace_id == job.workspace_id,
+            StageArtifact.product_line_id == job.product_line_id,
+            StageArtifact.artifact_key.startswith("result"), Job.run_id == job.run_id,
+            Job.kind == kind,
+        ).order_by(StageArtifact.created_at.desc(), StageArtifact.id.desc())) if job.run_id else None
+        if artifact:
+            return consume_artifact(db, artifact.id, job.workspace_id, job.product_line_id,
+                                    artifact.context_version, artifact.context_hash)
         run = db.scalar(
             select(PreparationRun).where(
                 PreparationRun.id == job.run_id,
@@ -157,6 +168,12 @@ def page(providers, url):
     key = "page:" + url
     if key in providers.cache:
         return providers.cache[key]
+    from .product_lines import line_mode
+    shared=hasattr(providers,"job") and line_mode(providers.job)
+    if shared:
+        from .company_evidence import lookup
+        saved=lookup(providers.job,url)
+        if saved:return providers.remember(key,saved)
     existing = sum(k.startswith("page:") for k in providers.cache)
     if existing >= 10:
         raise ProviderFailure("FETCH_PAGE_LIMIT")
@@ -164,18 +181,21 @@ def page(providers, url):
         fetched = fetch_public(url)
         if fetched["fetch_status"] != "SUCCESS":
             raise FetchError("UNAVAILABLE")
-        from .scraping import readable
+        from .discovery_strategies import extractor
 
         parser = Links()
         parser.feed(fetched["body"])
         value = {
             "source_url": fetched["final_url"],
-            "text": readable(fetched["body"])
+            "text": extractor.extract(fetched["body"])
             or normalize(" ".join(parser.parts))[:12000],
             "links": parser.links[:100],
         }
     except FetchError:
         value = {"source_url": url, "text": "", "links": [], "unavailable": True}
+    if shared:
+        from .company_evidence import save
+        save(providers.job,value)
     return providers.remember(key, value)
 
 
@@ -626,7 +646,7 @@ def scoring(job, providers):
         (c["points"] for c in value["criteria"] if c["criterion"] == "icp_fit"), 0
     )
     value["stop_reason"] = (
-        None if value["score"] >= 60 and fit > 0 else "QUALIFICATION_BELOW_POLICY"
+        None if value["score"] >= job.payload["context"]["preferences"].get("qualification_score",60) and fit > 0 else "QUALIFICATION_BELOW_POLICY"
     )
     return value
 
@@ -660,7 +680,7 @@ def matching(job, providers):
         for evidence in item["evidence"]:
             cite(evidence, research["pages"])
     suitable = sorted(
-        [m for m in value["matches"] if m["fit"] >= 60],
+        [m for m in value["matches"] if m["fit"] >= job.payload["context"]["preferences"].get("matching_fit",60)],
         key=lambda m: (-m["fit"], m["product_code"]),
     )
     value["selected_product"] = suitable[0]["product_code"] if suitable else None

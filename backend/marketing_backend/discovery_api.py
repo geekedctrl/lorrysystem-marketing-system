@@ -6,7 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, func
 from .auth import user, scope
 from .db import session
-from .models import DiscoveryMemory, Lead, Workspace, PreparationRun, now
+from .models import DiscoveryMemory, Lead, Workspace, PreparationRun, ProductLine, Job, now
+from .product_lines import default_id, line_mode, line_for, enqueue, bind_task
 from .pipeline import context, fingerprint, domain, start
 from .native_api import workspace_lock, enqueue_workspace
 from .public_fetch import checked_url, FetchError
@@ -51,6 +52,7 @@ def public(row, current_hash):
     return {
         **fields,
         "id": row.id,
+        "product_line_id": row.product_line_id,
         "domain": row.domain,
         "status": row.outcome,
         "unknowns": row.candidate.get("unknowns", []),
@@ -73,9 +75,13 @@ def candidates(
     status: str | None = Query(default=None, max_length=24),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=100000),
+    product_line_id: UUID | None = None,
 ):
     scope(wid, actor, db)
-    query = select(DiscoveryMemory).where(DiscoveryMemory.workspace_id == wid)
+    lid=product_line_id or default_id(db,wid)
+    if not db.scalar(select(ProductLine.id).where(ProductLine.workspace_id==wid,ProductLine.id==lid)):
+        raise HTTPException(404,"Product line not found")
+    query = select(DiscoveryMemory).where(DiscoveryMemory.workspace_id == wid,DiscoveryMemory.product_line_id==lid)
     if status:
         query = query.where(DiscoveryMemory.outcome == status)
     total = db.scalar(select(func.count()).select_from(query.subquery()))
@@ -84,9 +90,8 @@ def candidates(
         .offset(offset)
         .limit(limit)
     )
-    current_hash = fingerprint(context(db, wid))
     return {
-        "items": [public(row, current_hash) for row in rows],
+        "items": [public(row, fingerprint(candidate_context(db,row))) for row in rows],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -96,7 +101,13 @@ def candidates(
 @router.get("/{cid}", response_model=out.DiscoveryCandidate)
 def detail(wid: UUID, cid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db)
-    return public(candidate_for(db, wid, cid), fingerprint(context(db, wid)))
+    row=candidate_for(db,wid,cid)
+    return public(row,fingerprint(candidate_context(db,row)))
+
+
+def candidate_context(db,row):
+    source=db.get(Job,row.source_job_id) if row.source_job_id else None
+    return context(db,row.workspace_id,product_line_id=row.product_line_id if source and line_mode(source) else None)
 
 
 @router.post("/{cid}/accept", response_model=out.CandidateAccepted)
@@ -112,6 +123,7 @@ def accept(
             .where(
                 PreparationRun.workspace_id == wid,
                 PreparationRun.lead_id == row.accepted_lead_id,
+                PreparationRun.product_line_id == row.product_line_id,
             )
             .order_by(PreparationRun.created_at)
             .limit(1)
@@ -124,9 +136,11 @@ def accept(
         }
     if row.outcome != "READY_FOR_REVIEW":
         raise HTTPException(409, "Only a candidate awaiting review can be accepted")
-    if not workspace.automation_enabled:
+    source=db.get(Job,row.source_job_id) if row.source_job_id else None
+    scoped=bool(source and line_mode(source))
+    if line_for(db,wid,row.product_line_id).paused if scoped else not workspace.automation_enabled:
         raise HTTPException(409, "Resume product automation before acceptance")
-    if row.context_hash != fingerprint(context(db, wid)):
+    if row.context_hash != fingerprint(candidate_context(db,row)):
         raise HTTPException(
             409, "Targeting changed. Reassess this candidate before acceptance"
         )
@@ -137,18 +151,16 @@ def accept(
             raise FetchError("CANDIDATE_DOMAIN_CHANGED")
     except (FetchError, KeyError):
         raise HTTPException(409, "Candidate website is invalid") from None
-    if any(
-        domain(lead.website) == row.domain
-        for lead in db.scalars(select(Lead).where(Lead.workspace_id == wid))
-    ):
+    lead=next((lead for lead in db.scalars(select(Lead).where(Lead.workspace_id==wid)) if domain(lead.website)==row.domain),None)
+    if lead and not scoped:
         raise HTTPException(409, "This company already has a lead")
-    lead = Lead(
+    lead = lead or Lead(
         workspace_id=wid, company_name=value["company_name"], website=value["website"]
     )
     db.add(lead)
     db.flush()
     try:
-        run = start(db, lead, f"candidate:{cid}:RESEARCH", value["icp_code"])
+        run = start(db, lead, f"candidate:{cid}:RESEARCH", value["icp_code"],row.product_line_id if scoped else None,row.id if scoped else None)
     except ProviderFailure:
         raise HTTPException(409, "Active catalog and targeting are required") from None
     row.outcome = "ACCEPTED"
@@ -191,17 +203,19 @@ def retry(wid: UUID, cid: UUID, actor=Depends(user), db=Depends(session)):
         raise HTTPException(
             409, "Reviewed companies cannot be retried through discovery"
         )
-    if not workspace.automation_enabled or not workspace.automation.get(
-        "discovery_query"
-    ):
+    source=db.get(Job,row.source_job_id) if row.source_job_id else None
+    scoped=bool(source and line_mode(source))
+    line=line_for(db,wid,row.product_line_id)
+    if (line.paused or not line.settings.get("discovery_query")) if scoped else (not workspace.automation_enabled or not workspace.automation.get("discovery_query")):
         raise HTTPException(409, "Complete setup and resume discovery first")
     row.outcome, row.retry_after = "RETRY_PENDING", None
-    job = enqueue_workspace(db, workspace, "DISCOVERY", f"candidate-retry:{uuid4()}")
+    job = enqueue(db,line,"DISCOVERY",f"candidate-retry:{uuid4()}") if scoped else enqueue_workspace(db, workspace, "DISCOVERY", f"candidate-retry:{uuid4()}")
     job.payload = {
         **job.payload,
         "retry_domain": row.domain,
         "retry_url": row.candidate.get("source_url") or "https://" + row.domain + "/",
     }
+    if job.task_envelope is not None:bind_task(db,job)
     # Retain prior evidence and review history until an actual assessment replaces it.
     db.commit()
     return {"candidate_id": row.id, "status": "RETRY_PENDING", "job_id": job.id}
