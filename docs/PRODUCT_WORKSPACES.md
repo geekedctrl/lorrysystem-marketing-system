@@ -77,7 +77,7 @@ accounts join using 48-hour invitation links from **Workspaces & team**; links
 must be shared by the administrator. The app does not send invitation emails.
 Existing account holders enter their current password when accepting a link.
 
-Configure the dashboard's existing `dashboard/.env`:
+Configure the root `.env` used by the Compose stack:
 
 ```env
 DASHBOARD_SECURE_COOKIES=true

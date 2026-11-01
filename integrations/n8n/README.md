@@ -128,7 +128,7 @@ new discoveries; due retries also consume fetch/AI calls. These are run limits,
 not enforcement of the workspace's monthly spend setting. Run one discovery at
 a time per workspace. Public fetch redirects require separate validation.
 
-For DEV setup, `.env.n8n-dev` stays ignored. `MARKETING_WORKSPACE_API_KEY` is created
+For DEV setup, the root `.env` stays ignored and holds the local n8n connection settings. `MARKETING_WORKSPACE_API_KEY` is created
 in the dashboard: select the product, open **Workspaces & team → Automation
 credentials**, enter a name and select **Create credential**. Copy the token shown
 once. Use it in n8n Header Auth with header name `X-API-Key`. Brave uses Header Auth

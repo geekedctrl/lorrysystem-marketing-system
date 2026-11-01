@@ -12,7 +12,7 @@ The root `docker-compose.yml` includes `compose.backend.yml`. Docker documents t
 | `backend-migrate` | Runs native schema migrations before API/worker startup | No host port |
 | `backend-api` | Workspace-scoped native API | `127.0.0.1:8020` by default (`NATIVE_API_HOST_PORT` can override it) |
 | `backend-worker` | Native setup, discovery and lead-preparation execution | No host port |
-| `native-dashboard` | Native dashboard/BFF, single process in DEV | `127.0.0.1:8093` by default (`NATIVE_DASHBOARD_HOST_PORT` can override it) |
+| `dashboard-dev` | Native dashboard/BFF, single process in DEV | `127.0.0.1:8081` |
 
 The native database is intentionally separate from the legacy PostgreSQL database. No legacy users, workspaces, catalogs, leads, approvals or provider credentials are copied by starting this stack. The named native database volume must be retained across deployments and backed up separately.
 
@@ -29,38 +29,23 @@ Do not reuse the legacy database password for the native database roles. Do not 
 
 ## First startup and administrator bootstrap
 
-The current DietPi helper explicitly builds and starts only `marketing-api-dev` and `dashboard-dev`. Before deploying this change, update its build list to include `backend-api`, `backend-worker` and `native-dashboard`; run the `backend-migrate` one-shot migration before starting the native app; add `backend-api backend-worker native-dashboard` to its `docker compose up -d` list; and add native API/dashboard health checks plus native-service logs to failure diagnostics. Keep the existing legacy migration and checks. The helper's existing `docker compose config -q` also means all three native DB passwords must already exist in the protected server `.env` before any deployment.
+The DietPi helper at `/usr/local/sbin/lorry-dev-deploy` was updated on 14 October 2026. It now starts and waits for both PostgreSQL databases, makes separate protected backups before migrations, builds `marketing-api-dev`, `backend-api`, `backend-worker` and `dashboard-dev`, runs both Alembic migrations, and starts the native API, worker and dashboard. It verifies that the worker container remains running, retries native API and dashboard HTTP 200 health checks, checks both migration revisions, and includes native service logs when health checks fail. Feature-branch deploys are blocked from changing the native Compose and Docker build files.
 
-The corresponding helper blocks should follow this order, preserving its existing legacy commands:
+The helper retains ten pairs of legacy/native database backups. Its read-only preflight can be run with:
 
 ```bash
-docker compose build \
-    marketing-api-dev \
-    dashboard-dev \
-    backend-api \
-    backend-worker \
-    native-dashboard
-
-# Keep the existing marketing-api-dev migration, then migrate the separate DB.
-docker compose run --rm backend-migrate
-
-docker compose up -d \
-    marketing-api-dev \
-    dashboard-dev \
-    backend-api \
-    backend-worker \
-    native-dashboard
+sudo /usr/local/sbin/lorry-dev-deploy check develop
 ```
 
-Add retrying HTTP 200 checks for `http://127.0.0.1:8020/health` and `http://127.0.0.1:8093/health`; on failure, print `docker compose ps` and logs for `backend-db backend-migrate backend-api backend-worker native-dashboard` before the helper exits. The native dashboard is loopback-only; configure a separate HTTPS DEV hostname or use a private tunnel before user sign-in. Do not repoint the legacy dashboard hostname in this stage.
+All three native DB passwords and the provider configuration still need to be present in the protected server `.env` before deployment. The native dashboard remains loopback-only on port 8081; configure its HTTPS route separately. The old n8n and legacy services remain available during this stage.
 
-After that helper update and the code change are merged to `develop`, verify the native services without stopping legacy or n8n services:
+To verify the native services without stopping legacy or n8n services:
 
 ```bash
 cd /opt/lorrysystem/dev/lorrysystem-dev
-docker compose ps backend-db backend-migrate backend-api backend-worker native-dashboard
+docker compose ps backend-db backend-migrate backend-api backend-worker dashboard-dev
 curl -fsS http://127.0.0.1:8020/health
-curl -fsS http://127.0.0.1:8093/health
+curl -fsS http://127.0.0.1:8081/health
 ```
 
 For the first empty native database, bootstrap one platform administrator and the initial LorrySystem workspace interactively. The CLI prompts for the password; it is not passed in shell history:
@@ -71,7 +56,7 @@ docker compose run --rm backend-migrate \
   --email ADMIN_EMAIL --workspace LorrySystem
 ```
 
-Then open the native dashboard through an authenticated HTTPS development route, or a private loopback tunnel to port `8093`. The port is not bound publicly. If the route is not configured yet, keep the legacy `dashboard-dev.obsidian.cam` route on the legacy dashboard and configure a separate DEV hostname before inviting workers to the native dashboard.
+Then open the native dashboard through an authenticated HTTPS development route, or a private loopback tunnel to port `8081`. The port is not bound publicly. If the route is not configured yet, keep the legacy `dashboard-dev.obsidian.cam` route on the legacy dashboard and configure a separate DEV hostname before inviting workers to the native dashboard.
 
 Enter the product catalog and ICP through the native setup form. Existing product data and team memberships are not imported automatically. Use synthetic company data first. Live discovery requires the shared provider keys and confirmed rates above; it uses the configured API-provider budget. Candidates remain in the review inbox until a worker explicitly accepts them.
 
