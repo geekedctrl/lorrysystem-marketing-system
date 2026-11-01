@@ -93,3 +93,8 @@ Release checkpoint: implementation commit `bec7684`, integrated latest develop `
 ## Native DEV rollout checkpoint - 12 October 2026
 
 Implementation branch: geekedctrl/native-dev-cutover. Native API, worker, isolated PostgreSQL and native dashboard are wired in Compose/CI alongside legacy DEV. Native image builds, fresh DB migration and container health/network checks passed. DietPi helper still builds/starts only legacy API/dashboard; add native migration, services and health checks before rollout. Server needs three native DB passwords before Compose preflight; Compose include needs v2.20.3+. No provider calls, deployment, production changes, data migration, push or PR occurred. Preserve n8n until native human-reviewed DEV acceptance and rollback gates are complete. See docs/native-dev-cutover.md and docs/ai/TASK_BOARD.md.
+
+
+## Native deployment helper update - 14 October 2026
+
+The deployed PR #43 research fix was missing from the running worker image because the installed DietPi helper only rebuilt the legacy API and dashboard. The persistent `/usr/local/sbin/lorry-dev-deploy` helper has now been updated to start both databases, back up both before migrations, build the native API/worker/dashboard, apply the native migration, start the native services, and verify worker process, API/dashboard health, and migration heads. It logs native services on failure and protects native Compose/Docker files from direct feature-branch deploys. `bash -n` and its read-only `check develop` preflight pass at `187c0ce`. A timestamped pre-change backup is stored at `/opt/lorrysystem/ops/lorry-dev-deploy.backup-20261014`. This helper update did not deploy application code or change production.

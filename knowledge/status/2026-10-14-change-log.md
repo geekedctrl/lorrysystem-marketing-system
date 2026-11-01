@@ -1,0 +1,38 @@
+# 14 October 2026 change log
+
+## Prevent stale native workers on future DEV deployments
+
+- Investigated why the merged research fix was missing from the running DEV worker. The DietPi helper at `/usr/local/sbin/lorry-dev-deploy` only built and started the legacy Marketing API and dashboard.
+- Updated the persistent helper to start and wait for both PostgreSQL services; create separate 0600 backups of both databases before migrations; build the legacy API plus native API, worker and dashboard; run both migration commands; and start the native services.
+- Added a native worker running-state check, retrying HTTP 200 checks for the native API (`127.0.0.1:8020/health`) and dashboard (`127.0.0.1:8081/health`), native migration head verification, and native container logs on health failure.
+- Kept the ten most recent complete deployment backup pairs and added the native Compose/Docker files to the feature-deployment protection list.
+- Backed up the previous helper to `/opt/lorrysystem/ops/lorry-dev-deploy.backup-20261014`.
+- Verification: `bash -n /usr/local/sbin/lorry-dev-deploy` passed; `sudo /usr/local/sbin/lorry-dev-deploy check develop` passed for commit `187c0ce0376eb6ae103488ca52efaa4dd22b51b4`.
+- This changed only the persistent DEV deployment helper; it did not trigger an application deployment or provider call. No production services were changed.
+
+## Native ITS Logistics scoring response compatibility
+
+- Read-only inspection of preparation run `ebbd31c6-3f34-4fe0-af15-23851406715d` showed RESEARCH and CONTACT_SEARCH completed. The SCORING model request succeeded (5,805 tokens), but the stage failed with `MODEL_OUTPUT_SCHEMA_INVALID`; matching/drafting were not queued.
+- The saved xKiro JSON represented criteria as named keys (`icp_fit`, `operational_need`, `operating_scale`, `buying_signals`, `evidence_quality`) instead of the required `criteria` array. This was an output-shape incompatibility, not a provider or worker-connection failure.
+- Added a strict normalizer for that exact rubric-keyed shape, preserving the existing schema, score bounds, source citations and observed-opportunity checks. The prompt now includes the required JSON example and forbids keyed criteria. Unexpected/missing rubric keys remain rejected.
+- Added a PostgreSQL-backed full preparation regression using the keyed model output. It reaches `PENDING_APPROVAL` through scoring, matching and drafting.
+- Initial verification: native backend suite passed, 55 tests; one optional Chromium test skipped. The first fix was released in PR #44 and deployed. A single scoring retry then showed the updated model prompt returned the criteria array but used `quote` instead of `evidence_quote` in citation objects; the run failed again with the generic schema code, and no downstream stages or outreach ran.
+- Follow-up PR #45 normalizes the citation `quote` alias to `evidence_quote`, with a regression that carries this response shape through pending approval. It targets `develop`; CI/merge/deploy are pending. The run remains failed for now; exactly one provider scoring retry/request was made. No outreach was sent.
+
+## ITS ICP handoff and Malaysia query targeting — 14 October 2026
+
+A review of the 14 October ITS Logistics run found that discovery had accepted `its4logistics.com` as `THIRD_PARTY_LOGISTICS`, but the later fresh preparation selected `MANUFACTURERS_DISTRIBUTORS`. The preparation endpoint omitted an ICP and `pipeline.start()` defaulted to the alphabetically first active ICP. The preparation worker now inherits the accepted candidate ICP from workspace-scoped discovery memory, with the prior default retained for manually created leads. A PostgreSQL regression verifies that a different ICP sorts first and the accepted candidate's ICP still reaches the RESEARCH job.
+
+Discovery query text now spells country codes such as `MY` as `Malaysia`, and splits active ICP names across the available targeted queries rather than using only the alphabetically first profiles. Brave's country parameter remains a regional relevance bias; this change does not claim or enforce that a company is headquartered in or operates in Malaysia. Malaysia geography enforcement awaits the product decision on whether local subsidiaries count. Native backend suite: 57 passed, one optional Chromium test skipped. PR #46 merged to develop at f68e458 and shared DEV deployment succeeded (deployment run 38501635028). The deployed worker contains the accepted ICP lookup. Existing ITS run history remains unchanged and still records the old MANUFACTURERS_DISTRIBUTORS selection; a fresh authenticated preparation has not yet been started. No new provider calls or messages were made.
+
+## Post-deployment ITS verification — 14 October 2026
+
+Preparation run `1afe684c-2aca-4ab1-91d1-7b156fbff8d7` was started after PR #46's successful DEV deployment. Its RESEARCH job carried `THIRD_PARTY_LOGISTICS`, confirming the accepted ICP handoff fix. Research, contact search, and scoring completed. Scoring reported relevance 60 and opportunity 0; matching returned no supported product, so the run stopped at `NEEDS_REVIEW` / `NO_SUPPORTED_PRODUCT_MATCH`. The model request succeeded; this was a substantive no-match decision, not a worker/schema crash. Saved company evidence identifies ITS Logistics as a premier 3PL, with headquarters in Reno, Nevada and North American operations. It is not a suitable Malaysia-targeting validation case. No draft or sending occurred. Next: run one bounded discovery batch and human-review candidates for documented Malaysian presence before acceptance.
+
+## DEV discovery batch 467b9bab — 14 October 2026
+
+A bounded live discovery completed successfully: 3 Brave searches, 4 websites, 10 fetched pages and 4 company assessments yielded 2 candidates. Both are Malaysian transport/logistics providers mapped to `THIRD_PARTY_LOGISTICS`: Hock Cheong (`hockcheong.com.my`, official-page evidence describes a Malaysian logistics company with 150+ vehicles) and BMT Group (`bmtgroup.com.my`, official-page evidence identifies its Northern Region Malaysia network and transportation solutions). Both remain `READY_FOR_REVIEW`; neither was accepted. Two other assessed domains were excluded as unsupported, including a Singapore domain, confirming that Brave's MY region bias alone does not restrict results to Malaysia. Search estimates total $0.015 using configured rates; model usage was 12,541 tokens across four assessments, with model cost not configured. No leads or preparation runs were created from these candidates. This batch covers only the 3PL ICP; review and acceptance are a human decision, then run the next batch for another ICP to test diversity.
+
+## BMT research schema failure — 14 October 2026
+
+DEV worker inspection for BMT jobs at 02:58 and 02:59 UTC showed the worker had remained up since 02:33:42 UTC with restart count 0. xKiro returned valid JSON and the checkpoint retained it; Pydantic rejected the entire RESEARCH response because `people[0].role` and `people[1].role` were not strings. Manual retry made another model call and reproduced the same schema failure. A local targeted fix now validates contacts individually and drops malformed contacts while retaining company facts, attaching an explicit omission note. The end-to-end regression confirms research completes and the pipeline stops honestly at supported-contact review when no valid contacts remain. Backend suite: 58 passed, one optional Chromium test skipped. Fix is in PR #47 against develop; CI is pending and it is not deployed. No additional live model calls were made during diagnosis.

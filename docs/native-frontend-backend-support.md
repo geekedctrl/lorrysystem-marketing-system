@@ -21,11 +21,11 @@ The frontend owner must provide a checkout containing `dashboard/app/native.py`,
 
 ```powershell
 python backend/scripts/setup_native_integration.py --frontend-path 'C:/path/to/frontend-checkout'
-docker compose --env-file .env.native-integration-local -p native-acceptance -f compose.native-integration.yml up --build -d native-frontend native-worker
-docker compose --env-file .env.native-integration-local -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check
+docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml up --build -d native-frontend native-worker
+docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check
 ```
 
-The configuration helper generates three distinct random database passwords in an ignored local file and refuses to overwrite it. The bootstrap command creates accounts only in the dedicated `marketing_native_acceptance` database, guarded by `APP_ENV=native-acceptance`. Rerunning bootstrap retains its existing private manifest; it never adds fixtures to application workspaces.
+The configuration helper adds three distinct random database passwords to the ignored root `.env` only when those keys are absent. The bootstrap command creates accounts only in the dedicated `marketing_native_acceptance` database, guarded by `APP_ENV=native-acceptance`. Rerunning bootstrap retains its existing private manifest; it never adds fixtures to application workspaces.
 
 | Service / network | Address or resource |
 | --- | --- |
@@ -51,7 +51,7 @@ For the real-browser acceptance, use a local virtual environment with `playwrigh
 ```powershell
 docker cp native-acceptance-native-bootstrap-1:/fixtures/accounts.json tmp/native-acceptance-accounts.json
 python backend/scripts/validate_native_browser.py --fixtures tmp/native-acceptance-accounts.json --base-url http://127.0.0.1:8095
-docker compose --env-file .env.native-integration-local -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check python -m tests.native_support_check
+docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check python -m tests.native_support_check
 ```
 
 The browser test submits the actual product wizard, starts fresh native preparation, reviews sources/people/qualification/outreach, records synthetic approval with `sent:false`, exercises pause/resume, checks four roles and tablet/mobile layout, and captures ignored screenshots under `tmp/native-actual-browser`. It does not substitute mock API responses.
@@ -59,7 +59,7 @@ The browser test submits the actual product wizard, starts fresh native preparat
 Run the HTTP fixture journey, then browser acceptance, then the support-contract check, in that order on a fresh acceptance project. They intentionally leave synthetic decisions/history in that disposable database. Bootstrap is repeatable, but the mutating acceptance sequence is not a reset operation. To repeat the complete sequence, recreate **only this task-owned project**:
 
 ```powershell
-docker compose --env-file .env.native-integration-local -p native-acceptance -f compose.native-integration.yml down --volumes
+docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml down --volumes
 ```
 
 That removes this project's disposable data/accounts. Without `--volumes`, cleanup retains them. It does not operate on the existing `marketing-rebuild`, legacy app or DEV services. Stop the optional gateway separately. Re-export account fixtures after recreation; old fixture passwords/IDs are no longer valid.

@@ -52,6 +52,7 @@ __pycache__/
 .venv/
 venv/
 env/
+knowledge/
 
 .pytest_cache/
 .mypy_cache/
@@ -91,3 +92,9 @@ credentials.json
 
 # Development backup copies
 *.pre_*_backup
+.codex/
+docs/
+integrations/
+intern tasks/
+# Local worker redesign workspace
+/redesign/
