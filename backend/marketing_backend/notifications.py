@@ -71,3 +71,28 @@ class FakeNtfyTransport:
             "A new outreach draft is waiting for your review."
         )
         return True
+def retry_delay_seconds(
+    attempt: int,
+    base_delay_seconds: int = 30,
+    max_delay_seconds: int = 3600,
+) -> int:
+    """Calculate exponential retry delay, capped at one hour."""
+
+    if attempt < 1:
+        raise ValueError("Attempt must be at least 1")
+
+    if base_delay_seconds < 1:
+        raise ValueError("Base delay must be positive")
+
+    if max_delay_seconds < base_delay_seconds:
+        raise ValueError("Maximum delay cannot be smaller than base delay")
+
+    delay = base_delay_seconds
+
+    for _ in range(attempt - 1):
+        delay = min(delay * 2, max_delay_seconds)
+
+        if delay == max_delay_seconds:
+            break
+
+    return delay

@@ -1,5 +1,26 @@
 import pytest
+from marketing_backend.notifications import retry_delay_seconds
 
+
+@pytest.mark.parametrize(
+    "attempt, expected",
+    [
+        (1, 30),
+        (2, 60),
+        (3, 120),
+        (4, 240),
+        (5, 480),
+        (10, 3600),
+        (20, 3600),
+    ],
+)
+def test_notification_retry_delay(attempt, expected):
+    assert retry_delay_seconds(attempt) == expected
+
+
+def test_retry_delay_rejects_invalid_attempt():
+    with pytest.raises(ValueError):
+        retry_delay_seconds(0)
 from marketing_backend.notifications import (
     NtfyConfig,
     NtfyTransport,
