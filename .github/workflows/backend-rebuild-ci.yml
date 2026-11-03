@@ -1,4 +1,3 @@
-```yaml
 name: Backend Rebuild CI
 
 on:
@@ -103,4 +102,3 @@ jobs:
         if: always()
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test down
-```
