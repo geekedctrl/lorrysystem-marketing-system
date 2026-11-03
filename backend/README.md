@@ -28,6 +28,22 @@ Bootstrap refuses a database that already has users. Subsequent local provisioni
 
 Platform operators configure `BACKEND_MODEL_API_KEY`, `BACKEND_BRAVE_SEARCH_API_KEY` and confirmed provider input/output/search rates privately when ready for authorized live tests. Missing keys/rates stop before provider calls. The configurable monthly allowance covers conservative API reservations in this backend, not hosting or other systems. New configuration is independent of n8n credentials. Product teams do not configure providers. Tests use mocked providers.
 
+### Reviewer approval notifications (ntfy)
+
+Reviewer approval notifications use ntfy and are disabled by default.
+
+The following environment variables are available:
+
+- `NTFY_ENABLED=false` - keeps notifications disabled by default. Set to `true` only when explicitly authorized.
+- `NTFY_SERVER_URL` - ntfy server URL.
+- `NTFY_TOPIC` - configured notification topic.
+- `NTFY_AUTH_TOKEN` - optional authentication token.
+
+Keep notification credentials in the local `.env` file. Never commit real tokens or include them in logs or screenshots.
+
+The notification transport sends a generic reviewer approval message. It does not send prospect outreach messages.
+
+Automated ntfy retries and duplicate-alert prevention are not currently implemented by the notification transport. The retry-delay helper only calculates exponential delay values.
 ## Verification
 
 Tests refuse any database except `marketing_rebuild_test` with `APP_ENV=test`. Create it once inside the isolated rebuild PostgreSQL:
@@ -65,12 +81,12 @@ Set `MIGRATION_EXPORT_PATH` for `export` to create an immutable JSON review arti
 
 ## Native frontend support update
 
-BE-01–BE-06 backend support is implemented and tested locally: typed responses/current-user capabilities, lead detail/keyset pagination, immutable human draft revisions with a different reviewer, soft catalog lifecycle and persistent context versions. Product setup keeps explicit partial-save semantics. The worker loop now checks due discovery continuously. Migrations006/007 belong to this independent database.
+BE-01â€“BE-06 backend support is implemented and tested locally: typed responses/current-user capabilities, lead detail/keyset pagination, immutable human draft revisions with a different reviewer, soft catalog lifecycle and persistent context versions. Product setup keeps explicit partial-save semantics. The worker loop now checks due discovery continuously. Migrations006/007 belong to this independent database.
 
 The separate `compose.native-integration.yml` runs actual native API/workers/PostgreSQL with the frontend owner's checkout and guarded synthetic providers. Thirty-seven database tests, real HTTP/BFF two-product acceptance, actual headless Edge preparation/approval and restricted API revision/lifecycle checks pass. See [integration setup and frontend adaptations](../docs/native-frontend-backend-support.md). New BFF endpoint adapters remain frontend work. Windows host forwarding has a tested local gateway fallback; no DEV/n8n cutover or real sending/provider test is implied.
 
 
-### Discovery review update — 11 October 2026
+### Discovery review update â€” 11 October 2026
 
 Discovery now waits for explicit user acceptance before lead creation/research. See [native lead discovery](../docs/native-lead-discovery.md) for candidate APIs, native UI/BFF adapters, migration008, worker libraries/limits, local acceptance and coordinated release requirements. Earlier automatic discovery acceptance guidance is superseded.
 
@@ -91,7 +107,7 @@ backend-contacts, backend-scoring, backend-matching, backend-content, backend-em
 backend-social, backend-messaging and backend-scheduler services. The base Compose
 file alone starts only the research pool. It is not a full pipeline deployment.
 Each pool has an independent restart policy and a process/database readiness
-probe. `WORKER_<POOL>_CONCURRENCY` configures 1–8 local execution slots; the scheduler
+probe. `WORKER_<POOL>_CONCURRENCY` configures 1â€“8 local execution slots; the scheduler
 requires one. Database line limits still bound concurrent work across replicas.
 
 Social currently routes approved LINKEDIN assets. MESSAGING provides an adapter
