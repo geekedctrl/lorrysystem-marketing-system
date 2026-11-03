@@ -27,6 +27,7 @@ jobs:
     name: Native discovery + workers + PostgreSQL
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+
     services:
       postgres:
         image: postgres:17-alpine
@@ -38,21 +39,26 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U native_test -d marketing_rebuild_test"
           --health-interval 3s --health-timeout 5s --health-retries 20
+
     env:
       APP_ENV: test
       DATABASE_URL: postgresql+psycopg://native_test:native-ci-disposable-password@localhost:5432/marketing_rebuild_test
       API_DB_PASSWORD: native-ci-disposable-api-password
       WORKER_DB_PASSWORD: native-ci-disposable-worker-password
       DISCOVERY_BROWSER_TEST: "true"
+
     steps:
       - uses: actions/checkout@v7
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+
       - name: Install locked backend and isolated browser
         run: |
           python -m pip install -r backend/requirements.lock
           python -m playwright install --with-deps chromium
+
       - name: Migrate and test native discovery and preparation
         working-directory: backend
         run: |
@@ -120,6 +126,7 @@ jobs:
           POSTGRES_PASSWORD=${PG_PASSWORD}
 
           MARKETING_WORKSPACE_API_KEY=${API_KEY}
+          MARKETING_API_KEY=${API_KEY}
 
           BACKEND_DB_PASSWORD=${BACKEND_DB_PASSWORD}
           BACKEND_API_DB_PASSWORD=${BACKEND_API_DB_PASSWORD}
