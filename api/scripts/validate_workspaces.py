@@ -31,7 +31,15 @@ if os.getenv('APP_ENV') not in ('workspace-test', 'ci'):
     raise SystemExit('Refusing to run: APP_ENV must be workspace-test or ci.')
 
 BASE = os.getenv('API_BASE_URL', 'http://127.0.0.1:8000')
-DASHBOARD = os.getenv('DASHBOARD_BASE_URL', 'http://workspace-test-dashboard:8080')
+
+# CI uses the legacy dashboard. The disposable workspace-test
+# environment uses its own dashboard service.
+if os.getenv('APP_ENV') == 'ci':
+    DEFAULT_DASHBOARD = 'http://dashboard-legacy-dev:8080'
+else:
+    DEFAULT_DASHBOARD = 'http://workspace-test-dashboard:8080'
+
+DASHBOARD = os.getenv('DASHBOARD_BASE_URL', DEFAULT_DASHBOARD)
 passed = 0
 
 

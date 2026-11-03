@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-29T01:25:29.114Z",
+  "specification": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+    "sha256": "fb405076be2fc815b2aeb2c948dd1f58dc57bc88e8853672afaf6bb4a1ed9f31",
+    "bytes": 9000
+  },
+  "artifact": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+    "sha256": "291dee8b1fa5352163cbb974d532e00539273f43bc0211cd162f3f145c85c0b9",
+    "bytes": 852252
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\Nayeem\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "architecture",
+        "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+        "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "e73e6f9d-669c-46eb-bf8b-76a236024776",
+        "stage": "check",
+        "type": "architecture",
+        "input": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+        "output": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+        "error": "Final artifact check failed; the previous artifact was preserved.",
+        "diagnostics": [
+          {
+            "code": "composition/desktop-readability",
+            "severity": "error",
+            "message": "Final artifact failed composition/desktop-readability.",
+            "subject": {
+              "check": "composition",
+              "nodeId": "model-api"
+            },
+            "evidence": {
+              "owner": {
+                "kind": "node",
+                "id": "model-api"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1245,
+              "scale": 0.7469879518072289,
+              "text": "HTTPS chat completions • configurable endpoint",
+              "detail": "context",
+              "sourceFontPx": 6.4,
+              "projectedFontPx": 4.780722891566265,
+              "minimumProjectedFontPx": 6
+            },
+            "supportedFixes": [
+              "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 992px (current 1245px; 6.4px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+            ]
+          }
+        ],
+        "provenance": "failed",
+        "checker": {
+          "ok": false,
+          "file": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+          "artifact": {
+            "sha256": "a879cc415b4f494c4f061d359c0aa018fc3db764848d440b8c1a2b1f3d122b02",
+            "bytes": 851912
+          },
+          "checks": [
+            {
+              "name": "single_svg",
+              "ok": true,
+              "details": [
+                "found 1 <svg> block(s)"
+              ]
+            },
+            {
+              "name": "finite_svg",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "orthogonal_arrows",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "label_route_clearance",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_crossings",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_corridors",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "container_border_runs",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "route_rhythm",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "legend_clearance",
+              "ok": true,
+              "details": []
+            }
+          ],
+          "composition": {
+            "schemaVersion": 1,
+            "profile": "showcase",
+            "status": "fail",
+            "summary": {
+              "errors": 1,
+              "warnings": 0
+            },
+            "metrics": {
+              "properCrossings": 0,
+              "resolvedCrossovers": 0,
+              "ambiguousCorridors": 0,
+              "arrowheadCollisions": 0,
+              "containerBorderRuns": 0,
+              "labelRouteClearanceIssues": 0,
+              "labelCanvasOverflowIssues": 0,
+              "minLabelRouteClearance": 14.5,
+              "desktopReadabilityIssues": 1,
+              "viewportHeightIssues": 0,
+              "minProjectedNodeTextPx": 4.780722891566265,
+              "maxBends": 2,
+              "routesOverSuggestedBends": 0,
+              "maxStretch": 1,
+              "routesOverSuggestedStretch": 0,
+              "minSegmentPx": 24,
+              "minInteriorSegmentPx": 190,
+              "shortSegmentCount": 0,
+              "shortEndpointSegmentCount": 0,
+              "shortInteriorSegmentCount": 0,
+              "microSegmentCount": 0
+            },
+            "suggestedLimits": {
+              "bendsPerRelationship": 2,
+              "stretch": 1.35,
+              "segmentPx": 16,
+              "microSegmentPx": 8
+            },
+            "routeReview": {
+              "crossings": [],
+              "detours": []
+            },
+            "leadingSpace": {
+              "measured": true,
+              "emptyTopPx": 255,
+              "emptyTopRatio": 0.316,
+              "occupiedTop": 255,
+              "viewBoxTop": 0,
+              "canvasHeight": 808,
+              "typicalNodeHeight": 72,
+              "reviewSuggested": true
+            },
+            "desktopReadability": {
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "availableDiagramWidth": 930,
+              "actualBudgetPx": 930,
+              "limit": "legacy",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "hardFloorPx": 6,
+              "hardFloorMet": false,
+              "minimumOwner": {
+                "kind": "node",
+                "id": "model-api"
+              },
+              "minimumSourceTextPx": 6.4,
+              "minimumProjectedTextPx": 4.780722891566265,
+              "semanticTextCount": 26
+            },
+            "issues": [
+              {
+                "severity": "error",
+                "code": "composition/desktop-readability",
+                "nodeId": "model-api",
+                "owner": {
+                  "kind": "node",
+                  "id": "model-api"
+                },
+                "viewportWidth": 1440,
+                "viewportHeight": 900,
+                "availableDiagramWidth": 930,
+                "budgetBasis": "legacy-930",
+                "readerContract": "declared-wide-v1",
+                "requestedTargetPx": 7.5,
+                "requestedTargetMet": false,
+                "budgetLimit": "legacy",
+                "viewBoxWidth": 1245,
+                "scale": 0.7469879518072289,
+                "text": "HTTPS chat completions • configurable endpoint",
+                "detail": "context",
+                "sourceFontPx": 6.4,
+                "projectedFontPx": 4.780722891566265,
+                "minimumProjectedFontPx": 6
+              }
+            ]
+          }
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition",
+        "nodeId": "model-api"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "node",
+          "id": "model-api"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1245,
+        "scale": 0.7469879518072289,
+        "text": "HTTPS chat completions • configurable endpoint",
+        "detail": "context",
+        "sourceFontPx": 6.4,
+        "projectedFontPx": 4.780722891566265,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 992px (current 1245px; 6.4px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\review-2\\architecture.finalize.json",
+    "summaryReceipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\review-2\\architecture.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-10-29T01:25:31.398Z",
+  "durationMs": 2285,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-29T01:24:25.992Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

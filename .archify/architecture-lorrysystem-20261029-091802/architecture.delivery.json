@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "8dc213c0-d0f0-4ac9-b9f8-4e6bcff9c584",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+  "output": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+  "specification": {
+    "sha256": "9c78593f17d1f58b79476b10778839ce52caeae87c514e76dbaf3600e39113bb",
+    "bytes": 9000
+  },
+  "artifact": {
+    "sha256": "291dee8b1fa5352163cbb974d532e00539273f43bc0211cd162f3f145c85c0b9",
+    "bytes": 852252
+  }
+}

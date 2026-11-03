@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+    "sha256": "9c78593f17d1f58b79476b10778839ce52caeae87c514e76dbaf3600e39113bb",
+    "bytes": 9000
+  },
+  "artifact": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+    "sha256": "291dee8b1fa5352163cbb974d532e00539273f43bc0211cd162f3f145c85c0b9",
+    "bytes": 852252
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.finalize.json",
+    "summaryReceipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.finalize-summary.json",
+    "browserCheckReceipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-29T01:24:25.992Z",
+    "source": "network",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 16994,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 1,
+      "routesOverSuggestedBends": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "worker-model",
+            "from": "worker",
+            "to": "model-api",
+            "label": "JSON calls",
+            "collectionIndex": 5,
+            "artifactIndex": 6
+          },
+          "right": {
+            "id": "worker-sites",
+            "from": "worker",
+            "to": "company-sites",
+            "label": "guarded fetch",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "point": [
+            996,
+            400
+          ],
+          "sharedNode": "worker"
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "worker-brave",
+            "from": "worker",
+            "to": "brave-search",
+            "label": "search",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "bends": 4,
+          "stretch": 1
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "worker → model-api and worker → company-sites cross next to worker: move node model-api or company-sites so the two reach worker from different sides (for example one level with it, one directly above or below it).",
+      "worker → brave-search needs 4 bends: move node worker or brave-search so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

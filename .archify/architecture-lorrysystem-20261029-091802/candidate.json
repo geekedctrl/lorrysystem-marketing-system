@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "LorrySystem Native Worker Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-lorrysystem-20261029-091802/architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/geekedctrl/lorrysystem-marketing-system.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "4656fa284d441c153330c9f0a1ac33a1cf84b9c9"
+    }
+  },
+  "components": [
+    {
+      "id": "workspace-user",
+      "type": "external",
+      "label": "Workspace user",
+      "sublabel": "Admin / Operator / Reviewer",
+      "pos": [35, 285],
+      "size": [140, 72],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/native_api.py",
+          "line": 525,
+          "end_line": 574,
+          "label": "review decision"
+        }
+      ]
+    },
+    {
+      "id": "dashboard",
+      "type": "frontend",
+      "label": "Native dashboard",
+      "sublabel": "FastAPI BFF + browser UI",
+      "pos": [245, 285],
+      "size": [150, 76],
+      "sources": [
+        {
+          "path": "dashboard/app/native.py",
+          "line": 61,
+          "end_line": 74,
+          "label": "dashboard and API client"
+        },
+        {
+          "path": "dashboard/app/native.py",
+          "line": 247,
+          "end_line": 257,
+          "label": "role and CSRF checks"
+        }
+      ]
+    },
+    {
+      "id": "backend-api",
+      "type": "backend",
+      "label": "Native API",
+      "sublabel": "FastAPI • workspace routes",
+      "pos": [465, 285],
+      "size": [150, 76],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/api.py",
+          "line": 27,
+          "label": "FastAPI application"
+        },
+        {
+          "path": "backend/marketing_backend/api.py",
+          "line": 438,
+          "end_line": 458,
+          "label": "router registration"
+        },
+        {
+          "path": "backend/marketing_backend/native_api.py",
+          "line": 215,
+          "end_line": 225,
+          "label": "discovery job enqueue"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "Workspace state + durable jobs",
+      "pos": [700, 285],
+      "size": [185, 76],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/models.py",
+          "line": 164,
+          "end_line": 230,
+          "label": "durable job model"
+        },
+        {
+          "path": "backend/migrations/versions/002_runtime_roles.py",
+          "line": 13,
+          "end_line": 46,
+          "label": "database principals and grants"
+        },
+        {
+          "path": "compose.backend.yml",
+          "line": 2,
+          "end_line": 15,
+          "label": "PostgreSQL service"
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Python worker",
+      "sublabel": "scheduler • leased stage runner",
+      "pos": [700, 485],
+      "size": [185, 78],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/worker.py",
+          "line": 68,
+          "end_line": 91,
+          "label": "worker loop"
+        },
+        {
+          "path": "backend/marketing_backend/queue.py",
+          "line": 14,
+          "end_line": 61,
+          "label": "job claim and lease"
+        },
+        {
+          "path": "backend/marketing_backend/queue.py",
+          "line": 108,
+          "end_line": 145,
+          "label": "checkpoint, complete, fail"
+        }
+      ]
+    },
+    {
+      "id": "brave-search",
+      "type": "external",
+      "label": "Brave Search",
+      "sublabel": "Web search API",
+      "pos": [1020, 75],
+      "size": [185, 70],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/providers.py",
+          "line": 207,
+          "end_line": 230,
+          "label": "search adapter"
+        },
+        {
+          "path": "backend/marketing_backend/discovery.py",
+          "line": 362,
+          "end_line": 398,
+          "label": "discovery search calls"
+        }
+      ]
+    },
+    {
+      "id": "model-api",
+      "type": "external",
+      "label": "Model API",
+      "sublabel": "HTTPS chat completions • configurable endpoint",
+      "pos": [1020, 220],
+      "size": [185, 70],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/providers.py",
+          "line": 106,
+          "end_line": 157,
+          "label": "configured model adapter"
+        },
+        {
+          "path": "backend/marketing_backend/stages.py",
+          "line": 280,
+          "end_line": 282,
+          "label": "research model call"
+        }
+      ]
+    },
+    {
+      "id": "company-sites",
+      "type": "external",
+      "label": "Company websites",
+      "sublabel": "Guarded public-page fetch",
+      "pos": [1020, 365],
+      "size": [185, 70],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/stages.py",
+          "line": 156,
+          "end_line": 180,
+          "label": "page fetch and extraction"
+        },
+        {
+          "path": "backend/marketing_backend/public_fetch.py",
+          "line": 442,
+          "end_line": 478,
+          "label": "public fetch guard"
+        }
+      ]
+    },
+    {
+      "id": "smtp-relay",
+      "type": "external",
+      "label": "Configured SMTP relay",
+      "sublabel": "Verified workspace sender",
+      "pos": [1020, 510],
+      "size": [185, 70],
+      "sources": [
+        {
+          "path": "backend/marketing_backend/sending.py",
+          "line": 63,
+          "end_line": 92,
+          "label": "SMTP handoff"
+        },
+        {
+          "path": "backend/marketing_backend/sending_api.py",
+          "line": 105,
+          "end_line": 113,
+          "label": "separate send approval"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Backend data tier • separate API and worker DB identities",
+      "wraps": ["backend-api", "postgres", "worker"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-dashboard",
+      "from": "workspace-user",
+      "to": "dashboard",
+      "variant": "emphasis"
+    },
+    {
+      "id": "dashboard-api",
+      "from": "dashboard",
+      "to": "backend-api",
+      "label": "HTTP BFF",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-postgres",
+      "from": "backend-api",
+      "to": "postgres",
+      "label": "enqueue",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-postgres",
+      "from": "worker",
+      "to": "postgres",
+      "label": "poll / save",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-brave",
+      "from": "worker",
+      "to": "brave-search",
+      "label": "search",
+      "variant": "dashed"
+    },
+    {
+      "id": "worker-model",
+      "from": "worker",
+      "to": "model-api",
+      "label": "JSON calls",
+      "variant": "dashed"
+    },
+    {
+      "id": "worker-sites",
+      "from": "worker",
+      "to": "company-sites",
+      "label": "guarded fetch",
+      "variant": "dashed"
+    },
+    {
+      "id": "worker-smtp",
+      "from": "worker",
+      "to": "smtp-relay",
+      "label": "approved send",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Durable hand-off",
+      "items": [
+        "The API writes queued jobs into PostgreSQL. The worker polls and claims leased rows, then checkpoints and persists stage results.",
+        "The represented hand-off is database-mediated; this path contains no direct API-to-worker RPC."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "External calls",
+      "items": [
+        "Brave search and the configurable HTTPS chat-completions adapter run from worker stages when configured.",
+        "Company pages are fetched through the public-URL guard; the diagram does not imply these providers are currently live."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Human approval gates",
+      "items": [
+        "Preparation approval is separate from delivery: email delivery requires an approved draft, an enabled and verified sender, then a separate approve-send action.",
+        "The worker hands off SMTP only for a queued delivery attempt."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundary",
+      "items": [
+        "Compose config gives the dashboard an API base URL, while API and worker use distinct database identities; PostgreSQL has no published host port in this stack.",
+        "This marks credential separation, not a claim that the Compose network enforces service-level ACLs."
+      ]
+    }
+  ]
+}
