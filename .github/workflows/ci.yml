@@ -237,7 +237,7 @@ jobs:
           set -euo pipefail
 
           API_KEY="$(
-            grep '^MARKETING_API_KEY=' .env |
+            grep '^MARKETING_WORKSPACE_API_KEY=' .env |
             cut -d= -f2-
           )"
 
