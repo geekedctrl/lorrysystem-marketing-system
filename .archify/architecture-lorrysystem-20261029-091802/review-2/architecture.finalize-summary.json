@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+    "sha256": "fb405076be2fc815b2aeb2c948dd1f58dc57bc88e8853672afaf6bb4a1ed9f31",
+    "bytes": 9000
+  },
+  "artifact": {
+    "path": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\architecture.html",
+    "sha256": "291dee8b1fa5352163cbb974d532e00539273f43bc0211cd162f3f145c85c0b9",
+    "bytes": 852252
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition",
+        "nodeId": "model-api"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "node",
+          "id": "model-api"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1245,
+        "scale": 0.7469879518072289,
+        "text": "HTTPS chat completions • configurable endpoint",
+        "detail": "context",
+        "sourceFontPx": 6.4,
+        "projectedFontPx": 4.780722891566265,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 992px (current 1245px; 6.4px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\review-2\\architecture.finalize.json",
+    "summaryReceipt": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\review-2\\architecture.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-29T01:24:25.992Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2285,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "C:\\Users\\Nayeem\\Documents\\Project_intern\\lorrysystem-worker-task\\.archify\\architecture-lorrysystem-20261029-091802\\candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; apply each diagnostic's supportedFixes, or the fix its message names, and do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}
