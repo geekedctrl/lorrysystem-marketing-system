@@ -15,6 +15,7 @@ on:
     branches:
       - 'rebuild/**'
       - 'feature/python-lead-worker-revamp'
+      - 'feature/evidence-worker-approval-ntfy'
 
 jobs:
   backend:
@@ -86,7 +87,7 @@ jobs:
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test run --no-deps --rm --build backend-smoke
 
-            - name: Generate native API contract
+      - name: Generate native API contract
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml exec -T backend-api python -c "import json; from marketing_backend.api import app; print(json.dumps(app.openapi(), indent=2, sort_keys=True))" > native-openapi.json
 
@@ -97,3 +98,9 @@ jobs:
           name: generated-native-openapi
           path: native-openapi.json
           if-no-files-found: warn
+
+      - name: Stop isolated test containers
+        if: always()
+        run: |
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test down
+```
