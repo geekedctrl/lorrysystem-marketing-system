@@ -6,8 +6,6 @@ on:
       - 'backend/**'
       - 'compose.backend.yml'
       - 'compose.worker-pools.yml'
-      - 'compose.worker-day2-test.yml'
-      - 'compose.native-integration.yml'
       - 'docs/contracts/native-backend-openapi.json'
       - '.github/workflows/backend-rebuild-ci.yml'
   push:
@@ -40,6 +38,13 @@ jobs:
                   ]
               )
           )
+          with Path('.env.backend-ci').open('a') as env_file:
+              env_file.write(
+                  'BACKEND_MODEL_API_KEY=\n'
+                  'BACKEND_BRAVE_SEARCH_API_KEY=\n'
+                  'SENDER_CREDENTIAL_ENCRYPTION_KEY=\n'
+                  'BACKEND_DISCOVERY_BROWSER_FALLBACK=false\n'
+              )
           PY
 
       - name: Build backend and start isolated database
@@ -63,9 +68,21 @@ jobs:
           name: synthetic-worker-canary
           path: worker-canary-evidence/canary-comparison.*
 
+      - name: Test isolated native frontend-to-worker journey
+        run: |
+          docker compose --env-file .env.backend-ci -p native-journey-ci -f compose.backend.yml --profile native-acceptance up -d --build --wait native-frontend native-worker
+          docker compose --env-file .env.backend-ci -p native-journey-ci -f compose.backend.yml --profile native-acceptance run --no-deps --rm --build native-check
+
+      - name: Stop isolated native journey
+        if: always()
+        run: |
+          if [ -f .env.backend-ci ]; then
+            docker compose --env-file .env.backend-ci -p native-journey-ci -f compose.backend.yml --profile native-acceptance down -v
+          fi
+
       - name: Start restricted API and all independent worker pools
         run: |
-          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml up -d --build --wait backend-api backend-worker backend-setup backend-discovery backend-contacts backend-scoring backend-matching backend-content backend-email backend-social backend-messaging backend-scheduler
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml up -d --build --wait backend-api backend-worker backend-setup backend-discovery backend-contacts backend-scoring backend-matching backend-content backend-email backend-social backend-messaging backend-scheduler
 
           python3 - <<'PY'
           import time
@@ -84,11 +101,22 @@ jobs:
 
       - name: Test running API and seven stage pool boundaries
         run: |
-          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test run --no-deps --rm --build backend-smoke
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml --profile test run --no-deps --rm --build backend-smoke python -m tests.day2_runtime_smoke
 
       - name: Generate native API contract
         run: |
           docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml exec -T backend-api python -c "import json; from marketing_backend.api import app; print(json.dumps(app.openapi(), indent=2, sort_keys=True))" > native-openapi.json
+
+      - name: Verify exported native API contract
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          generated = json.loads(Path('native-openapi.json').read_text())
+          snapshot = json.loads(Path('docs/contracts/native-backend-openapi.json').read_text())
+          assert generated == snapshot, 'Refresh the native OpenAPI snapshot'
+          PY
 
       - name: Upload generated native API contract
         if: always()
@@ -101,4 +129,4 @@ jobs:
       - name: Stop isolated test containers
         if: always()
         run: |
-          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml -f compose.worker-day2-test.yml --profile test down
+          docker compose --env-file .env.backend-ci -p backend-rebuild-ci -f compose.backend.yml -f compose.worker-pools.yml --profile test down

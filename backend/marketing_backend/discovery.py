@@ -5,7 +5,7 @@ import re
 from typing import Literal
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 
 from .db import Session
@@ -13,6 +13,8 @@ from .models import DiscoveryMemory, Lead, now
 from .pipeline import domain
 from .research import ProviderFailure, normalize
 from .public_fetch import checked_url, FetchError
+from .domain_corroboration import corroborate, evidence_digest
+from .stages import page as fetch_page
 
 
 DIRECTORIES = {
@@ -26,6 +28,13 @@ DIRECTORIES = {
     "tracxn.com",
     "lusha.com",
     "mordorintelligence.com",
+    "wikipedia.org",
+    "wikidata.org",
+    "britannica.com",
+    "opencorporates.com",
+    "companieshouse.gov.uk",
+    "bloomberg.com",
+    "reuters.com",
 }
 
 SOCIAL = {
@@ -141,22 +150,48 @@ def blocked(host):
     )
 
 
+def first_party_evidence(source_url, company_domain):
+    """Require evidence on the candidate's own registrable host policy boundary."""
+    try:
+        checked_url(source_url)
+    except (FetchError, ValueError, TypeError):
+        return False
+    source_host = domain(source_url)
+    return bool(source_host and source_host == company_domain and not blocked(source_host))
+
+
 def listing(row):
+    return listing_reason(row) is not None
+
+
+def listing_reason(row):
     try:
         checked_url(row.get("url", ""))
     except (FetchError, ValueError, TypeError, AttributeError):
-        return True
+        return "INVALID_URL"
 
-    return blocked(domain(row.get("url", ""))) or bool(
-        re.search(
+    host = domain(row.get("url", ""))
+    if blocked(host):
+        return "DIRECTORY_OR_SOCIAL"
+    if host.endswith((".gov.my", ".gov", ".gov.uk", ".gov.sg")):
+        return "GOVERNMENT_SITE"
+    if re.search(
             r"\b(top\s+\d+|best\s+\d+|list of companies|companies in|company directory)\b",
             (
                 row.get("title", "")
                 + " "
                 + urlsplit(row.get("url", "")).path
             ).lower(),
-        )
-    )
+        ):
+        return "DIRECTORY_LISTING"
+    return None
+
+
+def search_priority(row):
+    """Deprioritize ambiguous organization types without excluding possible buyers."""
+    title = str(row.get("title") or "").lower()
+    ambiguous = bool(re.search(r"\b(association|federation|software vendor|software platform|directory)\b", title))
+    return (ambiguous, bool(urlsplit(row.get("url", "")).path.strip("/")))
 
 
 def search_query(query, known):
@@ -315,10 +350,17 @@ def assess(raw, sources, icps, host):
     """
     try:
         value = Assessment.model_validate(raw).model_dump()
+    except ValidationError as exc:
+        failure = ProviderFailure("MODEL_OUTPUT_SCHEMA_INVALID")
+        fields = set(Assessment.model_fields)
+        failure.details = [
+            {"field": str(err["loc"][0]) if err["loc"] and err["loc"][0] in fields else "assessment",
+             "category": err["type"]}
+            for err in exc.errors(include_input=False, include_url=False)[:10]
+        ]
+        raise failure from None
     except (ValueError, TypeError):
-        raise ProviderFailure(
-            "MODEL_OUTPUT_SCHEMA_INVALID"
-        ) from None
+        raise ProviderFailure("MODEL_OUTPUT_SCHEMA_INVALID") from None
 
     source = next(
         (
@@ -329,15 +371,19 @@ def assess(raw, sources, icps, host):
         None,
     )
 
-    if (
-        not source
-        or domain(source["source_url"]) != host
-        or normalize(value["company_name"]).lower()
-        not in normalize(source["text"]).lower()
-        or value["icp_code"] not in icps
-        or not value["official_company"]
-    ):
-        raise ProviderFailure("CANDIDATE_NOT_SUPPORTED")
+    checks = (
+        (not source, "UNKNOWN_EXCERPT"),
+        (bool(source) and domain(source["source_url"]) != host, "WRONG_DOMAIN"),
+        (bool(source) and not first_party_evidence(source["source_url"], host), "NOT_FIRST_PARTY_SITE"),
+        (bool(source) and normalize(value["company_name"]).lower() not in normalize(source["text"]).lower(), "COMPANY_NAME_MISMATCH"),
+        (value["icp_code"] not in icps, "UNKNOWN_CUSTOMER_PROFILE"),
+        (not value["official_company"], "OFFICIAL_COMPANY_NOT_ESTABLISHED"),
+    )
+    for failed, reason in checks:
+        if failed:
+            failure = ProviderFailure("CANDIDATE_NOT_SUPPORTED")
+            failure.details = [{"field": "evidence", "category": reason}]
+            raise failure
 
     # Exclude software vendors, consultants, unrelated and unknown
     # companies from the review-candidate list.
@@ -401,6 +447,8 @@ def discover(job, providers):
         country,
         known,
     )
+    if job.payload.get("official_search_name"):
+        queries = [search_query(job.payload["official_search_name"] + " official company website", known)]
 
     rows, search_errors = [], []
 
@@ -443,20 +491,26 @@ def discover(job, providers):
         )
 
     # Preserve directory and social-platform filtering.
-    rows = [r for r in rows if not listing(r)]
+    filtered = []
+    accepted_rows = []
+    for row in rows:
+        reason = listing_reason(row)
+        if reason:
+            host = domain(row.get("url", "")) if reason != "INVALID_URL" else ""
+            if host and len(filtered) < 50 and not any(item["domain"] == host for item in filtered):
+                filtered.append({"domain": host, "reason": reason})
+        else:
+            accepted_rows.append(row)
+    rows = accepted_rows
 
     # Prefer homepages; preserve provider order otherwise.
-    rows.sort(
-        key=lambda r: bool(
-            urlsplit(r.get("url", "")).path.strip("/")
-        )
-    )
+    rows.sort(key=search_priority)
 
     evaluated, candidates, seen = [], [], set()
 
     target = (
         1
-        if job.payload.get("retry_domain")
+        if job.payload.get("retry_domain") or job.payload.get("official_search_name")
         else ctx["preferences"].get("batch_size", 3)
     )
 
@@ -466,6 +520,8 @@ def discover(job, providers):
         "websites_attempted": 0,
         "pages_attempted": 0,
         "assessments_attempted": 0,
+        "ownership_searches_attempted": 0,
+        "ownership_pages_attempted": 0,
         "candidates_ready": 0,
     }
 
@@ -484,7 +540,7 @@ def discover(job, providers):
 
         # Retain existing resource and provider budgets.
         if (
-            counters["pages_attempted"] >= 10
+            counters["pages_attempted"] >= 8
             or len(seen) >= min(10, max(3, target * 2))
         ):
             break
@@ -502,7 +558,7 @@ def discover(job, providers):
         while (
             pending
             and len(visited) < 3
-            and counters["pages_attempted"] < 10
+            and counters["pages_attempted"] < 8
         ):
             current = pending.pop(0)
 
@@ -518,10 +574,11 @@ def discover(job, providers):
                 domain(fetched["source_url"]) != host
                 or fetched.get("unavailable")
             ):
+                last_failure = fetched.get("failure_reason", "FETCH_UNAVAILABLE")
                 continue
 
             if len(fetched["text"]) < 40:
-                last_failure = "JAVASCRIPT_REQUIRED"
+                last_failure = "EMPTY_EXTRACTION"
 
             if (
                 len(fetched["text"]) < 150
@@ -659,6 +716,10 @@ def discover(job, providers):
                     + "use exact boolean/integer/array types, and use UNKNOWN with suitable=false "
                     + "when the evidence does not prove relevance to the selected ICP."
                 )
+                if getattr(exc, "details", None):
+                    repair_instructions += " Validation fields and categories: " + ", ".join(
+                        item["field"] + ":" + item["category"] for item in exc.details
+                    )
 
                 raw = providers.model(
                     "discovery-repair:" + host,
@@ -691,12 +752,52 @@ def discover(job, providers):
                     "domain": host,
                     "source_url": origin,
                     "reason": exc.code,
+                    **({"validation_details": exc.details} if getattr(exc, "details", None) else {}),
                 }
             )
             continue
 
+        if (candidate and job.payload.get("official_search_name") and
+                normalize(candidate["company_name"]).casefold() != normalize(job.payload["official_search_name"]).casefold()):
+            evaluated.append({"domain": host, "source_url": origin, "reason": "COMPANY_IDENTITY_MISMATCH"})
+            continue
+
         if candidate:
-            candidates.append(candidate)
+            ownership = corroborate(
+                candidate["company_name"], candidate["website"],
+                candidate["evidence_quote"], providers,
+                lambda registry_url: fetch_page(providers, registry_url),
+                country=ctx["preferences"].get("country", "MY"),
+                max_results=8, max_fetches=min(2, 10 - counters["pages_attempted"]),
+            )
+            counters["ownership_searches_attempted"] += ownership.get("searches_attempted", 0)
+            counters["ownership_pages_attempted"] += ownership.get("pages_attempted", 0)
+            counters["pages_attempted"] += ownership.get("pages_attempted", 0)
+            candidate["verification_state"] = ownership["state"]
+            candidate["ownership_evidence"] = ownership["evidence"]
+            candidate["ownership_reason"] = ownership["reason"]
+            if ownership["state"] == "CORROBORATED":
+                candidate["ownership_evidence_digest"] = evidence_digest(
+                    candidate["company_name"], candidate["website"],
+                    candidate["evidence_quote"], ownership["evidence"],
+                )
+                candidates.append(candidate)
+            else:
+                evaluated.append({
+                    **{
+                        key: candidate[key]
+                        for key in (
+                            "company_name", "website", "industry", "prospect_type",
+                            "confidence", "icp_code", "reasoning", "evidence_quote", "unknowns",
+                        )
+                    },
+                    "domain": host,
+                    "source_url": candidate["source_url"],
+                    "reason": "OFFICIAL_SITE_" + ownership["state"],
+                    "verification_state": ownership["state"],
+                    "ownership_reason": ownership["reason"],
+                    "ownership_evidence": ownership["evidence"],
+                })
         else:
             evaluated.append(
                 {
@@ -715,6 +816,9 @@ def discover(job, providers):
         "CANDIDATES_READY"
         if candidates
         else (
+            "SOURCE_INELIGIBLE"
+            if job.payload.get("retry_domain") and filtered and not rows
+            else (
             "PARTIAL_FAILURE"
             if (
                 any(
@@ -724,12 +828,14 @@ def discover(job, providers):
                 or search_errors
             )
             else "NO_NEW_MATCHES"
+            )
         )
     )
 
     return {
         "candidates": candidates,
         "evaluated_domains": evaluated,
+        "filtered_domains": filtered,
         "coverage": (
             "Up to three searches, ten fetched pages and "
             "three pages per company. Human acceptance required."

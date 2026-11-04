@@ -67,7 +67,8 @@ def bind_task(db, job):
         candidate_id=job.payload.get("source_candidate_id"),
         job_id=str(job.id), lead_id=str(job.lead_id) if job.lead_id else None,
         stage=job.kind, idempotency_key=job.idempotency_key, trace_id=str(job.trace_id),
-        contract_name=STAGE_CONTRACTS[job.kind], schema_version=2, producer_version="native.day2.1",
+        contract_name=STAGE_CONTRACTS[job.kind], schema_version=3 if job.kind == "DISCOVERY" else 2,
+        producer_version="native.discovery.3" if job.kind == "DISCOVERY" else "native.day2.1",
         context_version=line.context_version, context_hash=line.context_hash,
         input_hash=content_hash(job.payload), attempt=0, max_attempts=job.max_attempts, prior_artifacts=refs)
     validate_envelope(job.task_envelope)
@@ -98,6 +99,8 @@ def invalidate(db, line):
     """Invalidate execution/readiness without rewriting human decisions or assets."""
     for job in db.scalars(select(Job).where(Job.product_line_id == line.id, Job.status.in_(["PENDING", "RUNNING"])).with_for_update()):
         job.status, job.failure_code = "FAILED", "CONTEXT_CHANGED"
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "REASSESSMENT_FAILED")
         job.lease_token = job.lease_until = None
         job.history = [*job.history, {"code": "CONTEXT_CHANGED", "at": now().isoformat()}]
         from .worker_contracts import record

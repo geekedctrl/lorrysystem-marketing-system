@@ -181,7 +181,7 @@ def page(providers, url):
     try:
         fetched = fetch_public(url)
         if fetched["fetch_status"] != "SUCCESS":
-            raise FetchError("UNAVAILABLE")
+            raise FetchError(fetched.get("failure_reason") or "UNAVAILABLE")
         from .discovery_strategies import extractor
 
         parser = Links()
@@ -192,8 +192,9 @@ def page(providers, url):
             or normalize(" ".join(parser.parts))[:12000],
             "links": parser.links[:100],
         }
-    except FetchError:
-        value = {"source_url": url, "text": "", "links": [], "unavailable": True}
+    except FetchError as exc:
+        value = {"source_url": url, "text": "", "links": [], "unavailable": True,
+                 "failure_reason": exc.reason}
     if shared:
         from .company_evidence import save
         save(providers.job,value)

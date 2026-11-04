@@ -27,6 +27,7 @@ WRITE_ROUTES = {
     "PATCH": [(r"catalog/[\w-]+", {"ADMIN"}), (r"members/[\w-]+", {"ADMIN"})],
     "POST": [
         (r"candidates/[\w-]+/(accept|reject|retry)", {"ADMIN", "OPERATOR", "REVIEWER"}),
+        (r"candidates/[\w-]+/find-official", {"ADMIN", "OPERATOR"}),
         (r"automation/(activate|pause|resume)", {"ADMIN"}),
         (r"discovery|leads|leads/[\w-]+/prepare|preparation/[\w-]+/(contact|retry-contact-search)|jobs/[\w-]+/retry", {"ADMIN", "OPERATOR"}),
         (r"approvals/[\w-]+/decision", {"ADMIN", "REVIEWER"}),

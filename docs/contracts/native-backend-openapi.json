@@ -2321,6 +2321,66 @@
         }
       }
     },
+    "/workspaces/{wid}/candidates/{cid}/find-official": {
+      "post": {
+        "summary": "Find Official",
+        "operationId": "find_official_workspaces__wid__candidates__cid__find_official_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateReviewed"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{wid}/senders": {
       "get": {
         "tags": [
@@ -6664,6 +6724,41 @@
             ],
             "title": "Evidence Quote"
           },
+          "verification_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CORROBORATED",
+                  "UNCERTAIN",
+                  "CONFLICTING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification State"
+          },
+          "ownership_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Reason"
+          },
+          "ownership_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/OwnershipEvidence"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Ownership Evidence"
+          },
           "unknowns": {
             "items": {
               "type": "string"
@@ -8011,6 +8106,42 @@
         ],
         "title": "OrganizationWorkspace"
       },
+      "OwnershipEvidence": {
+        "properties": {
+          "source_url": {
+            "type": "string",
+            "maxLength": 1500,
+            "title": "Source Url"
+          },
+          "source_domain": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Source Domain"
+          },
+          "evidence_quote": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Evidence Quote"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": [
+              "REGISTRY_WEBSITE_LISTING",
+              "REGISTRY_DOMAIN_CONFLICT"
+            ],
+            "title": "Relationship"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_url",
+          "source_domain",
+          "evidence_quote",
+          "relationship"
+        ],
+        "title": "OwnershipEvidence"
+      },
       "Page": {
         "properties": {
           "source_url": {
@@ -9325,6 +9456,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

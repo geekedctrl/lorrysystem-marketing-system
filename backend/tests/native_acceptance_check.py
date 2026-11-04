@@ -49,7 +49,7 @@ def main():
     check(api.get("/health"))
     check(frontend.get("/health"))
     headers = login(api, data["accounts"]["ADMIN"])
-    assert not check(api.get("/auth/me", headers=headers))["capabilities"][
+    assert check(api.get("/auth/me", headers=headers))["capabilities"][
         "create_workspace"
     ]
     workspaces = check(api.get("/workspaces", headers=headers))

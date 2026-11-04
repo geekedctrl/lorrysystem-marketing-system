@@ -44,6 +44,16 @@ class WorkerRuntimeUnitTests(unittest.TestCase):
             self.assertEqual(event_version(SimpleNamespace(task_envelope={"schema_version": version})), expected)
         self.assertEqual(event_version(SimpleNamespace(task_envelope=None)), 0)
 
+    def test_invalid_discovery_batch_raises_contract_violation(self):
+        from marketing_backend.worker_contracts import store_output
+        task = Mock(contract_name="discovery.candidate")
+        task.model_dump.return_value = {}
+        with patch("marketing_backend.worker_contracts.validate_task", return_value=task):
+            with self.assertRaises(ContractViolation) as caught:
+                store_output(Mock(), SimpleNamespace(attempts=1), {"raw": "synthetic-secret"})
+        self.assertEqual(caught.exception.code, "STAGE_PAYLOAD_INVALID")
+        self.assertNotIn("synthetic-secret", str(caught.exception))
+
     def test_legacy_mode_is_explicit_and_does_not_touch_database(self):
         db = Mock()
         self.assertIsNone(validate_task(db, SimpleNamespace(task_envelope=None)))
@@ -117,6 +127,79 @@ class WorkerRuntimeUnitTests(unittest.TestCase):
             execute(job, handler)
         self.assertEqual(fail.call_args.args[3], "HANDLER_ERROR")
         self.assertNotIn("synthetic-private-marker", " ".join(logs.output))
+
+    def test_worker_completes_research_with_checkpoint(self):
+        from marketing_backend.worker import execute
+        job = self.execution_job()
+        result = {"summary": "synthetic"}
+
+        def handler(current, save):
+            self.assertIs(current, job)
+            save({"step": 1})
+            return result
+
+        with patch("marketing_backend.worker.Session", return_value=MagicMock()), \
+             patch("marketing_backend.worker.queue.owned", return_value=job), \
+             patch("marketing_backend.worker.queue.checkpoint") as checkpoint, \
+             patch("marketing_backend.worker.queue.complete") as complete:
+            execute(job, handler)
+        self.assertEqual(checkpoint.call_args.args[1:], (job.id, job.lease_token, {"step": 1}))
+        self.assertEqual(complete.call_args.args[1:], (job.id, job.lease_token, result))
+        self.assertTrue(complete.call_args.kwargs["review"])
+        self.assertGreaterEqual(complete.call_args.kwargs["duration_ms"], 0)
+
+    def test_worker_records_retryable_provider_failure(self):
+        from marketing_backend.research import ProviderFailure
+        from marketing_backend.worker import execute
+        job = self.execution_job()
+        handler = Mock(side_effect=ProviderFailure("MODEL_TRANSPORT_ERROR", True))
+        with patch("marketing_backend.worker.Session", return_value=MagicMock()), \
+             patch("marketing_backend.worker.queue.owned", return_value=job), \
+             patch("marketing_backend.worker.queue.fail") as fail, \
+             patch("marketing_backend.worker.queue.complete") as complete:
+            execute(job, handler)
+        self.assertEqual(fail.call_args.args[1:], (job.id, job.lease_token, "MODEL_TRANSPORT_ERROR", True))
+        complete.assert_not_called()
+
+    def test_managed_worker_checks_context_before_handler_and_completes(self):
+        from marketing_backend.worker import execute
+        job = self.execution_job()
+        job.managed = True
+        events = []
+        handler = Mock(side_effect=lambda current, save: events.append("handler") or {"ok": True})
+        with patch("marketing_backend.worker.Session", return_value=MagicMock()), \
+             patch("marketing_backend.worker.queue.owned", side_effect=lambda *args: events.append("owned") or job), \
+             patch("marketing_backend.pipeline.valid_context", side_effect=lambda *args: events.append("context")), \
+             patch("marketing_backend.worker.queue.complete") as complete:
+            execute(job, handler)
+        self.assertEqual(events, ["owned", "owned", "context", "handler"])
+        self.assertFalse(complete.call_args.kwargs["review"])
+
+    def test_unsupported_unmanaged_job_fails_without_handler(self):
+        from marketing_backend.worker import execute
+        job = self.execution_job()
+        job.kind = "UNKNOWN"
+        handler = Mock()
+        with patch("marketing_backend.worker.Session", return_value=MagicMock()), \
+             patch("marketing_backend.worker.queue.owned", return_value=job), \
+             patch("marketing_backend.worker.queue.fail") as fail:
+            execute(job, handler)
+        handler.assert_not_called()
+        self.assertEqual(fail.call_args.args[3], "UNSUPPORTED_JOB_KIND")
+
+    def test_worker_does_not_save_result_after_lease_loss(self):
+        from marketing_backend.worker import execute
+        from marketing_backend.queue import LeaseLost
+        job = self.execution_job()
+        handler = Mock()
+        with patch("marketing_backend.worker.Session", return_value=MagicMock()), \
+             patch("marketing_backend.worker.queue.owned", side_effect=LeaseLost()), \
+             patch("marketing_backend.worker.queue.complete") as complete, \
+             patch("marketing_backend.worker.queue.fail") as fail:
+            execute(job, handler)
+        handler.assert_not_called()
+        complete.assert_not_called()
+        fail.assert_not_called()
 
 
 if __name__ == "__main__":

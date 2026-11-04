@@ -289,7 +289,25 @@ class WorkerQuarantineTests(BackendFixtures):
             db.commit()
         self.url = f"/workspaces/{self.wid}/jobs/{self.jid}"
         self.set_task(contract_name="discovery.candidate")
-        return dict(candidates=[candidate()], evaluated_domains=[], coverage="Synthetic source-backed candidate fixture",
+        from marketing_backend.domain_corroboration import evidence_digest
+        value = candidate()
+        value["website"] = "https://synthetic-retail.example.org/"
+        value["source_url"] = "https://synthetic-retail.example.org/about"
+        value["domain"] = "synthetic-retail.example.org"
+        value["evidence_quote"] = "Example Retail official website: https://synthetic-retail.example.org/"
+        value["verification_state"] = "CORROBORATED"
+        value["ownership_evidence"] = [{
+            "source_url": "https://opencorporates.com/companies/gb/123",
+            "source_domain": "opencorporates.com",
+            "evidence_quote": "Example Retail official website: https://synthetic-retail.example.org/",
+            "relationship": "REGISTRY_WEBSITE_LISTING",
+        }]
+        value["ownership_evidence_digest"] = evidence_digest(
+            value["company_name"], value["website"], value["evidence_quote"], value["ownership_evidence"]
+        )
+        from marketing_backend.domain_corroboration import valid_saved_evidence
+        self.assertTrue(valid_saved_evidence(value))
+        return dict(candidates=[value], evaluated_domains=[], coverage="Synthetic source-backed candidate fixture",
                     counts=dict(searches_attempted=1, searches_unavailable=0, websites_attempted=1,
                                 pages_attempted=1, assessments_attempted=1, candidates_ready=1),
                     outcome="CANDIDATES_READY", human_review_required=True)

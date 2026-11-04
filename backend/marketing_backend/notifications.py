@@ -4,10 +4,13 @@ Notifications are disabled by default.
 This module never sends prospect outreach messages.
 """
 
-from dataclasses import dataclass
+import logging
 import os
+from dataclasses import dataclass
 
 import httpx
+
+log = logging.getLogger("marketing-notifications")
 
 
 @dataclass(frozen=True)
@@ -43,7 +46,7 @@ class NtfyTransport:
         url = f"{self.config.server_url}/{self.config.topic}"
 
         headers = {
-            "Title": "Lorry System: Approval required",
+            "Title": "Marketing System: Approval required",
             "Priority": "default",
         }
 
@@ -71,6 +74,17 @@ class FakeNtfyTransport:
             "A new outreach draft is waiting for your review."
         )
         return True
+
+
+def send_approval_alert_if_enabled():
+    """Send an approval alert without changing the persisted decision."""
+    try:
+        return NtfyTransport(NtfyConfig.from_env()).send_approval_alert()
+    except (httpx.HTTPError, ValueError):
+        log.exception("Approval notification delivery failed")
+        return False
+
+
 def retry_delay_seconds(
     attempt: int,
     base_delay_seconds: int = 30,

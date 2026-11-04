@@ -9,6 +9,8 @@ from .db import session
 from .models import DiscoveryMemory, Lead, Workspace, PreparationRun, ProductLine, Job, now
 from .product_lines import default_id, line_mode, line_for, enqueue, bind_task
 from .pipeline import context, fingerprint, domain, start
+from .discovery import first_party_evidence
+from .domain_corroboration import valid_saved_evidence
 from .native_api import workspace_lock, enqueue_workspace
 from .public_fetch import checked_url, FetchError
 from .research import ProviderFailure
@@ -47,6 +49,9 @@ def public(row, current_hash):
             "reasoning",
             "source_url",
             "evidence_quote",
+            "verification_state",
+            "ownership_reason",
+            "ownership_evidence",
         )
     }
     return {
@@ -56,6 +61,7 @@ def public(row, current_hash):
         "domain": row.domain,
         "status": row.outcome,
         "unknowns": row.candidate.get("unknowns", []),
+        "ownership_evidence": row.candidate.get("ownership_evidence") or [],
         "failure_reason": row.candidate.get("reason"),
         "source_job_id": row.source_job_id,
         "accepted_lead_id": row.accepted_lead_id,
@@ -145,9 +151,11 @@ def accept(
             409, "Targeting changed. Reassess this candidate before acceptance"
         )
     value = row.candidate
+    if not valid_saved_evidence(value):
+        raise HTTPException(409, "Official website evidence is missing, changed, or unverified. Reassess this candidate before acceptance")
     try:
         checked_url(value["website"])
-        if domain(value["website"]) != row.domain:
+        if domain(value["website"]) != row.domain or not first_party_evidence(value.get("source_url", ""), row.domain):
             raise FetchError("CANDIDATE_DOMAIN_CHANGED")
     except (FetchError, KeyError):
         raise HTTPException(409, "Candidate website is invalid") from None
@@ -197,24 +205,45 @@ def reject(
 @router.post("/{cid}/retry", response_model=out.CandidateReviewed)
 def retry(wid: UUID, cid: UUID, actor=Depends(user), db=Depends(session)):
     scope(wid, actor, db, REVIEW_ROLES)
+    return queue_reassessment(wid, cid, db, find_official=False)
+
+
+@router.post("/{cid}/find-official", response_model=out.CandidateReviewed)
+def find_official(wid: UUID, cid: UUID, actor=Depends(user), db=Depends(session)):
+    scope(wid, actor, db, ["ADMIN", "OPERATOR"])
+    return queue_reassessment(wid, cid, db, find_official=True)
+
+
+def queue_reassessment(wid, cid, db, *, find_official):
     workspace = workspace_lock(db, wid)
     row = candidate_for(db, wid, cid)
     if row.outcome in {"ACCEPTED", "REJECTED", "KNOWN"}:
         raise HTTPException(
             409, "Reviewed companies cannot be retried through discovery"
         )
+    if row.outcome == "RETRY_PENDING":
+        raise HTTPException(409, "Reassessment is already queued")
+    if row.retry_after and row.retry_after > now():
+        raise HTTPException(409, "Reassessment is not available until the retry time")
+    company_name = row.candidate.get("company_name")
+    if find_official and (not isinstance(company_name, str) or not 2 <= len(company_name.strip()) <= 200):
+        raise HTTPException(409, "A company name is required to find an official website")
     source=db.get(Job,row.source_job_id) if row.source_job_id else None
     scoped=bool(source and line_mode(source))
     line=line_for(db,wid,row.product_line_id)
     if (line.paused or not line.settings.get("discovery_query")) if scoped else (not workspace.automation_enabled or not workspace.automation.get("discovery_query")):
         raise HTTPException(409, "Complete setup and resume discovery first")
-    row.outcome, row.retry_after = "RETRY_PENDING", None
     job = enqueue(db,line,"DISCOVERY",f"candidate-retry:{uuid4()}") if scoped else enqueue_workspace(db, workspace, "DISCOVERY", f"candidate-retry:{uuid4()}")
     job.payload = {
         **job.payload,
-        "retry_domain": row.domain,
-        "retry_url": row.candidate.get("source_url") or "https://" + row.domain + "/",
+        "retry_candidate_id": str(row.id),
+        **({"official_search_name": company_name.strip()} if find_official else {
+            "retry_domain": row.domain,
+            "retry_url": row.candidate.get("source_url") or "https://" + row.domain + "/",
+        }),
     }
+    row.outcome, row.retry_after = "RETRY_PENDING", None
+    row.candidate = {**row.candidate, "_retry_job_id": str(job.id)}
     if job.task_envelope is not None:bind_task(db,job)
     # Retain prior evidence and review history until an actual assessment replaces it.
     db.commit()

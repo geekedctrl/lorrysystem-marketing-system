@@ -180,6 +180,8 @@ def pause(wid: UUID, actor=Depends(user), db=Depends(session)):
     workspace_lock(db, wid).automation_enabled = False
     for job in running:
         job.status, job.failure_code = "FAILED", "PRODUCT_PAUSED"
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "REASSESSMENT_FAILED")
         job.lease_token = job.lease_until = None
         job.history = [
             *job.history,

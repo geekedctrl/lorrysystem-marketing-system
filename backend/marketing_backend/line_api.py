@@ -181,6 +181,8 @@ def pause(wid: UUID,lid: UUID,actor=Depends(user),db=Depends(session)):
     line=mutation_lock(db,wid,lid);line.paused=True
     for job in db.scalars(select(Job).where(Job.product_line_id==lid,Job.status=="RUNNING")):
         job.status,job.failure_code="FAILED","PRODUCT_LINE_PAUSED"
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "REASSESSMENT_FAILED")
         job.lease_token=job.lease_until=None
         if job.run_id:
             run=db.get(PreparationRun,job.run_id)

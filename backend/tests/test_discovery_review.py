@@ -27,6 +27,7 @@ from marketing_backend.discovery import (
     discovery_queries,
     excluded,
 )
+from marketing_backend.domain_corroboration import evidence_digest
 from marketing_backend.research import ProviderFailure
 
 
@@ -171,6 +172,78 @@ class DiscoveryTests(fixtures.BackendFixtures):
                     "beauty.example.com",
                 )
 
+    def test_wikipedia_cannot_establish_official_company_identity(self):
+        from marketing_backend.discovery import listing_reason
+        self.assertEqual(listing_reason({"url": "https://en.wikipedia.org/wiki/Example", "title": "Example"}), "DIRECTORY_OR_SOCIAL")
+        source = [{"excerpt_id": "P1_E1", "source_url": "https://en.wikipedia.org/wiki/Example", "text": "Example Logistics provides commercial transport services."}]
+        raw = {"suitable": True, "prospect_type": "LOGISTICS_PROVIDER", "company_name": "Example Logistics", "icp_code": "ICP", "confidence": 90, "official_company": True, "excerpt_id": "P1_E1", "industry": "Logistics", "reasoning": "The cited page describes transport services.", "unknowns": []}
+        with self.assertRaises(ProviderFailure):
+            assess(raw, source, {"ICP"}, "wikipedia.org")
+
+    def test_first_party_homepage_is_eligible_and_third_party_identity_is_not(self):
+        from marketing_backend.discovery import first_party_evidence
+        self.assertTrue(first_party_evidence("https://examplelogistics.com/about", "examplelogistics.com"))
+        self.assertFalse(first_party_evidence("https://directory.example/listing", "examplelogistics.com"))
+
+    def test_historical_third_party_candidate_cannot_be_accepted(self):
+        valid_cid = self.candidate(name="Valid Logistics")
+        valid_response = self.action(valid_cid, "accept")
+        self.assertEqual(valid_response.status_code, 200, valid_response.text)
+        self.assertEqual(valid_response.json()["status"], "ACCEPTED")
+
+        historical_id = uuid.uuid4()
+        historical = None
+        with Session() as db:
+            valid = db.get(DiscoveryMemory, uuid.UUID(valid_cid))
+            historical = DiscoveryMemory(
+                id=historical_id,
+                workspace_id=self.wid,
+                product_line_id=valid.product_line_id,
+                domain="historical.example.net",
+                outcome="READY_FOR_REVIEW",
+                context_hash=valid.context_hash,
+                candidate={
+                    **valid.candidate,
+                    "company_name": "Historical Logistics",
+                    "website": "https://historical.example.net/",
+                    "source_url": "https://wikipedia.org/wiki/Candidate",
+                },
+            )
+            db.add(historical)
+            db.commit()
+        response = self.action(str(historical_id), "accept")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Official website evidence", response.json()["detail"])
+        with Session() as db:
+            self.assertEqual(db.get(DiscoveryMemory, historical_id).outcome, "READY_FOR_REVIEW")
+
+    def test_acceptance_rejects_altered_or_legacy_ownership_evidence(self):
+        altered_id = self.candidate(name="Altered Logistics", candidate_domain="altered.example.com")
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(altered_id))
+            changed = dict(row.candidate)
+            changed_evidence = [dict(item) for item in changed["ownership_evidence"]]
+            changed_evidence[0]["evidence_quote"] = "Altered Logistics official website: https://evil.example/"
+            changed["ownership_evidence"] = changed_evidence
+            row.candidate = changed
+            db.commit()
+        altered_response = self.action(altered_id, "accept")
+        self.assertEqual(altered_response.status_code, 409)
+        self.assertIn("Official website evidence", altered_response.json()["detail"])
+
+        legacy_id = self.candidate(name="Legacy Logistics", candidate_domain="legacy.example.com")
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(legacy_id))
+            changed = dict(row.candidate)
+            changed.pop("verification_state", None)
+            changed.pop("ownership_evidence", None)
+            changed.pop("ownership_evidence_digest", None)
+            row.candidate = changed
+            db.commit()
+        legacy_response = self.action(legacy_id, "accept")
+        self.assertEqual(legacy_response.status_code, 409)
+        self.assertIn("Official website evidence", legacy_response.json()["detail"])
+
     # ============================================================
     # EXISTING TEST 1: Preserve selected ICP in queries
     # ============================================================
@@ -282,10 +355,11 @@ class DiscoveryTests(fixtures.BackendFixtures):
 
         fetcher = patch(
             "marketing_backend.stages.fetch_public",
-            return_value={
+            side_effect=lambda url: {
                 "fetch_status": "SUCCESS",
-                "final_url": fixtures.URL,
-                "body": "<p>" + fixtures.PAGE + "</p>",
+                "final_url": url,
+                "body": "<p>Example Logistics official website: https://example.com/.</p>"
+                if "opencorporates.com" in url else "<p>" + fixtures.PAGE + "</p>",
             },
         )
 
@@ -300,24 +374,36 @@ class DiscoveryTests(fixtures.BackendFixtures):
         name="Example Logistics",
         status="READY_FOR_REVIEW",
         wid=None,
+        candidate_domain="candidate.example.com",
     ):
         wid = wid or self.wid
 
         with Session() as db:
+            company_quote = (
+                name + " provides commercial transport and delivery services. "
+                + name + " official company website: https://" + candidate_domain + "/"
+            )
+            ownership_evidence = [{
+                "source_url": "https://opencorporates.com/companies/gb/123",
+                "source_domain": "opencorporates.com",
+                "evidence_quote": name + " official website: https://" + candidate_domain + "/",
+                "relationship": "REGISTRY_WEBSITE_LISTING",
+            }]
+            website = f"https://{candidate_domain}/"
             row = DiscoveryMemory(
                 workspace_id=wid,
-                domain="candidate.example.com",
+                domain=candidate_domain,
                 outcome=status,
                 context_hash=fingerprint(context(db, wid)),
                 candidate=dict(
                     company_name=name,
-                    website="https://candidate.example.com/",
-                    source_url="https://candidate.example.com/",
-                    evidence_quote=(
-                        name
-                        + " provides commercial transport "
-                        "and delivery services."
-                    ),
+                    website=website,
+                    source_url=f"https://{candidate_domain}/",
+                    evidence_quote=company_quote,
+                    verification_state="CORROBORATED",
+                    ownership_reason=None,
+                    ownership_evidence=ownership_evidence,
+                    ownership_evidence_digest=evidence_digest(name, website, company_quote, ownership_evidence),
                     prospect_type="FLEET_OPERATOR",
                     icp_code="ICP",
                     confidence=80,
@@ -571,6 +657,14 @@ class DiscoveryTests(fixtures.BackendFixtures):
     def test_retry_failed_website_queues_direct_reassessment(self):
         cid = self.candidate(status="FETCH_UNAVAILABLE")
 
+        with Session() as db:
+            db.get(DiscoveryMemory, uuid.UUID(cid)).retry_after = now() + timedelta(hours=1)
+            db.commit()
+        self.assertEqual(self.action(cid, "retry").status_code, 409)
+        with Session() as db:
+            db.get(DiscoveryMemory, uuid.UUID(cid)).retry_after = now() - timedelta(seconds=1)
+            db.commit()
+
         response = self.action(cid, "retry")
 
         self.assertEqual(
@@ -614,18 +708,20 @@ class DiscoveryTests(fixtures.BackendFixtures):
                 excluded(row, row.context_hash)
             )
 
+        def targeted_search(provider, operation, query, **options):
+            if operation.startswith("ownership:"):
+                return [{"url": "https://opencorporates.com/companies/gb/123"}]
+            raise AssertionError("A targeted retry must not perform broad discovery search")
+
         with patch.object(
-            fixtures.FixtureProviders,
-            "search",
-            side_effect=AssertionError(
-                "A targeted retry must not search Brave"
-            ),
+            fixtures.FixtureProviders, "search", targeted_search,
         ), patch(
             "marketing_backend.stages.fetch_public",
-            return_value={
+            side_effect=lambda url: {
                 "fetch_status": "SUCCESS",
-                "final_url": "https://candidate.example.com/",
-                "body": "<p>" + fixtures.PAGE + "</p>",
+                "final_url": url,
+                "body": "<p>Example Logistics official website: https://candidate.example.com/.</p>"
+                if "opencorporates.com" in url else "<p>" + fixtures.PAGE.replace("example.com", "candidate.example.com") + "</p>",
             },
         ):
             self.assertEqual(
@@ -642,6 +738,67 @@ class DiscoveryTests(fixtures.BackendFixtures):
                 "READY_FOR_REVIEW",
             )
 
+    def test_filtered_reassessment_resolves_and_preserves_evidence(self):
+        cid = self.candidate(name="Example Transit", status="OWNERSHIP_UNCERTAIN", candidate_domain="en.wikipedia.org")
+        with Session() as db:
+            before = dict(db.get(DiscoveryMemory, uuid.UUID(cid)).candidate)
+        queued = self.action(cid, "retry")
+        self.assertEqual(queued.status_code, 200, queued.text)
+        self.assertEqual(self.action(cid, "retry").status_code, 409)
+        self.assertEqual(self.drain(), ["DISCOVERY"])
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(cid))
+            job = db.get(Job, uuid.UUID(queued.json()["job_id"]))
+            self.assertEqual(job.result["outcome"], "SOURCE_INELIGIBLE")
+            self.assertEqual(row.outcome, "OWNERSHIP_UNCERTAIN")
+            self.assertEqual(row.candidate["reason"], "SOURCE_INELIGIBLE")
+            self.assertEqual(row.candidate["evidence_quote"], before["evidence_quote"])
+            self.assertNotIn("_retry_job_id", row.candidate)
+        self.assertEqual(self.action(cid, "accept").status_code, 409)
+
+    def test_terminal_reassessment_failure_releases_candidate(self):
+        cid = self.candidate(status="FETCH_UNAVAILABLE")
+        queued = self.action(cid, "retry")
+        self.assertEqual(queued.status_code, 200, queued.text)
+        with patch("marketing_backend.stages.dispatch", side_effect=ProviderFailure("MODEL_UNAVAILABLE")):
+            self.assertEqual(self.drain(), ["DISCOVERY"])
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(cid))
+            self.assertEqual(row.outcome, "OWNERSHIP_UNCERTAIN")
+            self.assertEqual(row.candidate["reason"], "REASSESSMENT_FAILED")
+            self.assertNotIn("_retry_job_id", row.candidate)
+
+    def test_expired_final_reassessment_releases_candidate(self):
+        from marketing_backend import queue
+        cid = self.candidate(status="FETCH_UNAVAILABLE")
+        queued = self.action(cid, "retry")
+        self.assertEqual(queued.status_code, 200, queued.text)
+        with Session() as db:
+            job = queue.claim(db)
+            self.assertEqual(str(job.id), queued.json()["job_id"])
+            job.attempts = job.max_attempts
+            job.lease_until = now() - timedelta(seconds=1)
+            db.commit()
+        with Session() as db:
+            self.assertEqual(queue.recover_expired(db), 1)
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(cid))
+            self.assertEqual(row.outcome, "OWNERSHIP_UNCERTAIN")
+            self.assertEqual(row.candidate["reason"], "REASSESSMENT_FAILED")
+
+    def test_official_search_is_separate_and_releases_original_on_empty_results(self):
+        cid = self.candidate(name="Example Transit", status="OWNERSHIP_UNCERTAIN", candidate_domain="en.wikipedia.org")
+        queued = self.action(cid, "find-official")
+        self.assertEqual(queued.status_code, 200, queued.text)
+        self.assertEqual(self.action(cid, "find-official").status_code, 409)
+        with patch.object(fixtures.FixtureProviders, "search", return_value=[]) as search:
+            self.assertEqual(self.drain(), ["DISCOVERY"])
+        self.assertIn("Example Transit", search.call_args.args[1])
+        with Session() as db:
+            row = db.get(DiscoveryMemory, uuid.UUID(cid))
+            self.assertEqual(row.outcome, "OWNERSHIP_UNCERTAIN")
+            self.assertEqual(row.candidate["reason"], "REASSESSMENT_NO_RESULT")
+
     # ============================================================
     # ORIGINAL TEST 6
     # ============================================================
@@ -655,10 +812,11 @@ class DiscoveryTests(fixtures.BackendFixtures):
 
         with patch(
             "marketing_backend.stages.fetch_public",
-            return_value={
+            side_effect=lambda url: {
                 "fetch_status": "SUCCESS",
-                "final_url": fixtures.URL,
-                "body": (
+                "final_url": url,
+                "body": "<p>Example Logistics official website: https://example.com/.</p>"
+                if "opencorporates.com" in url else (
                     "<main></main>"
                     "<script src='/app.js'></script>"
                 ),
@@ -716,14 +874,10 @@ class DiscoveryTests(fixtures.BackendFixtures):
             "https://good.example.com/",
         ]
 
-        search = lambda *args, **kwargs: [
-            {
-                "url": u,
-                "title": "Company",
-                "text": "",
-            }
-            for u in urls
-        ]
+        def search(operation, query, **options):
+            if operation.startswith("ownership:"):
+                return [{"url": "https://opencorporates.com/companies/gb/123"}]
+            return [{"url": u, "title": "Company", "text": ""} for u in urls]
 
         def fetch(url):
             name = (
@@ -735,13 +889,15 @@ class DiscoveryTests(fixtures.BackendFixtures):
             return {
                 "fetch_status": "SUCCESS",
                 "final_url": url,
-                "body": (
+                "body": "<p>Good Company official website: https://good.example.com/.</p>"
+                if "opencorporates.com" in url else (
                     "<p>"
                     + name
                     + " provides commercial transport and delivery services. "
                     "Its public company website describes logistics operations "
-                    "and freight forwarding across the country.</p>"
-                    '<a href="https://[broken/about">About</a>'
+                    "and freight forwarding across the country. "
+                    + name + " official website: https://" + url.split("//", 1)[1].split("/", 1)[0] + "/.</p>"
+                    + '<a href="https://[broken/about">About</a>'
                 ),
             }
 
@@ -879,6 +1035,8 @@ class DiscoveryTests(fixtures.BackendFixtures):
                 return {
                     "missing": "required assessment fields"
                 }
+
+            self.assertIn("suitable:missing", instructions)
 
             return dict(
                 suitable=True,

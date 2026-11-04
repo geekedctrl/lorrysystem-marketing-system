@@ -1,9 +1,8 @@
 """Worker boundary contracts. These models never import providers or the database.
 
-Versions 1 and 2 are the first explicitly versioned contracts, not labels applied
-to historical JSON results. V2 adds optional upstream artifact references. No
-version conversion, provider checkpoint forwarding, or evidence acceptance occurs
-here: source validation and human candidate acceptance remain separate gates.
+Versions 1 and 2 remain readable contracts; version 3 adds required independent
+website corroboration to new discovery candidates. No historical artifact is
+rewritten or silently relabeled. Human candidate acceptance remains separate.
 """
 
 import hashlib
@@ -14,8 +13,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, JsonValue, field_validator, model_validator
 
-CURRENT_VERSION = 2
-SUPPORTED_VERSIONS = (1, 2)
+CURRENT_VERSION = 3
+SUPPORTED_VERSIONS = (1, 2, 3)
 Stage = Literal["SETUP", "DISCOVERY", "RESEARCH", "CONTACT_SEARCH", "SCORING", "MATCHING", "DRAFTING"]
 Hash = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Code = Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")]
@@ -37,7 +36,7 @@ class Strict(BaseModel):
 class ArtifactReference(Strict):
     artifact_id: UUID
     contract_name: Code
-    schema_version: int = Field(ge=1, le=2)
+    schema_version: int = Field(ge=1, le=3)
     content_hash: Hash
 
 
@@ -116,6 +115,8 @@ class StageInput(Strict):
     icp_code: str | None = Field(default=None,max_length=80)
     retry_domain: str | None = Field(default=None,max_length=254)
     retry_url: str | None = Field(default=None,max_length=1500)
+    retry_candidate_id: UUID | None = None
+    official_search_name: str | None = Field(default=None, min_length=2, max_length=200)
     source_candidate_id: UUID | None = None
 
 
@@ -188,6 +189,48 @@ class DiscoveryCandidateV2(DiscoveryCandidateV1):
     source_artifact_ids: list[UUID] = Field(default_factory=list, max_length=20)
 
 
+class OwnershipEvidenceV3(Strict):
+    source_url: str = Field(min_length=8, max_length=1500)
+    source_domain: str = Field(min_length=1, max_length=254)
+    evidence_quote: str = Field(min_length=1, max_length=500)
+    relationship: Literal["REGISTRY_WEBSITE_LISTING"]
+
+
+class DiscoveryCandidateV3(DiscoveryCandidateV2):
+    verification_state: Literal["CORROBORATED"]
+    ownership_evidence: list[OwnershipEvidenceV3] = Field(min_length=1, max_length=2)
+    ownership_evidence_digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    ownership_reason: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def ownership_integrity(self):
+        candidate_host = (urlsplit(self.website).hostname or "").lower().removeprefix("www.")
+        forbidden = {"wikipedia.org", "wikidata.org", "britannica.com", "opencorporates.com", "ensun.io", "clutch.co", "goodfirms.co", "yellowpages.my", "zoominfo.com", "crunchbase.com", "yelp.com", "linkedin.com", "facebook.com", "instagram.com", "twitter.com", "x.com", "youtube.com"}
+        if any(candidate_host == host or candidate_host.endswith("." + host) for host in forbidden):
+            raise ValueError("reference or directory domain cannot establish company identity")
+        registry_hosts = {
+            "opencorporates.com", "companieshouse.gov.uk", "ssm.com.my", "ssm-einfo.my",
+            "acra.gov.sg", "bizfile.gov.sg", "sec.gov", "asic.gov.au",
+            "companies-register.companiesoffice.govt.nz", "cr.gov.hk", "ahu.go.id",
+        }
+        evidence = [item.model_dump(mode="json") for item in self.ownership_evidence]
+        for item in evidence:
+            source_host = (urlsplit(item["source_url"]).hostname or "").lower().removeprefix("www.")
+            if (source_host != item["source_domain"] or source_host == candidate_host
+                    or not any(source_host == host or source_host.endswith("." + host) for host in registry_hosts)):
+                raise ValueError("invalid independent registry source")
+        digest_input = {
+            "company_name": " ".join(self.company_name.split()),
+            "website": self.website,
+            "company_quote": self.evidence_quote,
+            "registry_evidence": evidence,
+        }
+        expected = hashlib.sha256(canonical_json(digest_input).encode("utf-8")).hexdigest()
+        if self.ownership_evidence_digest != expected:
+            raise ValueError("ownership evidence digest mismatch")
+        return self
+
+
 class Finding(Citation):
     category: Literal["COMPANY", "INDUSTRY", "SERVICES", "FLEET", "TECHNOLOGY", "LOCATION", "PAIN_POINT", "SIGNAL"]
     statement: str = Field(min_length=8, max_length=1000)
@@ -206,6 +249,7 @@ class ResearchPage(Strict):
     source_url: str = Field(min_length=8, max_length=1500)
     text: str = Field(max_length=100000)
     unavailable: bool | None = None
+    failure_reason: Code | None = None
     links: list[str] | None = Field(default=None, max_length=100)
 
 
@@ -350,6 +394,7 @@ STAGE_CONTRACTS = dict(SETUP="setup.output", DISCOVERY="discovery.candidate", RE
 SCHEMAS = {
     ("discovery.candidate", 1): DiscoveryCandidateV1,
     ("discovery.candidate", 2): DiscoveryCandidateV2,
+    ("discovery.candidate", 3): DiscoveryCandidateV3,
     ("research.output", 1): ResearchOutputV1,
     ("research.output", 2): ResearchOutputV2,
 }

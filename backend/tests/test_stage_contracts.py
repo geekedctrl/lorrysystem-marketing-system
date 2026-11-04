@@ -58,11 +58,37 @@ class StageContractTests(unittest.TestCase):
             self.assert_code("STAGE_PAYLOAD_INVALID", lambda: validate_payload(name, 1, value))
 
     def test_unsupported_versions_and_names_fail_closed(self):
-        for version in (0, 3, True, "2", 2.0, None):
+        for version in (0, 4, True, "2", 2.0, None):
             self.assert_code("UNSUPPORTED_CONTRACT", lambda: validate_payload("research.output", version, research()))
         self.assert_code("UNSUPPORTED_CONTRACT", lambda: validate_payload("research.unknown", 2, research()))
-        value = envelope(version=3)
+        value = envelope(version=4)
         self.assert_code("UNSUPPORTED_CONTRACT", lambda: validate_envelope(value))
+
+    def test_discovery_v3_requires_correlated_evidence_and_digest(self):
+        from marketing_backend.domain_corroboration import evidence_digest
+        value = candidate()
+        value["website"] = "https://example.com/"
+        value["source_url"] = "https://example.com/about"
+        value["domain"] = "example.com"
+        value["evidence_quote"] = "Example Retail official website: https://example.com/"
+        value["verification_state"] = "CORROBORATED"
+        value["ownership_evidence"] = [{
+            "source_url": "https://opencorporates.com/companies/gb/123",
+            "source_domain": "opencorporates.com",
+            "evidence_quote": "Example Retail official website: https://example.com/",
+            "relationship": "REGISTRY_WEBSITE_LISTING",
+        }]
+        value["ownership_evidence_digest"] = evidence_digest(
+            value["company_name"], value["website"], value["evidence_quote"], value["ownership_evidence"]
+        )
+        self.assertEqual(validate_payload("discovery.candidate", 3, value), value)
+        value["ownership_evidence_digest"] = "0" * 64
+        self.assert_code("STAGE_PAYLOAD_INVALID", lambda: validate_payload("discovery.candidate", 3, value))
+        value["ownership_evidence_digest"] = evidence_digest(
+            value["company_name"], value["website"], value["evidence_quote"], value["ownership_evidence"]
+        )
+        value.pop("ownership_evidence")
+        self.assert_code("STAGE_PAYLOAD_INVALID", lambda: validate_payload("discovery.candidate", 3, value))
 
     def test_envelope_requires_line_context_trace_and_idempotency(self):
         for field in ("workspace_id", "product_line_id", "job_id", "context_version", "context_hash", "trace_id", "idempotency_key"):
@@ -107,6 +133,11 @@ class StageContractTests(unittest.TestCase):
         for changes in ({"source_url": "https://other.test/about"}, {"website": "file:///etc/passwd"}, {"source_url": "https://user:pass@example.test/"}):
             value = {**candidate(), **changes}
             self.assert_code("STAGE_PAYLOAD_INVALID", lambda: validate_payload("discovery.candidate", 2, value))
+
+    def test_historical_reference_domain_artifacts_remain_readable(self):
+        value = {**candidate(), "domain": "en.wikipedia.org", "website": "https://en.wikipedia.org/", "source_url": "https://en.wikipedia.org/wiki/Example"}
+        for version in (1, 2):
+            self.assertEqual(validate_payload("discovery.candidate", version, value), value)
 
     def test_research_stops_and_six_page_limit(self):
         value = {**research(), "stop_reason": "INSUFFICIENT_COMPANY_EVIDENCE"}
@@ -155,6 +186,24 @@ class StageContractTests(unittest.TestCase):
             with self.subTest(statement=statement.splitlines()[0]):
                 compiled = text(statement).compile(dialect=dialect())
                 self.assertEqual(compiled.construct_params(), {})
+
+    def test_discovery_v3_migration_only_expands_version_check(self):
+        import importlib.util
+        from pathlib import Path
+        from unittest.mock import patch
+        from sqlalchemy import text
+        from sqlalchemy.dialects.postgresql.psycopg import dialect
+
+        path = Path(__file__).resolve().parents[1] / "migrations/versions/018_discovery_candidate_v3.py"
+        spec = importlib.util.spec_from_file_location("discovery_v3_migration_sql_check", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        statements = []
+        with patch.object(module.op, "execute", side_effect=statements.append):
+            module.upgrade()
+        self.assertEqual(len(statements), 2)
+        for statement in statements:
+            self.assertEqual(text(statement).compile(dialect=dialect()).construct_params(), {})
 
 
 if __name__ == "__main__":

@@ -8,6 +8,10 @@ log = logging.getLogger("marketing-worker")
 stop = threading.Event()
 
 
+def _elapsed_ms(started):
+    return max(0, int((time.monotonic()-started)*1000))
+
+
 def execution_log(job, event, started, code=None, retryable=False):
     from .diagnostics import classify
     from .worker_contracts import event_version
@@ -15,12 +19,26 @@ def execution_log(job, event, started, code=None, retryable=False):
     log.info(json.dumps(dict(
         event=event, pool=job.kind, stage=job.kind, job_id=str(job.id),
         workspace_id=str(job.workspace_id), product_line_id=str(job.product_line_id),
-        attempt=job.attempts, duration_ms=max(0, int((time.monotonic()-started)*1000)),
+        attempt=job.attempts, duration_ms=_elapsed_ms(started),
         contract_version=event_version(job), trace_id=str(job.trace_id),
         error_code=failure.code if failure else None,
         error_category=failure.category if failure else None,
         retryable=failure.retryable if failure else False,
     ), separators=(",", ":")))
+
+
+def _select_handler(job, handler):
+    if job.managed:
+        from .stages import dispatch
+        from .pipeline import valid_context
+
+        with Session() as db:
+            queue.owned(db, job.id, job.lease_token)
+            valid_context(db, job)
+        return handler or dispatch
+    if job.kind != "RESEARCH":
+        raise ProviderFailure("UNSUPPORTED_JOB_KIND")
+    return handler or research
 
 
 def execute(job, handler=None):
@@ -46,22 +64,11 @@ def execute(job, handler=None):
         with Session() as db:
             current = queue.owned(db, job.id, job.lease_token)
             validate_task(db, current)
-        if job.managed:
-            from .stages import dispatch
-            from .pipeline import valid_context
-
-            with Session() as db:
-                queue.owned(db, job.id, job.lease_token)
-                valid_context(db, job)
-            handler = handler or dispatch
-        elif job.kind != "RESEARCH":
-            raise ProviderFailure("UNSUPPORTED_JOB_KIND")
-        else:
-            handler = handler or research
+        handler = _select_handler(job, handler)
         result = handler(job, save)
         with Session() as db:
             queue.complete(db, job.id, job.lease_token, result, review=not job.managed,
-                           duration_ms=max(0, int((time.monotonic()-started)*1000)))
+                           duration_ms=_elapsed_ms(started))
         execution_log(job, "COMPLETION", started)
     except queue.LeaseLost:
         execution_log(job, "LEASE_LOSS", started, "LEASE_LOST")
@@ -70,7 +77,7 @@ def execute(job, handler=None):
         try:
             with Session() as db:
                 queue.quarantine(db, job.id, job.lease_token, exc.code,
-                                 duration_ms=max(0, int((time.monotonic()-started)*1000)))
+                                 duration_ms=_elapsed_ms(started))
             execution_log(job, "QUARANTINE", started, exc.code)
         except queue.LeaseLost:
             execution_log(job, "LEASE_LOSS", started, "LEASE_LOST")
@@ -78,7 +85,7 @@ def execute(job, handler=None):
         try:
             with Session() as db:
                 queue.fail(db, job.id, job.lease_token, exc.code, exc.retryable,
-                           duration_ms=max(0, int((time.monotonic()-started)*1000)))
+                           duration_ms=_elapsed_ms(started))
             execution_log(job, "FAILURE_OR_RETRY", started, exc.code, exc.retryable)
         except queue.LeaseLost:
             log.warning("Lease lost for job %s", job.id)
@@ -88,7 +95,7 @@ def execute(job, handler=None):
         try:
             with Session() as db:
                 queue.fail(db, job.id, job.lease_token, "HANDLER_ERROR",
-                           duration_ms=max(0, int((time.monotonic()-started)*1000)))
+                           duration_ms=_elapsed_ms(started))
             execution_log(job, "FAILURE", started, "HANDLER_ERROR")
         except queue.LeaseLost:
             pass

@@ -38,6 +38,9 @@ def recover_expired(db):
         from .worker_contracts import record
         record(db, job, "LEASE_LOSS", "LEASE_EXPIRED")
         record(db, job, "FAILURE" if job.status == "FAILED" else "RETRY", "LEASE_EXPIRED")
+        if job.status == "FAILED":
+            from .reassessment import resolve_reassessment
+            resolve_reassessment(db, job, "REASSESSMENT_FAILED")
         if job.run_id and job.status == "FAILED":
             from .models import PreparationRun
 
@@ -146,6 +149,7 @@ def checkpoint(db, job_id, token, value):
 
 def complete(db, job_id, token, result, review=False, duration_ms=None):
     job = owned(db, job_id, token)
+    approval_created = False
     from .worker_contracts import record, store_output
     result = store_output(db, job, result)
     job.result = result
@@ -156,10 +160,16 @@ def complete(db, job_id, token, result, review=False, duration_ms=None):
         from .pipeline import finalize
 
         db.flush()
-        finalize(db, job, result)
+        approval_created = finalize(db, job, result)
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "SOURCE_INELIGIBLE" if result.get("outcome") == "SOURCE_INELIGIBLE" else "REASSESSMENT_NO_RESULT")
     job.history = [*job.history, {"code": "STAGE_COMPLETED", "at": now().isoformat()}]
     record(db, job, "COMPLETION", duration_ms=duration_ms)
     db.commit()
+    if approval_created:
+        from .notifications import send_approval_alert_if_enabled
+
+        send_approval_alert_if_enabled()
 
 
 def fail(db, job_id, token, code, retryable=False, duration_ms=None):
@@ -174,6 +184,9 @@ def fail(db, job_id, token, code, retryable=False, duration_ms=None):
     )
     job.available_at = now() + timedelta(seconds=min(300, 2**job.attempts))
     job.lease_token = job.lease_until = None
+    if job.status == "FAILED":
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "REASSESSMENT_FAILED")
     if job.run_id and job.status == "FAILED":
         from .models import PreparationRun
 
@@ -198,6 +211,8 @@ def quarantine(db, job_id, token, code, duration_ms=None):
     job.status = "QUARANTINED"
     job.lease_token = job.lease_until = None
     job.history = [*job.history, {"code": "CONTRACT_QUARANTINED", "at": now().isoformat()}]
+    from .reassessment import resolve_reassessment
+    resolve_reassessment(db, job, "REASSESSMENT_FAILED")
     if job.run_id:
         from .models import PreparationRun
         run = db.get(PreparationRun, job.run_id)

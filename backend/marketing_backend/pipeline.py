@@ -172,6 +172,7 @@ def next_job(db, job, kind):
 
 def finalize(db, job, result):
     valid_context(db, job)
+    approval_created = False
     if job.kind == "SETUP":
         for item in result["icps"]:
             if not db.scalar(
@@ -214,6 +215,8 @@ def finalize(db, job, result):
         saved_candidates = 0
 
         for item in [*result["candidates"], *result.get("evaluated_domains", [])]:
+            from .domain_corroboration import valid_saved_evidence
+            verified = item.get("verification_state") == "CORROBORATED" and valid_saved_evidence(item)
             host = item.get("domain") or domain(item["website"])
             memory = db.scalar(
                 select(DiscoveryMemory)
@@ -235,14 +238,22 @@ def finalize(db, job, result):
             memory.created_at = now()
             memory.outcome = (
                 "READY_FOR_REVIEW"
-                if "company_name" in item
+                if "company_name" in item and verified
                 else (
-                    "NO_MATCH"
-                    if item["reason"] == "NO_MATCH"
+                    "OWNERSHIP_CONFLICTING"
+                    if item.get("verification_state") == "CONFLICTING"
                     else (
-                        "ASSESSMENT_FAILED"
-                        if item["reason"].startswith(("MODEL", "CANDIDATE"))
-                        else "FETCH_UNAVAILABLE"
+                        "OWNERSHIP_UNCERTAIN"
+                        if item.get("verification_state") in {"UNCERTAIN", "CORROBORATED"}
+                        else (
+                            "NO_MATCH"
+                            if item.get("reason") == "NO_MATCH"
+                            else (
+                                "ASSESSMENT_FAILED"
+                                if item.get("reason", "").startswith(("MODEL", "CANDIDATE"))
+                                else "FETCH_UNAVAILABLE"
+                            )
+                        )
                     )
                 )
             )
@@ -294,8 +305,10 @@ def finalize(db, job, result):
                 status="PENDING",
             )
         )
+        approval_created = True
     else:
         next_job(db, job, STAGES[STAGES.index(job.kind) + 1])
+    return approval_created
 
 
 def schedule(db):

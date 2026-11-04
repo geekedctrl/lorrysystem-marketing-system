@@ -101,7 +101,12 @@ services:
         INSTALL_DISCOVERY_BROWSER: ${BACKEND_DISCOVERY_BROWSER_FALLBACK:-false}
     restart: unless-stopped
     command: ["python", "-m", "marketing_backend.worker", "--pool", "DRAFTING", "--concurrency", "${WORKER_DRAFTING_CONCURRENCY:-1}"]
-    environment: *stage-env
+    environment:
+      <<: *stage-env
+      NTFY_ENABLED: ${NTFY_ENABLED:-false}
+      NTFY_SERVER_URL: ${NTFY_SERVER_URL:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NTFY_AUTH_TOKEN: ${NTFY_AUTH_TOKEN:-}
     depends_on:
       backend-migrate: {condition: service_completed_successfully}
     healthcheck:

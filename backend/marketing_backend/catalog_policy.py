@@ -35,6 +35,8 @@ def lock_catalog_change(db, wid, *, kind=None, code=None, cid=None, desired=None
         )
     for job in pending:
         job.status, job.failure_code = "FAILED", "CATALOG_CHANGED"
+        from .reassessment import resolve_reassessment
+        resolve_reassessment(db, job, "REASSESSMENT_FAILED")
         job.lease_token = job.lease_until = None
         job.history = [
             *job.history,

@@ -7,7 +7,7 @@ import json
 import re
 from datetime import datetime
 from uuid import UUID
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from pydantic import Field
 from sqlalchemy import select, func, tuple_
 from sqlalchemy.exc import IntegrityError
@@ -259,7 +259,8 @@ class Revision(Strict):
     response_model=out.RevisionResponse,
 )
 def revise(
-    wid: UUID, aid: UUID, data: Revision, actor=Depends(user), db=Depends(session)
+    wid: UUID, aid: UUID, data: Revision, background_tasks: BackgroundTasks,
+    actor=Depends(user), db=Depends(session)
 ):
     scope(wid, actor, db, ["ADMIN", "OPERATOR"])
     request_hash = fingerprint(
@@ -377,6 +378,9 @@ def revise(
         raise HTTPException(
             409, "Another revision was submitted; refresh review history"
         ) from None
+    from .notifications import send_approval_alert_if_enabled
+
+    background_tasks.add_task(send_approval_alert_if_enabled)
     return {
         "approval_id": approval.id,
         "run_id": fresh.id,

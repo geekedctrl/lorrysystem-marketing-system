@@ -30,6 +30,7 @@ PERSON = "Alex Worker is Operations Director. Contact Alex Worker at alex@exampl
 PAGE = " ".join(
     [
         SERVICE,
+        "Example Logistics official company website: https://example.com/.",
         NEED,
         SIGNAL,
         PERSON,
@@ -64,6 +65,8 @@ class FixtureProviders:
         return value
 
     def search(self, operation, query, **options):
+        if operation.startswith("ownership:"):
+            return [{"url": "https://opencorporates.com/companies/gb/123", "title": "Example Logistics"}]
         if operation.startswith("discovery"):
             return [{"url": URL, "title": "Example Logistics", "text": SERVICE}]
         if self.ambiguous and operation.endswith("linkedin"):
@@ -212,10 +215,11 @@ class NativeTests(BackendFixtures):
         self.provider = patch("marketing_backend.stages.Providers", FixtureProviders)
         self.fetcher = patch(
             "marketing_backend.stages.fetch_public",
-            return_value={
+            side_effect=lambda url: {
                 "fetch_status": "SUCCESS",
-                "final_url": URL,
-                "body": "<p>" + PAGE + "</p>",
+                "final_url": url,
+                "body": "<p>Example Logistics official website: https://example.com/.</p>"
+                if "opencorporates.com" in url else "<p>" + PAGE + "</p>",
             },
         )
         (

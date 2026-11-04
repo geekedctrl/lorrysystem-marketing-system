@@ -11,16 +11,48 @@ from . import artifacts
 from .stage_contracts import (
     Strict, Code, ContractViolation, content_hash, canonical_json,
     validate_envelope, validate_payload,
+    SCHEMAS,
 )
 from .diagnostics import classify
 
 IMPLEMENTATION = "native.day2.1"
 
 
+class ValidationDetail(Strict):
+    field: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_]+$")
+    category: Code
+
+
+class OwnershipEvidence(Strict):
+    source_url: str = Field(min_length=8, max_length=1500)
+    source_domain: str = Field(min_length=1, max_length=254)
+    evidence_quote: str = Field(min_length=1, max_length=500)
+    relationship: Literal["REGISTRY_WEBSITE_LISTING", "REGISTRY_DOMAIN_CONFLICT"]
+
+
+class FilteredDomain(Strict):
+    domain: str = Field(min_length=1, max_length=254)
+    reason: Code
+
+
 class EvaluatedDomain(Strict):
     domain: str = Field(min_length=1, max_length=254)
     source_url: str = Field(min_length=8, max_length=1500)
     reason: Code
+    validation_details: list[ValidationDetail] = Field(default_factory=list, max_length=10)
+    company_name: str | None = Field(default=None, max_length=300)
+    website: str | None = Field(default=None, max_length=1500)
+    industry: str | None = Field(default=None, max_length=150)
+    prospect_type: str | None = Field(default=None, max_length=40)
+    confidence: int | None = Field(default=None, ge=0, le=100)
+    icp_code: str | None = Field(default=None, max_length=80)
+    reasoning: str | None = Field(default=None, max_length=1500)
+    evidence_quote: str | None = Field(default=None, max_length=2000)
+    unknowns: list[str] = Field(default_factory=list, max_length=10)
+    verification_state: Literal["CORROBORATED", "UNCERTAIN", "CONFLICTING"] | None = None
+    ownership_reason: str | None = Field(default=None, max_length=100)
+    ownership_evidence: list[OwnershipEvidence] = Field(default_factory=list, max_length=2)
+    ownership_evidence_digest: str | None = Field(default=None, max_length=64)
 
 
 class DiscoveryCounts(Strict):
@@ -30,14 +62,17 @@ class DiscoveryCounts(Strict):
     pages_attempted: int = Field(ge=0, le=10)
     assessments_attempted: int = Field(ge=0, le=10)
     candidates_ready: int = Field(ge=0, le=10)
+    ownership_searches_attempted: int = Field(default=0, ge=0, le=10)
+    ownership_pages_attempted: int = Field(default=0, ge=0, le=10)
 
 
 class DiscoveryBatch(Strict):
     candidates: list[dict[str, Any]] = Field(max_length=10)
     evaluated_domains: list[EvaluatedDomain] = Field(max_length=100)
+    filtered_domains: list[FilteredDomain] = Field(default_factory=list, max_length=50)
     coverage: str = Field(max_length=2000)
     counts: DiscoveryCounts
-    outcome: Literal["CANDIDATES_READY", "PARTIAL_FAILURE", "NO_NEW_MATCHES"]
+    outcome: Literal["CANDIDATES_READY", "PARTIAL_FAILURE", "NO_NEW_MATCHES", "SOURCE_INELIGIBLE"]
     human_review_required: Literal[True]
 
 
@@ -105,9 +140,16 @@ def store_output(db, job, result):
             raise ContractViolation("STAGE_PAYLOAD_INVALID") from None
         if type(result.get("human_review_required")) is not bool or batch["counts"]["candidates_ready"] != len(batch["candidates"]):
             raise ContractViolation("STAGE_PAYLOAD_INVALID")
-        outputs = [("candidate:" + content_hash(item["domain"]), item) for item in (
-            validate_payload(value.contract_name, value.schema_version, candidate) for candidate in batch["candidates"]
-        )]
+        outputs = []
+        schema = SCHEMAS[value.contract_name, value.schema_version]
+        for candidate in batch["candidates"]:
+            # Existing v1/v2 tasks keep their immutable artifact shape while
+            # the enriched job result carries the new evidence to review.
+            payload = candidate
+            if value.schema_version < 3:
+                payload = {key: item for key, item in candidate.items() if key in schema.model_fields}
+            validated = validate_payload(value.contract_name, value.schema_version, payload)
+            outputs.append(("candidate:" + content_hash(candidate["domain"]), validated))
         if len({key for key, _ in outputs}) != len(outputs):
             raise ContractViolation("STAGE_PAYLOAD_INVALID")
     else:

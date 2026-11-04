@@ -31,6 +31,10 @@ services:
       SENDER_CREDENTIAL_ENCRYPTION_KEY: ${SENDER_CREDENTIAL_ENCRYPTION_KEY:-}
       OWNERSHIP_PREFLIGHT_TOKEN: ${OWNERSHIP_PREFLIGHT_TOKEN:-}
       OWNERSHIP_CUTOVER_READY: ${OWNERSHIP_CUTOVER_READY:-false}
+      NTFY_ENABLED: ${NTFY_ENABLED:-false}
+      NTFY_SERVER_URL: ${NTFY_SERVER_URL:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NTFY_AUTH_TOKEN: ${NTFY_AUTH_TOKEN:-}
     ports: ["127.0.0.1:${NATIVE_API_HOST_PORT:-8020}:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
@@ -105,5 +109,91 @@ services:
     command: ["sh", "-c", "alembic upgrade head && python -m unittest discover -s tests -v"]
     depends_on:
       backend-db: {condition: service_healthy}
+  native-db:
+    profiles: [native-acceptance]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: marketing_native_acceptance
+      POSTGRES_USER: native_acceptance
+      POSTGRES_PASSWORD: ${BACKEND_DB_PASSWORD:?Generate the ignored acceptance configuration}
+    volumes: [native-acceptance-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U native_acceptance -d marketing_native_acceptance']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  native-migrate:
+    profiles: [native-acceptance]
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://native_acceptance:${BACKEND_DB_PASSWORD}@native-db:5432/marketing_native_acceptance
+      API_DB_PASSWORD: ${BACKEND_API_DB_PASSWORD:?Set BACKEND_API_DB_PASSWORD}
+      WORKER_DB_PASSWORD: ${BACKEND_WORKER_DB_PASSWORD:?Set BACKEND_WORKER_DB_PASSWORD}
+    command: [alembic, upgrade, head]
+    depends_on:
+      native-db: {condition: service_healthy}
+  native-bootstrap:
+    profiles: [native-acceptance]
+    build: ./backend
+    user: '0:0'
+    environment:
+      DATABASE_URL: postgresql+psycopg://native_acceptance:${BACKEND_DB_PASSWORD}@native-db:5432/marketing_native_acceptance
+      APP_ENV: native-acceptance
+    command: [python, -m, tests.native_acceptance, bootstrap]
+    volumes: [native-acceptance-fixtures:/fixtures]
+    depends_on:
+      native-migrate: {condition: service_completed_successfully}
+  native-acceptance-api:
+    profiles: [native-acceptance]
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_api:${BACKEND_API_DB_PASSWORD}@native-db:5432/marketing_native_acceptance
+    depends_on:
+      native-bootstrap: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  native-worker:
+    profiles: [native-acceptance]
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://backend_worker:${BACKEND_WORKER_DB_PASSWORD}@native-db:5432/marketing_native_acceptance
+      APP_ENV: native-acceptance
+    command: [python, -m, tests.native_acceptance, worker]
+    depends_on:
+      native-acceptance-api: {condition: service_healthy}
+  native-frontend:
+    profiles: [native-acceptance]
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.native
+    command: [python, -m, uvicorn, app.native:app, --host, 0.0.0.0, --port, '8080']
+    environment:
+      NATIVE_API_BASE_URL: http://native-acceptance-api:8000
+      DASHBOARD_SECURE_COOKIES: 'false'
+    depends_on:
+      native-acceptance-api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  native-check:
+    profiles: [native-acceptance]
+    build: ./backend
+    environment:
+      APP_ENV: native-acceptance
+      NATIVE_API_URL: http://native-acceptance-api:8000
+      NATIVE_FRONTEND_URL: http://native-frontend:8080
+    command: [python, -m, tests.native_acceptance_check]
+    volumes: [native-acceptance-fixtures:/fixtures]
+    depends_on:
+      native-frontend: {condition: service_healthy}
+      native-worker: {condition: service_started}
+
 volumes:
+  native-acceptance-data:
+  native-acceptance-fixtures:
   backend-rebuild-data:

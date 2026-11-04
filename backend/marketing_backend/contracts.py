@@ -184,6 +184,13 @@ class LeadResponse(Public):
     website: str
 
 
+class OwnershipEvidence(Public):
+    source_url: str = Field(max_length=1500)
+    source_domain: str = Field(max_length=254)
+    evidence_quote: str = Field(max_length=500)
+    relationship: Literal["REGISTRY_WEBSITE_LISTING", "REGISTRY_DOMAIN_CONFLICT"]
+
+
 class DiscoveryCandidate(Public):
     product_line_id: UUID | None = None
     id: UUID
@@ -198,6 +205,9 @@ class DiscoveryCandidate(Public):
     reasoning: str | None = None
     source_url: str | None = None
     evidence_quote: str | None = None
+    verification_state: Literal["CORROBORATED", "UNCERTAIN", "CONFLICTING"] | None = None
+    ownership_reason: str | None = None
+    ownership_evidence: list["OwnershipEvidence"] = Field(default_factory=list, max_length=2)
     unknowns: list[str] = Field(default_factory=list)
     failure_reason: str | None = None
     source_job_id: UUID | None

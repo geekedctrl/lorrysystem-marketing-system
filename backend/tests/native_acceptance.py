@@ -9,11 +9,12 @@ import json
 import os
 import secrets
 import re
+import time
 from pathlib import Path
 from unittest.mock import patch
 from sqlalchemy import select
 from marketing_backend.db import Session, engine
-from marketing_backend.models import User, Workspace, Membership, Organization, OrganizationMembership
+from marketing_backend.models import User, Workspace, Membership, Organization, OrganizationMembership, ExecutorOwnership
 from marketing_backend.auth import hash_password
 from marketing_backend.providers import Providers
 from marketing_backend.research import ProviderFailure
@@ -59,15 +60,27 @@ def company(url):
 def synthetic_fetch(url):
     from urllib.parse import urlsplit
 
-    if not urlsplit(url).hostname.endswith(".fixtures.example.org"):
+    host = urlsplit(url).hostname or ""
+    if host == "opencorporates.com":
+        from urllib.parse import parse_qs
+        website = parse_qs(urlsplit(url).query).get("website", [""])[0]
+        if not website.endswith(".fixtures.example.org"):
+            raise RuntimeError("Synthetic registry fixture requires an allowed company domain")
+        name, *_ = company("https://" + website)
+        return {
+            "fetch_status": "SUCCESS",
+            "final_url": url,
+            "body": f"<p>{name} official website: https://{website}/.</p>",
+        }
+    if not host.endswith(".fixtures.example.org"):
         raise RuntimeError("Synthetic acceptance cannot fetch a real company URL")
-    _, service, need, signal, person = company(url)
+    name, service, need, signal, person = company(url)
     return {
         "fetch_status": "SUCCESS",
         "final_url": url,
         "body": "<p>"
         + " ".join((service, need, signal, person, "Existing systems remain in place."))
-        + "</p>",
+        + f" {name} official company website: https://{host}/.</p>",
     }
 
 
@@ -88,6 +101,12 @@ class SyntheticProviders(Providers):
             url = "https://" + ("accounting" if accounting else "haulage") + suffix + ".fixtures.example.org/"
             name, service, *_ = company(url)
             rows = [{"url": url, "title": name, "text": service}]
+        elif operation.startswith("ownership:"):
+            candidate_domain = operation.split(":", 1)[1]
+            rows = [{
+                "url": "https://opencorporates.com/companies/gb/synthetic?website=" + candidate_domain,
+                "title": "Synthetic company register result",
+            }]
         elif "contact-review" in self.job.payload.get(
             "website", ""
         ) and operation.endswith("linkedin"):
@@ -276,6 +295,12 @@ def bootstrap():
         ]
         db.add_all(workspaces)
         db.flush()
+        # Workspace triggers default to the legacy executor. Only this guarded,
+        # disposable database assigns the preparation capabilities to Python.
+        db.query(ExecutorOwnership).filter(
+            ExecutorOwnership.workspace_id.in_([w.id for w in workspaces]),
+            ExecutorOwnership.capability.in_(["SETUP", "DISCOVERY", "PREPARATION"]),
+        ).update({ExecutorOwnership.owner: "PYTHON"}, synchronize_session=False)
         accounts = {}
         for role in ("ADMIN", "OPERATOR", "REVIEWER", "VIEWER"):
             email, password = role.lower() + "@example.test", secrets.token_urlsafe(24)
@@ -320,12 +345,21 @@ def main():
     if args.command == "bootstrap":
         bootstrap()
     else:
-        from marketing_backend.worker import main as worker
+        from marketing_backend.pools import STAGES
+        from marketing_backend.runner import tick
 
         with patch("marketing_backend.stages.Providers", SyntheticProviders), patch(
             "marketing_backend.stages.fetch_public", synthetic_fetch
         ):
-            worker()
+            # The production runner owns one pool per process. This disposable
+            # harness exercises the same pool claims serially without delivery.
+            while True:
+                tick("SCHEDULER")
+                busy = False
+                for stage in STAGES:
+                    busy = tick(stage) or busy
+                if not busy:
+                    time.sleep(1)
 
 
 if __name__ == "__main__":

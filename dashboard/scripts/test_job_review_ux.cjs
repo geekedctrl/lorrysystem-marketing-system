@@ -28,6 +28,17 @@ state.data.operations.enabled=true;assert(!jobRetryState(j('FAILED',{attempts:3}
 assert(!jobRetryState(j('NEEDS_REVIEW')).allowed);
 assert(!jobCards([j('FAILED',{failure_code:'<img src=x onerror=alert(1)>',history:['<script>alert(1)</script>']})]).includes('<script>'));
 assert(!jobCards([j('FAILED',{failure_code:'<img src=x onerror=alert(1)>',history:['<script>alert(1)</script>']})]).includes('<img'));
+const discovery = jobCards([j('COMPLETED', {result:{counts:{candidates_ready:0, searches_attempted:3, websites_attempted:2, pages_attempted:2, assessments_attempted:1}, evaluated_domains:[{domain:'example.test',reason:'CANDIDATE_NOT_SUPPORTED',validation_details:[{field:'evidence',category:'UNKNOWN_EXCERPT'}]},{domain:'<img>',reason:'TIMEOUT'},{domain:'other.test',reason:'NO_MATCH'}]}})]);
+assert(discovery.includes('Finished with no candidates; 2 sites need investigation.'));
+assert(discovery.includes('Unknown excerpt'));
+assert(!discovery.includes('<img>'));
+const rowCode = src.slice(src.indexOf('  function candidateRow(c) {'), src.indexOf('  function candidateInbox(page) {'));
+Object.assign(sandbox, {canReviewCandidate:()=>true, productName:x=>x, link:()=>'', evidence:()=>'', field:()=>''});
+vm.runInContext(rowCode+'\nthis.candidateRowTest = candidateRow;', sandbox);
+const ineligible = sandbox.candidateRowTest({id:'synthetic', status:'OWNERSHIP_UNCERTAIN', company_name:'Example', failure_reason:'SOURCE_INELIGIBLE'});
+assert(ineligible.includes('The saved source is a reference site, not an eligible company website.'));
+assert(ineligible.includes('candidates/synthetic/find-official'));
+assert(!ineligible.includes('Accept & start research'));
 assert(src.includes('if (state.busy) return;'), 'Existing duplicate-submit protection must remain');
 assert(src.includes('state.epoch++') && src.includes('state.controller.abort()'), 'Existing workspace response invalidation must remain');
 console.log('Day 2 Job UX synthetic tests passed: statuses, retry roles, pause, attempts, escaping, duplicate guard, context reset.');

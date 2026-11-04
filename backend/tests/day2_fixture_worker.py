@@ -27,7 +27,8 @@ class CountedFixtureProviders(FixtureProviders):
 if __name__=="__main__":
     # Network-capable adapters are replaced only inside this guarded test entrypoint.
     with patch("marketing_backend.stages.Providers",CountedFixtureProviders),\
-         patch("marketing_backend.stages.fetch_public",return_value=dict(fetch_status="SUCCESS",final_url=URL,body="<p>"+PAGE+"</p>")),\
+         patch("marketing_backend.stages.fetch_public",side_effect=lambda url:dict(fetch_status="SUCCESS",final_url=url,
+             body="<p>Example Logistics official website: https://example.com/.</p>" if "opencorporates.com" in url else "<p>"+PAGE+"</p>")),\
          patch("marketing_backend.sending.smtp_handoff",return_value=None),\
          patch("socket.socket.connect",side_effect=AssertionError("Synthetic fixture blocks Python network calls")):
         main()

@@ -24,7 +24,9 @@ class ProductLineTests(BackendFixtures):
         (FixtureProviders.people,FixtureProviders.opportunity,FixtureProviders.ambiguous,
          FixtureProviders.keyed_scoring,FixtureProviders.quote_alias_scoring,FixtureProviders.invalid_contact_roles)=(True,True,False,False,False,False)
         self.patcher=patch("marketing_backend.stages.Providers",FixtureProviders)
-        self.fetch=patch("marketing_backend.stages.fetch_public",return_value=dict(fetch_status="SUCCESS",final_url=URL,body="<p>"+PAGE+"</p>"))
+        self.fetch=patch("marketing_backend.stages.fetch_public",side_effect=lambda url:dict(
+            fetch_status="SUCCESS",final_url=url,
+            body="<p>Example Logistics official website: https://example.com/.</p>" if "opencorporates.com" in url else "<p>"+PAGE+"</p>"))
         self.patcher.start();self.fetcher=self.fetch.start()
         self.addCleanup(self.patcher.stop);self.addCleanup(self.fetch.stop)
 
