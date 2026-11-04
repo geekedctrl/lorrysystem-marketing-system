@@ -1,3 +1,5 @@
+name: marketing-system
+
 include:
   # Run the replacement native API, worker, database and dashboard alongside
   # the legacy DEV app until native discovery passes its cutover checks.
@@ -7,7 +9,7 @@ services:
 
   postgres-dev:
     image: postgres:17-alpine
-    container_name: lorrysystem-dev-postgres
+    container_name: marketing-system-dev-postgres
     restart: unless-stopped
 
     environment:
@@ -29,17 +31,17 @@ services:
       retries: 5
 
     networks:
-      - lorrysystem-dev-db-net
+      - marketing-system-dev-db-net
 
     mem_limit: 384m
     cpus: 0.50
 
 
-  marketing-api-dev:
+  dev-marketing-api:
     build:
       context: ./api
 
-    container_name: lorrysystem-dev-marketing-api
+    container_name: marketing-system-dev-marketing-api
     restart: unless-stopped
 
     environment:
@@ -82,8 +84,8 @@ services:
       retries: 5
 
     networks:
-      - lorrysystem-dev-db-net
-      - lorrysystem-dev-api-net
+      - marketing-system-dev-db-net
+      - marketing-system-dev-api-net
       - default
 
     mem_limit: 384m
@@ -94,11 +96,11 @@ services:
   dashboard-legacy-dev:
     build:
       context: ./dashboard
-    container_name: lorrysystem-dev-dashboard-legacy
+    container_name: marketing-system-dev-dashboard-legacy
     restart: unless-stopped
 
     environment:
-      MARKETING_API_BASE_URL: ${MARKETING_API_BASE_URL:-http://marketing-api-dev:8000}
+      MARKETING_API_BASE_URL: ${MARKETING_API_BASE_URL:-http://dev-marketing-api:8000}
       MARKETING_API_KEY: ${MARKETING_API_KEY}
       DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
       DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-}
@@ -110,23 +112,23 @@ services:
       DASHBOARD_SECURE_COOKIES: ${DASHBOARD_SECURE_COOKIES:-false}
 
     depends_on:
-      marketing-api-dev:
+      dev-marketing-api:
         condition: service_healthy
 
     ports:
       - "127.0.0.1:8082:8080"
 
     networks:
-      - lorrysystem-dev-api-net
+      - marketing-system-dev-api-net
 
     mem_limit: 384m
     cpus: 0.50
 
 networks:
 
-  lorrysystem-dev-db-net:
-    name: lorrysystem-dev-db-net
+  marketing-system-dev-db-net:
+    name: marketing-system-dev-db-net
     internal: true
 
-  lorrysystem-dev-api-net:
-    name: lorrysystem-dev-api-net
+  marketing-system-dev-api-net:
+    name: marketing-system-dev-api-net

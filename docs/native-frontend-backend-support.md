@@ -17,53 +17,7 @@ Actual integration also found and fixed a worker-loop gap: due discovery schedul
 
 ## Local integration setup
 
-The frontend owner must provide a checkout containing `dashboard/app/native.py`, `native.html`, `native.js` and `native.css`. From the backend repository root:
-
-```powershell
-python backend/scripts/setup_native_integration.py --frontend-path 'C:/path/to/frontend-checkout'
-docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml up --build -d native-frontend native-worker
-docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check
-```
-
-The configuration helper adds three distinct random database passwords to the ignored root `.env` only when those keys are absent. The bootstrap command creates accounts only in the dedicated `marketing_native_acceptance` database, guarded by `APP_ENV=native-acceptance`. Rerunning bootstrap retains its existing private manifest; it never adds fixtures to application workspaces.
-
-| Service / network | Address or resource |
-| --- | --- |
-| Frontend browser mapping | `http://127.0.0.1:8094` |
-| Frontend server → native API | `http://backend-api:8000` on `native-acceptance_default` |
-| Database | `native-db:5432/marketing_native_acceptance`; no host port |
-| Native workers | Real worker loop/leases/transitions under `backend_worker`; synthetic provider/evidence adapters only in the guarded test launcher |
-| Private fixture accounts | `/fixtures/accounts.json` in `native-acceptance_native-acceptance-fixtures`, readable by the backend test user |
-| Data volume | `native-acceptance_native-acceptance-data` |
-
-No model/search keys are supplied to this environment. Synthetic requests use the real reservation ledger with zero cost. Public-page fetching and provider outputs are replaced only by the dedicated acceptance worker launcher; the API, stage evidence validation, queue, PostgreSQL and frontend bridge remain real. This verifies integration, not real scraping/provider quality.
-
-On this Windows machine, Docker-internal connectivity passes while direct localhost8094 forwarding fails with mirrored WSL networking. A reversible fallback is included; no machine-wide networking settings are changed:
-
-```powershell
-python backend/scripts/native_local_gateway.py
-```
-
-Open `http://127.0.0.1:8095`. The helper binds Windows loopback only and forwards HTTP through `docker exec` to the task-owned frontend listener. It does not expose Docker's socket, target arbitrary upstream URLs, log request bodies or put backend bearer credentials in the browser. It is a local preview utility, not a deployment server. Stop it with Ctrl+C. Standard localhost8094 mapping remains the normal route where Docker forwarding works.
-
-For the real-browser acceptance, use a local virtual environment with `playwright==1.55.0`. A local Edge installation is used by default; otherwise install Playwright Chromium or set `FRONTEND_BROWSER` to a local Chromium executable. Export synthetic account credentials to an ignored local fixture file without displaying them:
-
-```powershell
-docker cp native-acceptance-native-bootstrap-1:/fixtures/accounts.json tmp/native-acceptance-accounts.json
-python backend/scripts/validate_native_browser.py --fixtures tmp/native-acceptance-accounts.json --base-url http://127.0.0.1:8095
-docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml --profile test run --rm --no-deps --build native-check python -m tests.native_support_check
-```
-
-The browser test submits the actual product wizard, starts fresh native preparation, reviews sources/people/qualification/outreach, records synthetic approval with `sent:false`, exercises pause/resume, checks four roles and tablet/mobile layout, and captures ignored screenshots under `tmp/native-actual-browser`. It does not substitute mock API responses.
-
-Run the HTTP fixture journey, then browser acceptance, then the support-contract check, in that order on a fresh acceptance project. They intentionally leave synthetic decisions/history in that disposable database. Bootstrap is repeatable, but the mutating acceptance sequence is not a reset operation. To repeat the complete sequence, recreate **only this task-owned project**:
-
-```powershell
-docker compose --env-file .env -p native-acceptance -f compose.native-integration.yml down --volumes
-```
-
-That removes this project's disposable data/accounts. Without `--volumes`, cleanup retains them. It does not operate on the existing `marketing-rebuild`, legacy app or DEV services. Stop the optional gateway separately. Re-export account fixtures after recreation; old fixture passwords/IDs are no longer valid.
-
+The standalone `compose.native-integration.yml` stack described in the original acceptance instructions has been removed. Its setup commands and local browser journey are no longer runnable from this repository. The acceptance results above record checks completed before removal. Native database tests remain available through `compose.backend.yml` and its test profile; the removed file was the separate frontend/API integration environment.
 ## Additive APIs and compatibility
 
 All workspace routes below require an expiring bearer session and existing membership. Native routes still have no `/api` prefix. Existing bare-list responses remain available; no envelope replacement is imposed on the frontend.
@@ -133,6 +87,6 @@ New endpoints are verified at the backend; availability does not automatically e
 - Separate HTTP checks using the actual restricted API role passed new paging/capability/revision/lifecycle operations, including immutable snapshot insert and different-reviewer enforcement.
 - OpenAPI and normalized synthetic examples accompany this guide. Local gateway health returned200. No live provider spend, prospect outreach, SMTP, deployment or executor cutover occurred.
 
-Source locations: [frontend_api.py](../backend/marketing_backend/frontend_api.py), [contracts.py](../backend/marketing_backend/contracts.py), [catalog_policy.py](../backend/marketing_backend/catalog_policy.py), [integration Compose](../compose.native-integration.yml), [OpenAPI](contracts/native-backend-openapi.json), [synthetic response examples](contracts/native-backend-examples.json), [support tests](../backend/tests/test_frontend_support.py) and [browser runner](../backend/scripts/validate_native_browser.py).
+Source locations: [frontend_api.py](../backend/marketing_backend/frontend_api.py), [contracts.py](../backend/marketing_backend/contracts.py), [catalog_policy.py](../backend/marketing_backend/catalog_policy.py), retired integration Compose stack, [OpenAPI](contracts/native-backend-openapi.json), [synthetic response examples](contracts/native-backend-examples.json), [support tests](../backend/tests/test_frontend_support.py) and [browser runner](../backend/scripts/validate_native_browser.py).
 
 BE-07 team/accounts, BE-08 encrypted provider connections, BE-09 imports, BE-10 separate sending and BE-11 migration/cutover remain separate work. Real-provider calibration is not established by synthetic acceptance. Existing deployed app/n8n remains active. All PRs target `develop`; production is separate.

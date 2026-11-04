@@ -3,7 +3,7 @@ name: Dispatch Successful Develop CI
 on:
   workflow_run:
     workflows:
-      - LorrySystem CI
+      - Marketing System CI
     types:
       - completed
 

@@ -67,7 +67,7 @@ migration directory mounted as defined in `docker-compose.yml`.
 After the DEV deployment, create the first account interactively on the server:
 
 ```bash
-docker exec -it lorrysystem-dev-marketing-api \
+docker exec -it marketing-system-dev-marketing-api \
   python -m app.manage bootstrap-admin --email YOUR_ADMIN_EMAIL
 ```
 
@@ -93,7 +93,7 @@ longer used for user operations; account identity and ICPs come from the API.
 Server administrators can recover an account without logging its password:
 
 ```bash
-docker exec -it lorrysystem-dev-marketing-api \
+docker exec -it marketing-system-dev-marketing-api \
   python -m app.manage reset-password --email EXISTING_ACCOUNT_EMAIL
 ```
 
@@ -151,10 +151,10 @@ regression with an authenticated test account, and a separate migration exercise
 Tests run only with `APP_ENV=ci` or `workspace-test` for the database-mutating
 workspace suites. Never run them against customer data.
 
-The disposable local environment in `compose.workspace-test.yml` uses a named
-test volume and ports 8011/8091; it never mounts the existing `data/` directory.
-Supply randomly generated `WORKSPACE_TEST_DB_PASSWORD`, `WORKSPACE_TEST_API_KEY`
-and `WORKSPACE_TEST_SESSION_SECRET` via an ignored env file.
+The former `compose.workspace-test.yml` environment has been removed. GitHub
+Actions creates the disposable workspace-test database and credentials for the
+workspace integration checks. Do not run those database-mutating checks against
+shared DEV or production data.
 
 The regression covers two private teams, overlapping prospect data, cross-team
 record access and relationships, role restrictions, human approvals, queue claims,

@@ -39,7 +39,7 @@ settings = Settings.from_env()
 api = MarketingAPI(settings)
 
 app = FastAPI(
-    title="LorrySystem MVP1 Dashboard",
+    title="Marketing System Dashboard",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
@@ -346,7 +346,7 @@ async def root() -> RedirectResponse:
 
 @app.get("/health", response_class=JSONResponse)
 async def dashboard_health() -> dict[str, str]:
-    return {"status": "ok", "service": "lorrysystem-dashboard"}
+    return {"status": "ok", "service": "marketing-system-dashboard"}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

@@ -1,4 +1,4 @@
-name: LorrySystem CI
+name: Marketing System CI
 
 on:
   push:
@@ -139,7 +139,7 @@ jobs:
           EOF
 
           cat > dashboard/.env <<EOF
-          MARKETING_API_BASE_URL=http://lorrysystem-dev-marketing-api:8000
+          MARKETING_API_BASE_URL=http://dev-marketing-api:8000
           MARKETING_API_KEY=${API_KEY}
 
           DASHBOARD_SESSION_SECRET=${DASHBOARD_SECRET}
@@ -158,11 +158,11 @@ jobs:
 
       - name: Build legacy and native API and Dashboard images
         run: |
-          docker compose build marketing-api-dev dashboard-dev dashboard-legacy-dev backend-api backend-worker
+          docker compose build dev-marketing-api dashboard-dev dashboard-legacy-dev backend-api backend-worker
 
       - name: Start PostgreSQL and API
         run: |
-          docker compose up -d postgres-dev marketing-api-dev
+          docker compose up -d postgres-dev dev-marketing-api
           docker compose ps
 
       - name: Wait for PostgreSQL health
@@ -171,7 +171,7 @@ jobs:
           set -euo pipefail
 
           for attempt in {1..30}; do
-            STATUS="$(docker inspect -f '{{.State.Health.Status}}' lorrysystem-dev-postgres 2>/dev/null || true)"
+            STATUS="$(docker inspect -f '{{.State.Health.Status}}' marketing-system-dev-postgres 2>/dev/null || true)"
 
             if [ "${STATUS}" = "healthy" ]; then
               echo "PostgreSQL is healthy."
@@ -187,7 +187,7 @@ jobs:
 
       - name: Apply Alembic migrations
         run: |
-          docker exec lorrysystem-dev-marketing-api \
+          docker exec marketing-system-dev-marketing-api \
             alembic upgrade head
 
       - name: Verify Alembic migration state
@@ -196,13 +196,13 @@ jobs:
           set -euo pipefail
 
           HEAD_REVISION="$(
-            docker exec lorrysystem-dev-marketing-api \
+            docker exec marketing-system-dev-marketing-api \
               alembic heads |
             awk 'NR == 1 {print $1}'
           )"
 
           CURRENT_REVISION="$(
-            docker exec lorrysystem-dev-marketing-api \
+            docker exec marketing-system-dev-marketing-api \
               alembic current 2>/dev/null |
             awk '/\(head\)/ {print $1}' |
             tail -1
@@ -312,7 +312,7 @@ jobs:
           set -euo pipefail
 
           COMMERCIAL_ID="$(
-            docker exec lorrysystem-dev-postgres \
+            docker exec marketing-system-dev-postgres \
               psql \
               -U lorrysystem_dev \
               -d lorrysystem_dev \
@@ -322,7 +322,7 @@ jobs:
           )"
 
           LOGISTICS_ID="$(
-            docker exec lorrysystem-dev-postgres \
+            docker exec marketing-system-dev-postgres \
               psql \
               -U lorrysystem_dev \
               -d lorrysystem_dev \
@@ -332,7 +332,7 @@ jobs:
           )"
 
           PASSENGER_ID="$(
-            docker exec lorrysystem-dev-postgres \
+            docker exec marketing-system-dev-postgres \
               psql \
               -U lorrysystem_dev \
               -d lorrysystem_dev \
@@ -359,7 +359,7 @@ jobs:
           )"
 
           cat > dashboard/.env <<EOF
-          MARKETING_API_BASE_URL=http://lorrysystem-dev-marketing-api:8000
+          MARKETING_API_BASE_URL=http://dev-marketing-api:8000
           MARKETING_API_KEY=${API_KEY}
 
           DASHBOARD_SESSION_SECRET=${DASHBOARD_SECRET}
@@ -448,13 +448,13 @@ jobs:
             -e APP_ENV=ci \
             -e EXPORT_TEST_LOGIN=true \
             -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
-            lorrysystem-dev-marketing-api \
+            marketing-system-dev-marketing-api \
             python scripts/validate_workspaces.py
 
       - name: Test business-card OCR and CSV import regression
         run: |
-          docker cp lorrysystem-dev-marketing-api:/tmp/workspace-validation-account.json /tmp/workspace-validation-account.json
-          docker exec -i lorrysystem-dev-dashboard-legacy python -c \
+          docker cp marketing-system-dev-marketing-api:/tmp/workspace-validation-account.json /tmp/workspace-validation-account.json
+          docker exec -i marketing-system-dev-dashboard-legacy python -c \
             "import json,os,runpy,sys; account=json.load(sys.stdin); os.environ['DASHBOARD_TEST_EMAIL']=account['email']; os.environ['DASHBOARD_TEST_PASSWORD']=account['password']; runpy.run_path('scripts/validate_lead_imports.py',run_name='__main__')" \
             < /tmp/workspace-validation-account.json
           rm -f /tmp/workspace-validation-account.json
@@ -462,47 +462,47 @@ jobs:
       - name: Test dashboard discovery runs and workspace boundaries
         run: |
           docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
-            lorrysystem-dev-marketing-api python scripts/validate_discovery_runs.py
+            marketing-system-dev-marketing-api python scripts/validate_discovery_runs.py
 
       - name: Test workspace migration and guarded rollback
         run: |
           docker exec \
             -e APP_ENV=ci \
-            lorrysystem-dev-marketing-api \
+            marketing-system-dev-marketing-api \
             python scripts/validate_workspace_migration.py
 
       - name: Test workspace research queue and dashboard
         run: |
           docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
-            lorrysystem-dev-marketing-api python scripts/validate_workspace_research.py
+            marketing-system-dev-marketing-api python scripts/validate_workspace_research.py
 
       - name: Test reviewed contact, scoring, matching, drafts and approval pipeline
         run: |
           docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
-            lorrysystem-dev-marketing-api python scripts/validate_lead_pipeline.py
+            marketing-system-dev-marketing-api python scripts/validate_lead_pipeline.py
 
       - name: Test mock campaign strategy, tenancy and human review
         run: |
-          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/test_campaign_strategist.py
-          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_campaign_strategist.py
+          docker exec -e APP_ENV=ci marketing-system-dev-marketing-api python scripts/test_campaign_strategist.py
+          docker exec -e APP_ENV=ci marketing-system-dev-marketing-api python scripts/validate_campaign_strategist.py
           docker exec -e APP_ENV=ci -e DASHBOARD_BASE_URL=http://dashboard-legacy-dev:8080 \
-            lorrysystem-dev-marketing-api python scripts/validate_campaign_http.py
+            marketing-system-dev-marketing-api python scripts/validate_campaign_http.py
 
       - name: Test shared product onboarding and automatic preparation
         run: |
           docker exec -e APP_ENV=ci \
-            lorrysystem-dev-marketing-api python scripts/validate_product_automation.py
+            marketing-system-dev-marketing-api python scripts/validate_product_automation.py
 
       - name: Test Dashboard to API connectivity
         run: |
-          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_preparation_quality.py
-          docker exec -e APP_ENV=ci lorrysystem-dev-marketing-api python scripts/validate_smtp_sending.py
+          docker exec -e APP_ENV=ci marketing-system-dev-marketing-api python scripts/validate_preparation_quality.py
+          docker exec -e APP_ENV=ci marketing-system-dev-marketing-api python scripts/validate_smtp_sending.py
 
       - name: Verify Dashboard to API connectivity
         run: |
-          docker exec lorrysystem-dev-dashboard-legacy \
+          docker exec marketing-system-dev-dashboard-legacy \
             python -c \
-            "import httpx; r=httpx.get('http://lorrysystem-dev-marketing-api:8000/health'); r.raise_for_status(); print(r.status_code, r.text)"
+            "import httpx; r=httpx.get('http://dev-marketing-api:8000/health'); r.raise_for_status(); print(r.status_code, r.text)"
 
       - name: Show diagnostics on failure
         if: failure()
@@ -512,18 +512,18 @@ jobs:
 
           echo
           echo "=== API LOGS ==="
-          docker logs --tail 200 lorrysystem-dev-marketing-api || true
+          docker logs --tail 200 marketing-system-dev-marketing-api || true
 
           echo
           echo "=== NATIVE DASHBOARD LOGS ==="
           docker compose logs --tail 200 dashboard-dev || true
 
           echo "=== LEGACY DASHBOARD LOGS ==="
-          docker logs --tail 200 lorrysystem-dev-dashboard-legacy || true
+          docker logs --tail 200 marketing-system-dev-dashboard-legacy || true
 
           echo
           echo "=== POSTGRES LOGS ==="
-          docker logs --tail 200 lorrysystem-dev-postgres || true
+          docker logs --tail 200 marketing-system-dev-postgres || true
 
       - name: Clean up CI containers
         if: always()

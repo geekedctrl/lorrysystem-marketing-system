@@ -12,9 +12,9 @@ first-administrator setup and automation configuration. The historical MVP1 note
 below describe the original single-workspace build; API-key, reviewer identity and
 ICP environment configuration have been replaced with account/workspace APIs.
 
-# LorrySystem MVP1 Dashboard
+# Marketing System Dashboard
 
-Server-rendered FastAPI dashboard for the LorrySystem Marketing API.
+Server-rendered FastAPI dashboard for the Marketing System API.
 
 ## MVP1 architecture
 

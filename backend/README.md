@@ -83,7 +83,7 @@ Set `MIGRATION_EXPORT_PATH` for `export` to create an immutable JSON review arti
 
 BE-01â€“BE-06 backend support is implemented and tested locally: typed responses/current-user capabilities, lead detail/keyset pagination, immutable human draft revisions with a different reviewer, soft catalog lifecycle and persistent context versions. Product setup keeps explicit partial-save semantics. The worker loop now checks due discovery continuously. Migrations006/007 belong to this independent database.
 
-The separate `compose.native-integration.yml` runs actual native API/workers/PostgreSQL with the frontend owner's checkout and guarded synthetic providers. Thirty-seven database tests, real HTTP/BFF two-product acceptance, actual headless Edge preparation/approval and restricted API revision/lifecycle checks pass. See [integration setup and frontend adaptations](../docs/native-frontend-backend-support.md). New BFF endpoint adapters remain frontend work. Windows host forwarding has a tested local gateway fallback; no DEV/n8n cutover or real sending/provider test is implied.
+The former `compose.native-integration.yml` acceptance stack has been removed. The integration results in [the support record](../docs/native-frontend-backend-support.md) are historical. This repository no longer includes the standalone frontend/API acceptance environment used for those checks.
 
 
 ### Discovery review update â€” 11 October 2026
@@ -126,12 +126,11 @@ Migration 017 preserves existing email snapshots/decisions, adds immutable chann
 routing and trace identity, and introduces append-only delivery diagnostics. Runtime
 roles cannot edit or delete that history. Downgrade requires a forward recovery plan.
 
-For local synthetic runtime validation also merge `compose.worker-day2-test.yml`.
-This clears provider/sender credentials and makes backend-smoke exercise a normal
-API research task plus quarantine before execution in all seven stage pools. The
-backend-test suite separately starts restricted subprocesses with guarded fake
-providers, fake channels, concurrent claims, restart recovery and a synthetic query
-strategy canary. No live provider or outbound-send test is required.
+The CI workflow runs `tests.day2_runtime_smoke` directly as the backend-smoke
+command. CI's generated environment contains no provider or sender credentials,
+so the smoke run uses synthetic settings. The backend-test suite separately
+starts restricted subprocesses with guarded fake providers, fake channels,
+concurrent claims, restart recovery and a synthetic query strategy canary.
 
 Product-line settings accept discovery_query_strategy=baseline (icp-queries.1) or
 explicit canary opt-in official (icp-queries.2). Both produce the same candidate

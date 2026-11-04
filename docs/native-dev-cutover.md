@@ -1,5 +1,7 @@
 # Native DEV parallel rollout
 
+The repository now uses the Compose project name `marketing-system` and legacy API service hostname `dev-marketing-api`. Before deploying this rename, update the installed DietPi helper and server environment, check clients using the old networks, and plan reuse or migration of the existing native database volume. Changing a Compose project name does not migrate its named volumes. The helper's historical behavior below predates this rename.
+
 The native Python API, durable worker and native dashboard can run alongside the existing DEV application for cutover validation. The legacy dashboard/API, PostgreSQL data, n8n instances and production services remain in place during this phase. This is a parallel DEV stack, not a production-ready migration.
 
 ## Runtime

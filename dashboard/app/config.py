@@ -15,7 +15,7 @@ class Settings:
         if not session_secret or session_secret == "CHANGE_ME":
             raise RuntimeError("DASHBOARD_SESSION_SECRET must be configured")
         return cls(
-            api_base_url=os.getenv("MARKETING_API_BASE_URL", "http://marketing-api:8000").rstrip("/"),
+            api_base_url=os.getenv("MARKETING_API_BASE_URL", "http://dev-marketing-api:8000").rstrip("/"),
             session_secret=session_secret,
         )
 

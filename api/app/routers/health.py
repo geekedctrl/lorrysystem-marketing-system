@@ -14,7 +14,7 @@ router = APIRouter(
 def health_check():
     return {
         "status": "ok",
-        "service": "lorrysystem-marketing-api",
+        "service": "marketing-system-api",
     }
 
 

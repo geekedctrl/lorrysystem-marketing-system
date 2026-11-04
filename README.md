@@ -1,6 +1,10 @@
-# LorrySystem Marketing & Lead Generation
+# Marketing System
 
-Internal marketing, lead-generation, research, scoring, product-matching, approval, and outreach platform for LorrySystem.
+Marketing, lead-generation, research, scoring, product-matching, approval, and outreach platform for product workspaces.
+
+The Compose project is named `marketing-system`. The legacy dashboard reaches the API at `http://dev-marketing-api:8000`. Before applying this rename to an existing environment, update its `MARKETING_API_BASE_URL` and deployment helper, check clients of the old network names, and plan how to reuse or migrate the native database volume. Changing the Compose project name can select a different named volume; it does not migrate data.
+
+The legacy health responses now identify their services as `marketing-system-api` and `marketing-system-dashboard`. Update any external checks that compare the previous service values.
 
 This repository contains the core application used by the **development environment** and is the source of truth for application code changes before they are promoted to production.
 
@@ -109,7 +113,7 @@ Legacy n8n remains connected only to the legacy runtime until the separate migra
 ## 3. Repository Structure
 
 ```text
-lorrysystem-marketing-system/
+marketing-system/
 ├── api/
 │   ├── app/
 │   │   ├── core/
@@ -384,14 +388,14 @@ Never edit an already-applied migration simply to change production behavior. Cr
 Check migration status:
 
 ```bash
-docker exec lorrysystem-dev-marketing-api alembic current
-docker exec lorrysystem-dev-marketing-api alembic heads
+docker exec marketing-system-dev-marketing-api alembic current
+docker exec marketing-system-dev-marketing-api alembic heads
 ```
 
 Apply migrations in DEV:
 
 ```bash
-docker exec lorrysystem-dev-marketing-api alembic upgrade head
+docker exec marketing-system-dev-marketing-api alembic upgrade head
 ```
 
 Database migrations must be tested in DEV before being promoted to production.
@@ -441,8 +445,8 @@ Development should happen on the intern's own computer.
 Clone:
 
 ```bash
-git clone https://github.com/geekedctrl/lorrysystem-marketing-system.git
-cd lorrysystem-marketing-system
+git clone https://github.com/geekedctrl/marketing-system.git
+cd marketing-system
 ```
 
 Start from `develop`:
@@ -510,7 +514,7 @@ docker compose up -d --build
 If there is a new migration:
 
 ```bash
-docker exec lorrysystem-dev-marketing-api alembic upgrade head
+docker exec marketing-system-dev-marketing-api alembic upgrade head
 ```
 
 Verify:
@@ -586,7 +590,7 @@ MARKETING_API_KEY=CHANGE_ME
 Dashboard configuration:
 
 ```env
-MARKETING_API_BASE_URL=http://lorrysystem-dev-marketing-api:8000
+MARKETING_API_BASE_URL=http://dev-marketing-api:8000
 MARKETING_API_KEY=CHANGE_ME
 
 DASHBOARD_SESSION_SECRET=CHANGE_ME
@@ -642,19 +646,19 @@ docker compose ps
 API logs:
 
 ```bash
-docker logs --tail 100 lorrysystem-dev-marketing-api
+docker logs --tail 100 marketing-system-dev-marketing-api
 ```
 
 Dashboard logs:
 
 ```bash
-docker logs --tail 100 lorrysystem-dev-dashboard
+docker logs --tail 100 marketing-system-dev-dashboard
 ```
 
 PostgreSQL logs:
 
 ```bash
-docker logs --tail 100 lorrysystem-dev-postgres
+docker logs --tail 100 marketing-system-dev-postgres
 ```
 
 n8n logs:
@@ -743,7 +747,7 @@ The DEV environment has been validated through the complete application lifecycl
 GitHub:
 
 ```text
-https://github.com/geekedctrl/lorrysystem-marketing-system
+https://github.com/geekedctrl/marketing-system
 ```
 
 Primary branches:

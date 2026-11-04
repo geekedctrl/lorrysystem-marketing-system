@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "LorrySystem Marketing API"
+    app_name: str = "Marketing System API"
     app_env: str = "development"
 
     postgres_host: str = "postgres"
